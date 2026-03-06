@@ -10,7 +10,6 @@ const ASPECT_H = 909;
 const ASPECT_RATIO = ASPECT_W / ASPECT_H;
 const ASPECT_TOLERANCE = 0.01;
 
-const UNLOCK_PASSWORD = "bridge2026";
 
 // ============================================================
 // Main Component
@@ -27,8 +26,6 @@ export function TiffCropSidePanel() {
   const redoCropBounds = useTiffStore((s) => s.redoCropBounds);
   const cropHistory = useTiffStore((s) => s.cropHistory);
   const cropFuture = useTiffStore((s) => s.cropFuture);
-  const isFeatureUnlocked = useTiffStore((s) => s.isFeatureUnlocked);
-  const setFeatureUnlocked = useTiffStore((s) => s.setFeatureUnlocked);
   const cropGuides = useTiffStore((s) => s.cropGuides);
   const clearCropGuides = useTiffStore((s) => s.clearCropGuides);
   const removeCropGuide = useTiffStore((s) => s.removeCropGuide);
@@ -38,7 +35,6 @@ export function TiffCropSidePanel() {
   const resetCropEditor = useTiffStore((s) => s.resetCropEditor);
   const loadCropPreset = useTiffStore((s) => s.loadCropPreset);
 
-  const [showUnlockDialog, setShowUnlockDialog] = useState(false);
   const [showJsonLoadDialog, setShowJsonLoadDialog] = useState(false);
   const [showJsonRegisterDialog, setShowJsonRegisterDialog] = useState(false);
 
@@ -106,32 +102,6 @@ export function TiffCropSidePanel() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 10H11a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
               </svg>
             </button>
-            {/* Lock toggle */}
-            <button
-              onClick={() => {
-                if (isFeatureUnlocked) {
-                  setFeatureUnlocked(false);
-                } else {
-                  setShowUnlockDialog(true);
-                }
-              }}
-              className={`p-1.5 rounded-lg transition-colors ${
-                isFeatureUnlocked
-                  ? "text-accent-warm hover:bg-accent-warm/10"
-                  : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
-              }`}
-              title={isFeatureUnlocked ? "ロック (クリックでロック)" : "ロック解除"}
-            >
-              {isFeatureUnlocked ? (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                </svg>
-              ) : (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              )}
-            </button>
           </div>
         </div>
       </div>
@@ -183,17 +153,15 @@ export function TiffCropSidePanel() {
               JSONから読み込む
             </button>
 
-            {isFeatureUnlocked && (
-              <button
-                onClick={() => setShowJsonRegisterDialog(true)}
-                className="w-full px-3 py-2 text-xs font-medium rounded-lg transition-all text-left flex items-center gap-2 text-text-secondary bg-bg-elevated border border-border/50 hover:bg-bg-elevated/80"
-              >
-                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                JSONに新規登録
-              </button>
-            )}
+            <button
+              onClick={() => setShowJsonRegisterDialog(true)}
+              className="w-full px-3 py-2 text-xs font-medium rounded-lg transition-all text-left flex items-center gap-2 text-text-secondary bg-bg-elevated border border-border/50 hover:bg-bg-elevated/80"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              JSONに新規登録
+            </button>
           </div>
         </div>
 
@@ -265,8 +233,7 @@ export function TiffCropSidePanel() {
               </button>
             </div>
 
-            {/* Apply guides button (only when locked mode, enough guides) */}
-            {!isFeatureUnlocked && canApplyGuides && (
+            {canApplyGuides && (
               <button
                 onClick={applyCropGuidesToBounds}
                 className="w-full mb-2 px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-accent-warm to-accent rounded-lg hover:-translate-y-0.5 transition-all shadow-sm"
@@ -337,17 +304,6 @@ export function TiffCropSidePanel() {
           比率 {ASPECT_W}:{ASPECT_H}
         </div>
       </div>
-
-      {/* Unlock Dialog */}
-      {showUnlockDialog && (
-        <UnlockDialog
-          onClose={() => setShowUnlockDialog(false)}
-          onUnlock={() => {
-            setFeatureUnlocked(true);
-            setShowUnlockDialog(false);
-          }}
-        />
-      )}
 
       {/* JSON Load Dialog */}
       {showJsonLoadDialog && (
@@ -995,61 +951,3 @@ export function CropJsonRegisterDialog({ onClose }: { onClose: () => void }) {
 // Unlock Dialog
 // ============================================================
 
-export function UnlockDialog({ onClose, onUnlock }: { onClose: () => void; onUnlock: () => void }) {
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
-
-  const handleSubmit = () => {
-    if (password === UNLOCK_PASSWORD) {
-      onUnlock();
-    } else {
-      setError(true);
-    }
-  };
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl w-80 p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-accent-warm" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          <h3 className="text-sm font-display font-bold text-text-primary">機能解放</h3>
-        </div>
-        <p className="text-xs text-text-muted">パスワードを入力してJSON新規登録を解放します</p>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => { setPassword(e.target.value); setError(false); }}
-          onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-          placeholder="パスワード"
-          autoFocus
-          className={`
-            w-full px-3 py-2 text-sm bg-bg-elevated border rounded-lg text-text-primary
-            placeholder:text-text-muted/40 focus:outline-none
-            ${error ? "border-error focus:border-error" : "border-border/50 focus:border-accent-warm/50"}
-          `}
-        />
-        {error && <p className="text-[10px] text-error">パスワードが正しくありません</p>}
-        <div className="flex gap-2">
-          <button
-            onClick={onClose}
-            className="flex-1 px-3 py-2 text-sm font-medium text-text-secondary bg-bg-tertiary rounded-xl hover:bg-bg-tertiary/80 transition-colors"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="flex-1 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-accent-warm to-accent rounded-xl hover:-translate-y-0.5 transition-all shadow-sm"
-          >
-            解放
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}

@@ -4,7 +4,7 @@ import { useTiffStore } from "../../store/tiffStore";
 import { TiffResultDialog } from "./TiffResultDialog";
 import { TiffPartialBlurModal } from "./TiffPartialBlurModal";
 import { TiffPageRulesEditor } from "./TiffPageRulesEditor";
-import { CropJsonLoadDialog, CropJsonRegisterDialog, UnlockDialog } from "./TiffCropSidePanel";
+import { CropJsonLoadDialog, CropJsonRegisterDialog } from "./TiffCropSidePanel";
 import { useTiffProcessor } from "../../hooks/useTiffProcessor";
 import { usePsdLoader } from "../../hooks/usePsdLoader";
 import type { TiffColorMode } from "../../types/tiff";
@@ -67,8 +67,6 @@ export function TiffSettingsPanel() {
   const redoCropBounds = useTiffStore((s) => s.redoCropBounds);
   const cropHistory = useTiffStore((s) => s.cropHistory);
   const cropFuture = useTiffStore((s) => s.cropFuture);
-  const isFeatureUnlocked = useTiffStore((s) => s.isFeatureUnlocked);
-  const setFeatureUnlocked = useTiffStore((s) => s.setFeatureUnlocked);
   const cropGuides = useTiffStore((s) => s.cropGuides);
   const clearCropGuides = useTiffStore((s) => s.clearCropGuides);
   const removeCropGuide = useTiffStore((s) => s.removeCropGuide);
@@ -87,7 +85,6 @@ export function TiffSettingsPanel() {
   const [showPageRulesEditor, setShowPageRulesEditor] = useState(false);
   const [showJsonLoadDialog, setShowJsonLoadDialog] = useState(false);
   const [showJsonRegisterDialog, setShowJsonRegisterDialog] = useState(false);
-  const [showUnlockDialog, setShowUnlockDialog] = useState(false);
 
   // Accordion
   const [openSections, setOpenSections] = useState<Set<string>>(() => new Set(DEFAULT_OPEN));
@@ -286,28 +283,6 @@ export function TiffSettingsPanel() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M21 10H11a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
                     </svg>
                   </button>
-                  <button
-                    onClick={() => {
-                      if (isFeatureUnlocked) setFeatureUnlocked(false);
-                      else setShowUnlockDialog(true);
-                    }}
-                    className={`p-1 rounded-md transition-colors ${
-                      isFeatureUnlocked
-                        ? "text-accent-warm hover:bg-accent-warm/10"
-                        : "text-text-muted hover:text-text-primary hover:bg-bg-elevated"
-                    }`}
-                    title={isFeatureUnlocked ? "ロック (クリックでロック)" : "ロック解除"}
-                  >
-                    {isFeatureUnlocked ? (
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                    )}
-                  </button>
                 </>
               )}
             </div>
@@ -375,7 +350,7 @@ export function TiffSettingsPanel() {
                       </button>
                     </div>
 
-                    {!isFeatureUnlocked && canApplyGuides && (
+                    {canApplyGuides && (
                       <button
                         onClick={applyCropGuidesToBounds}
                         className="w-full px-3 py-1.5 text-xs font-medium text-white bg-gradient-to-r from-accent-warm to-accent rounded-lg hover:-translate-y-0.5 transition-all shadow-sm"
@@ -427,17 +402,15 @@ export function TiffSettingsPanel() {
                     </svg>
                     JSONから読み込む
                   </button>
-                  {isFeatureUnlocked && (
-                    <button
-                      onClick={() => setShowJsonRegisterDialog(true)}
-                      className="w-full px-3 py-1.5 text-xs font-medium rounded-lg text-left flex items-center gap-2 text-text-secondary bg-bg-elevated border border-border/50 hover:bg-bg-elevated/80 transition-colors"
-                    >
-                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                      </svg>
-                      JSONに新規登録
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setShowJsonRegisterDialog(true)}
+                    className="w-full px-3 py-1.5 text-xs font-medium rounded-lg text-left flex items-center gap-2 text-text-secondary bg-bg-elevated border border-border/50 hover:bg-bg-elevated/80 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    JSONに新規登録
+                  </button>
                 </div>
               </>
             )}
@@ -793,12 +766,6 @@ export function TiffSettingsPanel() {
       )}
       {showJsonRegisterDialog && (
         <CropJsonRegisterDialog onClose={() => setShowJsonRegisterDialog(false)} />
-      )}
-      {showUnlockDialog && (
-        <UnlockDialog
-          onClose={() => setShowUnlockDialog(false)}
-          onUnlock={() => { setFeatureUnlocked(true); setShowUnlockDialog(false); }}
-        />
       )}
     </div>
   );

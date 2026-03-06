@@ -39,11 +39,15 @@ function isSharp(code: string): boolean {
   return AA_SHARP_VALUES.has(code);
 }
 
+export type TextIssueFilter = "antiAlias" | "tracking";
+
 interface SpecTextGridProps {
   onFilterFont?: (font: string) => void;
+  onFilterIssue?: (issue: TextIssueFilter) => void;
+  onFilterStroke?: (strokeSize: number) => void;
 }
 
-export function SpecTextGrid({ onFilterFont }: SpecTextGridProps = {}) {
+export function SpecTextGrid({ onFilterFont, onFilterIssue, onFilterStroke }: SpecTextGridProps = {}) {
   const files = usePsdStore((s) => s.files);
   const activeFileId = usePsdStore((s) => s.activeFileId);
   const selectFile = usePsdStore((s) => s.selectFile);
@@ -233,30 +237,47 @@ export function SpecTextGrid({ onFilterFont }: SpecTextGridProps = {}) {
         <div className="mb-4 flex flex-wrap gap-2">
           {/* Stroke compact */}
           {strokeStats.entries.length > 0 && (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary/60 border border-border/50 rounded-lg">
+            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all ${
+              onFilterStroke
+                ? "bg-accent-tertiary/5 border-accent-tertiary/25 hover:bg-accent-tertiary/10 hover:border-accent-tertiary/40"
+                : "bg-bg-secondary/60 border-border/50"
+            }`}>
               <svg className="w-3 h-3 text-accent-tertiary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <span className="text-[10px] text-text-muted">白フチ</span>
               {strokeStats.entries.map(([size, count]) => (
-                <span
+                <button
                   key={size}
-                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-accent-tertiary/25 bg-accent-tertiary/8 text-[9px]"
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-accent-tertiary/25 bg-accent-tertiary/8 text-[9px] ${
+                    onFilterStroke ? "cursor-pointer hover:bg-accent-tertiary/20 hover:border-accent-tertiary/40 transition-all" : ""
+                  }`}
+                  title={onFilterStroke ? `ビューアーで白フチ${size}pxを絞り込み` : undefined}
+                  onClick={onFilterStroke ? () => onFilterStroke(size) : undefined}
                 >
                   <span className="font-medium text-accent-tertiary">{size}px</span>
                   <span className="text-text-muted">({count})</span>
-                </span>
+                </button>
               ))}
+              {onFilterStroke && (
+                <svg className="w-2.5 h-2.5 ml-0.5 text-accent-tertiary/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+              )}
             </div>
           )}
 
           {/* AntiAlias compact */}
           {antiAliasStats.total > 0 && (
-            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
-              antiAliasStats.nonSharpCount > 0
-                ? "bg-red-500/5 border-red-500/25"
-                : "bg-bg-secondary/60 border-border/50"
-            }`}>
+            <button
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all ${
+                antiAliasStats.nonSharpCount > 0
+                  ? "bg-red-500/5 border-red-500/25 hover:bg-red-500/10 hover:border-red-500/40 cursor-pointer"
+                  : "bg-bg-secondary/60 border-border/50"
+              }`}
+              onClick={antiAliasStats.nonSharpCount > 0 && onFilterIssue ? () => onFilterIssue("antiAlias") : undefined}
+              title={antiAliasStats.nonSharpCount > 0 && onFilterIssue ? "DTPビューアーで確認" : undefined}
+            >
               <svg className={`w-3 h-3 flex-shrink-0 ${antiAliasStats.nonSharpCount > 0 ? "text-red-400" : "text-emerald-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" />
               </svg>
@@ -281,38 +302,54 @@ export function SpecTextGrid({ onFilterFont }: SpecTextGridProps = {}) {
                       </span>
                     );
                   })}
+                  {onFilterIssue && (
+                    <svg className="w-2.5 h-2.5 ml-0.5 text-red-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                  )}
                 </>
               ) : (
                 <span className="text-[10px] font-medium text-emerald-400">全てシャープ</span>
               )}
-            </div>
+            </button>
           )}
 
           {/* Tracking (kerning) compact */}
           {trackingStats.totalTextLayers > 0 && (
-            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
-              trackingStats.totalWithNonZero > 0
-                ? "bg-red-500/5 border-red-500/25"
-                : "bg-bg-secondary/60 border-border/50"
-            }`}>
+            <button
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all ${
+                trackingStats.totalWithNonZero > 0
+                  ? "bg-red-500/5 border-red-500/25 hover:bg-red-500/10 hover:border-red-500/40 cursor-pointer"
+                  : "bg-bg-secondary/60 border-border/50"
+              }`}
+              onClick={trackingStats.totalWithNonZero > 0 && onFilterIssue ? () => onFilterIssue("tracking") : undefined}
+              title={trackingStats.totalWithNonZero > 0 && onFilterIssue ? "DTPビューアーで確認" : undefined}
+            >
               <svg className={`w-3 h-3 flex-shrink-0 ${trackingStats.totalWithNonZero > 0 ? "text-red-400" : "text-emerald-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
               <span className="text-[10px] text-text-muted">カーニング</span>
               {trackingStats.totalWithNonZero > 0 ? (
-                trackingStats.entries.map(([val, count]) => (
-                  <span
-                    key={val}
-                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-red-500/25 bg-red-500/8 text-[9px]"
-                  >
-                    <span className="font-medium text-red-400">{val > 0 ? `+${val}` : val}</span>
-                    <span className="text-text-muted">({count})</span>
-                  </span>
-                ))
+                <>
+                  {trackingStats.entries.map(([val, count]) => (
+                    <span
+                      key={val}
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-red-500/25 bg-red-500/8 text-[9px]"
+                    >
+                      <span className="font-medium text-red-400">{val > 0 ? `+${val}` : val}</span>
+                      <span className="text-text-muted">({count})</span>
+                    </span>
+                  ))}
+                  {onFilterIssue && (
+                    <svg className="w-2.5 h-2.5 ml-0.5 text-red-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                  )}
+                </>
               ) : (
                 <span className="text-[10px] font-medium text-emerald-400">全て0</span>
               )}
-            </div>
+            </button>
           )}
         </div>
       )}

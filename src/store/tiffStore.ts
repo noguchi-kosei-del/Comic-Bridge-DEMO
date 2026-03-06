@@ -17,8 +17,6 @@ import { DEFAULT_TIFF_SETTINGS as defaults } from "../types/tiff";
 // localStorage キー
 const LS_KEY_PRESETS = "tiff_cropPresets";
 const LS_KEY_SETTINGS = "tiff_lastSettings";
-const LS_KEY_UNLOCK = "tiff_featureUnlocked";
-
 function loadCropPresetsFromStorage(): TiffCropPreset[] {
   try {
     const raw = localStorage.getItem(LS_KEY_PRESETS);
@@ -80,8 +78,6 @@ interface TiffState {
   cropMethod: TiffCropMethod;
   cropHistory: (TiffCropBounds | null)[];
   cropFuture: (TiffCropBounds | null)[];
-  isFeatureUnlocked: boolean;
-
   // --- アクション: 設定 ---
   setSettings: (partial: Partial<TiffSettings>) => void;
   resetSettings: () => void;
@@ -122,7 +118,6 @@ interface TiffState {
   pushCropHistory: () => void;
   undoCropBounds: () => void;
   redoCropBounds: () => void;
-  setFeatureUnlocked: (unlocked: boolean) => void;
   resetCropEditor: () => void;
 
   // --- アクション: 処理 ---
@@ -169,10 +164,6 @@ export const useTiffStore = create<TiffState>((set) => ({
   cropMethod: "drag",
   cropHistory: [],
   cropFuture: [],
-  isFeatureUnlocked: (() => {
-    try { return localStorage.getItem(LS_KEY_UNLOCK) === "true"; } catch { return false; }
-  })(),
-
   // --- 設定 ---
   setSettings: (partial) =>
     set((state) => {
@@ -405,11 +396,6 @@ export const useTiffStore = create<TiffState>((set) => ({
         cropFuture: future,
       };
     }),
-
-  setFeatureUnlocked: (unlocked) => {
-    try { localStorage.setItem(LS_KEY_UNLOCK, String(unlocked)); } catch { /* ignore */ }
-    set({ isFeatureUnlocked: unlocked });
-  },
 
   resetCropEditor: () =>
     set({

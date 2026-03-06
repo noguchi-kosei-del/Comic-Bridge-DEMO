@@ -10,17 +10,36 @@ import { performPresetJsonSave } from "../../hooks/useScanPsdProcessor";
 import { useFontResolver, collectTextLayers } from "../../hooks/useFontResolver";
 import { SUB_NAME_PALETTE, ALL_SUB_NAMES } from "../../types/scanPsd";
 import type { PresetJsonData } from "../../types/scanPsd";
-import { TextLayerRow } from "./SpecTextGrid";
+import { TextLayerRow, type TextIssueFilter } from "./SpecTextGrid";
 import { LayerTree } from "../metadata/LayerTree";
 import { JsonFileBrowser } from "../scanPsd/JsonFileBrowser";
+
+const AA_SHARP_VALUES = new Set(["antiAliasSharp", "sharp", "Shrp"]);
+
+function hasIssue(entry: { textInfo?: import("../../types").TextInfo }, issue: TextIssueFilter): boolean {
+  if (!entry.textInfo) return false;
+  if (issue === "antiAlias") {
+    const aa = entry.textInfo.antiAlias;
+    return !!aa && !AA_SHARP_VALUES.has(aa);
+  }
+  if (issue === "tracking") {
+    const t = entry.textInfo.tracking;
+    return !!t && t.length > 0;
+  }
+  return false;
+}
 
 interface SpecViewerPanelProps {
   onOpenInPhotoshop?: (filePath: string) => void;
   initialFilterFont?: string | null;
   onFilterFontConsumed?: () => void;
+  initialFilterIssue?: TextIssueFilter | null;
+  onFilterIssueConsumed?: () => void;
+  initialFilterStroke?: number | null;
+  onFilterStrokeConsumed?: () => void;
 }
 
-export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilterFontConsumed }: SpecViewerPanelProps) {
+export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilterFontConsumed, initialFilterIssue, onFilterIssueConsumed, initialFilterStroke, onFilterStrokeConsumed }: SpecViewerPanelProps) {
   const files = usePsdStore((s) => s.files);
   const selectedFileIds = usePsdStore((s) => s.selectedFileIds);
   const { openFolderForFile } = useOpenFolder();
@@ -37,6 +56,10 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
   // Font filter (3-state: null → filterOnly → filterAndHighlight)
   const [filterFont, setFilterFont] = useState<string | null>(null);
   const [filterHighlightAll, setFilterHighlightAll] = useState(false);
+  // Issue filter (antiAlias / tracking)
+  const [filterIssue, setFilterIssue] = useState<TextIssueFilter | null>(null);
+  // Stroke filter (by stroke size in px)
+  const [filterStroke, setFilterStroke] = useState<number | null>(null);
   // Text layer highlight (index in textLayers)
   const [highlightLayerIdx, setHighlightLayerIdx] = useState<number | null>(null);
   // Layer tree highlight (by layer id)
@@ -114,9 +137,33 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
     if (initialFilterFont) {
       setFilterFont(initialFilterFont);
       setFilterHighlightAll(false);
+      setFilterIssue(null);
+      setFilterStroke(null);
       onFilterFontConsumed?.();
     }
   }, [initialFilterFont]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply initial issue filter from parent (e.g. clicking AA/tracking badge in SpecTextGrid)
+  useEffect(() => {
+    if (initialFilterIssue) {
+      setFilterIssue(initialFilterIssue);
+      setFilterFont(null);
+      setFilterStroke(null);
+      setFilterHighlightAll(true); // 問題レイヤーを全ハイライト
+      onFilterIssueConsumed?.();
+    }
+  }, [initialFilterIssue]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply initial stroke filter from parent (e.g. clicking stroke badge in SpecTextGrid)
+  useEffect(() => {
+    if (initialFilterStroke != null) {
+      setFilterStroke(initialFilterStroke);
+      setFilterFont(null);
+      setFilterIssue(null);
+      setFilterHighlightAll(true);
+      onFilterStrokeConsumed?.();
+    }
+  }, [initialFilterStroke]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fullscreen mode (true OS fullscreen via Tauri)
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -172,19 +219,21 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
     };
   }, [isFullscreen]);
 
-  // Filtered file indices (when a font filter is active)
+  // Filtered file indices (when a font, issue, or stroke filter is active)
   const filteredIndices = useMemo(() => {
-    if (!filterFont) return null;
+    if (!filterFont && !filterIssue && filterStroke == null) return null;
     return files
       .map((f, i) => ({ f, i }))
       .filter(({ f }) => {
         if (!f.metadata?.layerTree) return false;
-        return collectTextLayers(f.metadata.layerTree).some(
-          (e) => e.textInfo?.fonts.includes(filterFont)
-        );
+        const layers = collectTextLayers(f.metadata.layerTree);
+        if (filterFont) return layers.some((e) => e.textInfo?.fonts.includes(filterFont));
+        if (filterIssue) return layers.some((e) => hasIssue(e, filterIssue));
+        if (filterStroke != null) return layers.some((e) => e.textInfo?.strokeSize === filterStroke);
+        return false;
       })
       .map(({ i }) => i);
-  }, [files, filterFont]);
+  }, [files, filterFont, filterIssue, filterStroke]);
 
   // Position within filtered list
   const filteredPos = useMemo(() => {
@@ -198,7 +247,7 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
     if (!filteredIndices.includes(viewerFileIndex)) {
       setViewerFileIndex(filteredIndices[0]);
     }
-  }, [filterFont]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterFont, filterIssue, filterStroke]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const viewerFile = files[viewerFileIndex] ?? files[0] ?? null;
 
@@ -237,12 +286,27 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
 
   // All matching bounds when filterHighlightAll is active
   const filterHighlightBoundsList = useMemo(() => {
-    if (!filterHighlightAll || !filterFont) return [];
-    return textLayers
-      .filter((e) => e.textInfo?.fonts.includes(filterFont))
-      .map((e) => e.bounds)
-      .filter((b): b is import("../../types").LayerBounds => !!b);
-  }, [filterHighlightAll, filterFont, textLayers]);
+    if (!filterHighlightAll) return [];
+    if (filterFont) {
+      return textLayers
+        .filter((e) => e.textInfo?.fonts.includes(filterFont))
+        .map((e) => e.bounds)
+        .filter((b): b is import("../../types").LayerBounds => !!b);
+    }
+    if (filterIssue) {
+      return textLayers
+        .filter((e) => hasIssue(e, filterIssue))
+        .map((e) => e.bounds)
+        .filter((b): b is import("../../types").LayerBounds => !!b);
+    }
+    if (filterStroke != null) {
+      return textLayers
+        .filter((e) => e.textInfo?.strokeSize === filterStroke)
+        .map((e) => e.bounds)
+        .filter((b): b is import("../../types").LayerBounds => !!b);
+    }
+    return [];
+  }, [filterHighlightAll, filterFont, filterIssue, filterStroke, textLayers]);
 
   // Reset highlight when file changes
   useEffect(() => {
@@ -250,6 +314,37 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
     setHighlightTreeLayerId(null);
     setHighlightTreeBounds(null);
   }, [viewerFileIndex]);
+
+  // Detect which issues exist across all files
+  const existingIssues = useMemo(() => {
+    let hasAA = false;
+    let hasTracking = false;
+    for (const f of files) {
+      if (!f.metadata?.layerTree) continue;
+      const layers = collectTextLayers(f.metadata.layerTree);
+      for (const e of layers) {
+        if (!hasAA && hasIssue(e, "antiAlias")) hasAA = true;
+        if (!hasTracking && hasIssue(e, "tracking")) hasTracking = true;
+        if (hasAA && hasTracking) break;
+      }
+      if (hasAA && hasTracking) break;
+    }
+    return { hasAA, hasTracking };
+  }, [files]);
+
+  // Detect which stroke sizes exist across all files (sorted by frequency)
+  const existingStrokes = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const f of files) {
+      if (!f.metadata?.layerTree) continue;
+      const layers = collectTextLayers(f.metadata.layerTree);
+      for (const e of layers) {
+        const s = e.textInfo?.strokeSize;
+        if (s != null && s > 0) counts.set(s, (counts.get(s) || 0) + 1);
+      }
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [files]);
 
   // Per-file font summary
   const fileFonts = useMemo(() => {
@@ -449,8 +544,8 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
                     y={b.top}
                     width={b.right - b.left}
                     height={b.bottom - b.top}
-                    fill={`${filterFont ? fontInfo.getFontColor(filterFont) : "rgba(194,90,90,1)"}18`}
-                    stroke={`${filterFont ? fontInfo.getFontColor(filterFont) : "rgba(194,90,90,1)"}70`}
+                    fill={`${filterFont ? fontInfo.getFontColor(filterFont) : filterStroke != null ? "#00c9a7" : "#c25a5a"}18`}
+                    stroke={`${filterFont ? fontInfo.getFontColor(filterFont) : filterStroke != null ? "#00c9a7" : "#c25a5a"}70`}
                     strokeWidth={Math.max(3, psdWidth * 0.002)}
                     rx={4}
                   />
@@ -558,7 +653,7 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
             {files.length > 1 && (
               <span className="text-[10px] text-text-muted flex-shrink-0">
                 {navPos} / {navTotal}
-                {filterFont && <span className="text-accent"> (絞込)</span>}
+                {(filterFont || filterIssue || filterStroke != null) && <span className="text-accent"> (絞込{filterIssue === "antiAlias" ? ": AA" : filterIssue === "tracking" ? ": カーニング" : filterStroke != null ? `: 白フチ${filterStroke}px` : ""})</span>}
               </span>
             )}
             {viewerFile && (
@@ -636,10 +731,91 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                     </svg>
                     <span className="text-[9px] text-text-muted">フォント絞り込み</span>
-                    {filterFont && (
+                    {(existingIssues.hasAA || existingIssues.hasTracking) && (
+                      <div className="flex items-center gap-1">
+                        {existingIssues.hasAA && (
+                          <button
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-medium transition-all ${
+                              filterIssue === "antiAlias"
+                                ? filterHighlightAll
+                                  ? "bg-error/25 text-error ring-1 ring-error/50"
+                                  : "bg-error/20 text-error ring-1 ring-error/30"
+                                : "bg-error/10 text-error/60 hover:bg-error/15 hover:text-error"
+                            }`}
+                            title={filterIssue === "antiAlias" ? (filterHighlightAll ? "ハイライト解除" : "該当レイヤーをすべてハイライト") : "AA問題のあるページに絞り込み"}
+                            onClick={() => {
+                              if (filterIssue === "antiAlias") {
+                                setFilterHighlightAll(!filterHighlightAll);
+                              } else {
+                                setFilterIssue("antiAlias");
+                                setFilterFont(null);
+                                setFilterStroke(null);
+                                setFilterHighlightAll(true);
+                              }
+                            }}
+                          >
+                            AA問題
+                          </button>
+                        )}
+                        {existingIssues.hasTracking && (
+                          <button
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-medium transition-all ${
+                              filterIssue === "tracking"
+                                ? filterHighlightAll
+                                  ? "bg-error/25 text-error ring-1 ring-error/50"
+                                  : "bg-error/20 text-error ring-1 ring-error/30"
+                                : "bg-error/10 text-error/60 hover:bg-error/15 hover:text-error"
+                            }`}
+                            title={filterIssue === "tracking" ? (filterHighlightAll ? "ハイライト解除" : "該当レイヤーをすべてハイライト") : "カーニング問題のあるページに絞り込み"}
+                            onClick={() => {
+                              if (filterIssue === "tracking") {
+                                setFilterHighlightAll(!filterHighlightAll);
+                              } else {
+                                setFilterIssue("tracking");
+                                setFilterFont(null);
+                                setFilterStroke(null);
+                                setFilterHighlightAll(true);
+                              }
+                            }}
+                          >
+                            カーニング問題
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {existingStrokes.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        {existingStrokes.map(([size]) => (
+                          <button
+                            key={size}
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-medium transition-all ${
+                              filterStroke === size
+                                ? filterHighlightAll
+                                  ? "bg-accent-tertiary/25 text-accent-tertiary ring-1 ring-accent-tertiary/50"
+                                  : "bg-accent-tertiary/20 text-accent-tertiary ring-1 ring-accent-tertiary/30"
+                                : "bg-accent-tertiary/10 text-accent-tertiary/60 hover:bg-accent-tertiary/15 hover:text-accent-tertiary"
+                            }`}
+                            title={filterStroke === size ? (filterHighlightAll ? "ハイライト解除" : "該当レイヤーをすべてハイライト") : `白フチ${size}pxのページに絞り込み`}
+                            onClick={() => {
+                              if (filterStroke === size) {
+                                setFilterHighlightAll(!filterHighlightAll);
+                              } else {
+                                setFilterStroke(size);
+                                setFilterFont(null);
+                                setFilterIssue(null);
+                                setFilterHighlightAll(true);
+                              }
+                            }}
+                          >
+                            白フチ{size}px
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {(filterFont || filterIssue || filterStroke != null) && (
                       <button
                         className="ml-auto text-[9px] px-1.5 py-0.5 rounded text-accent hover:bg-accent/10 transition-all"
-                        onClick={() => { setFilterFont(null); setFilterHighlightAll(false); }}
+                        onClick={() => { setFilterFont(null); setFilterIssue(null); setFilterStroke(null); setFilterHighlightAll(false); }}
                       >
                         解除
                       </button>
@@ -679,6 +855,8 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
                               } else {
                                 // 1st click: filter
                                 setFilterFont(font);
+                                setFilterIssue(null);
+                                setFilterStroke(null);
                                 setFilterHighlightAll(false);
                               }
                             }}
@@ -725,16 +903,30 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
                                       </button>
                                     );
                                   })}
+                                  <div className="border-t border-border/30 my-0.5" />
+                                  <div className="px-2 py-1">
+                                    <input
+                                      className="w-full text-[9px] px-1.5 py-0.5 rounded border border-border/50 bg-bg-primary text-text-primary outline-none focus:border-accent/50 placeholder:text-text-muted/50"
+                                      placeholder="カスタム入力..."
+                                      defaultValue=""
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          const val = e.currentTarget.value.trim();
+                                          if (val) updateFontCategory(font, val);
+                                        }
+                                        e.stopPropagation();
+                                      }}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
                                   {catEntry.subName && (
-                                    <>
-                                      <div className="border-t border-border/30 my-0.5" />
-                                      <button
-                                        className="block w-full text-left text-[9px] px-2.5 py-1 text-text-muted hover:bg-white/5 transition-colors"
-                                        onClick={() => updateFontCategory(font, "")}
-                                      >
-                                        カテゴリなし
-                                      </button>
-                                    </>
+                                    <button
+                                      className="block w-full text-left text-[9px] px-2.5 py-1 text-text-muted hover:bg-white/5 transition-colors"
+                                      onClick={() => updateFontCategory(font, "")}
+                                    >
+                                      カテゴリなし
+                                    </button>
                                   )}
                                 </div>
                               )}

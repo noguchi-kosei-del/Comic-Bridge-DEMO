@@ -207,10 +207,28 @@ function extractLayerTree(children: Psd["children"], parentPath = "", dpi = 72):
         }
       }
 
+      // アンチエイリアス（テキストデータ直下）
+      const antiAlias = child.text.antiAlias as string | undefined;
+
+      // トラッキング（カーニング）：0以外の値のみ収集
+      const trackingValues = new Set<number>();
+      if (child.text.style?.tracking && child.text.style.tracking !== 0) {
+        trackingValues.add(child.text.style.tracking);
+      }
+      if (child.text.styleRuns) {
+        for (const run of child.text.styleRuns) {
+          if (run.style?.tracking && run.style.tracking !== 0) {
+            trackingValues.add(run.style.tracking);
+          }
+        }
+      }
+
       node.textInfo = {
         text: child.text.text || "",
         fonts: [...fonts],
         fontSizes: [...fontSizes].sort((a, b) => b - a),
+        ...(antiAlias ? { antiAlias } : {}),
+        ...(trackingValues.size > 0 ? { tracking: [...trackingValues] } : {}),
       };
     }
 

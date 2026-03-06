@@ -2,7 +2,7 @@ import { useState } from "react";
 import { usePsdStore } from "../../store/psdStore";
 import { useOpenInPhotoshop } from "../../hooks/useOpenInPhotoshop";
 import { CompactFileList } from "../common/CompactFileList";
-import { SpecTextGrid } from "../spec-checker/SpecTextGrid";
+import { SpecTextGrid, type TextIssueFilter } from "../spec-checker/SpecTextGrid";
 import { SpecViewerPanel } from "../spec-checker/SpecViewerPanel";
 import { TypesettingViewerPanel } from "../typesetting-check/TypesettingViewerPanel";
 import { TypesettingCheckPanel } from "../typesetting-check/TypesettingCheckPanel";
@@ -14,6 +14,8 @@ export function TypsettingView() {
   const files = usePsdStore((s) => s.files);
   const [subTab, setSubTab] = useState<SubTab>("spec");
   const [viewerFilterFont, setViewerFilterFont] = useState<string | null>(null);
+  const [viewerFilterIssue, setViewerFilterIssue] = useState<TextIssueFilter | null>(null);
+  const [viewerFilterStroke, setViewerFilterStroke] = useState<number | null>(null);
   const { openFileInPhotoshop } = useOpenInPhotoshop();
 
   const hasFiles = files.length > 0;
@@ -44,7 +46,11 @@ export function TypsettingView() {
           <>
             <CompactFileList className="w-52 flex-shrink-0 border-r border-border" />
             <div className="flex-1 overflow-hidden">
-              <SpecTextGrid onFilterFont={(font) => { setViewerFilterFont(font); setSubTab("viewer"); }} />
+              <SpecTextGrid
+                onFilterFont={(font) => { setViewerFilterFont(font); setViewerFilterIssue(null); setViewerFilterStroke(null); setSubTab("viewer"); }}
+                onFilterIssue={(issue) => { setViewerFilterIssue(issue); setViewerFilterFont(null); setViewerFilterStroke(null); setSubTab("viewer"); }}
+                onFilterStroke={(size) => { setViewerFilterStroke(size); setViewerFilterFont(null); setViewerFilterIssue(null); setSubTab("viewer"); }}
+              />
             </div>
           </>
         )}
@@ -55,6 +61,10 @@ export function TypsettingView() {
               onOpenInPhotoshop={openFileInPhotoshop}
               initialFilterFont={viewerFilterFont}
               onFilterFontConsumed={() => setViewerFilterFont(null)}
+              initialFilterIssue={viewerFilterIssue}
+              onFilterIssueConsumed={() => setViewerFilterIssue(null)}
+              initialFilterStroke={viewerFilterStroke}
+              onFilterStrokeConsumed={() => setViewerFilterStroke(null)}
             />
           </div>
         )}
@@ -93,7 +103,7 @@ export function TypsettingView() {
 function SubTabBar({ subTab, setSubTab }: { subTab: SubTab; setSubTab: (t: SubTab) => void }) {
   const tabs: { id: SubTab; label: string }[] = [
     { id: "spec", label: "写植仕様" },
-    { id: "viewer", label: "フォントビューアー" },
+    { id: "viewer", label: "DTPビューアー" },
     { id: "check", label: "写植調整" },
   ];
 
