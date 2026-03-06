@@ -20,7 +20,7 @@ export function FontSizesTab() {
   }
 
   const sizeStats = scanData.sizeStats ?? { mostFrequent: null, sizes: [], excludeRange: null, allSizes: {} };
-  const strokeStats = scanData.strokeStats ?? { sizes: [] };
+  const strokeSizes = scanData.strokeStats?.sizes ?? [];
   const top10 = (sizeStats.sizes ?? []).slice(0, 10);
   const remaining = (sizeStats.sizes ?? []).slice(10);
   const maxCount = top10.length > 0 ? top10[0].count : 1;
@@ -207,14 +207,14 @@ export function FontSizesTab() {
         <div className="flex items-center gap-2 mb-2">
           <h4 className="text-[10px] font-bold text-text-secondary">白フチサイズ</h4>
           <span className="text-[9px] font-bold text-accent-tertiary bg-accent-tertiary/10 px-2 py-0.5 rounded-full">
-            {strokeStats.sizes.length}
+            {strokeSizes.length}
           </span>
         </div>
-        {strokeStats.sizes.length === 0 ? (
+        {strokeSizes.length === 0 ? (
           <p className="text-xs text-text-muted py-2 text-center bg-bg-tertiary/30 rounded-xl border border-dashed border-border">検出なし</p>
         ) : (
           <div className="space-y-1.5">
-            {strokeStats.sizes.map((s) => (
+            {strokeSizes.map((s) => (
               <div key={s.size} className="bg-bg-tertiary/40 rounded-lg px-3 py-2 border border-border/30 hover:border-accent-tertiary/30 transition-colors">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold text-accent-tertiary">{s.size}px</span>
