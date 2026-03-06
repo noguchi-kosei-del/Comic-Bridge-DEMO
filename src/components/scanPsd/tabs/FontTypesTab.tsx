@@ -5,6 +5,9 @@ import { getAutoSubName, FONT_SUB_NAME_MAP, SUB_NAME_PALETTE } from "../../../ty
 import type { FontPreset } from "../../../types/scanPsd";
 import { MISSING_FONT_COLOR } from "../../../hooks/useFontResolver";
 import type { FontResolveInfo } from "../../../hooks/useFontResolver";
+import { FontBrowserDialog } from "../../spec-checker/FontBrowserDialog";
+
+const FONT_SHARE_PATH = "\\\\haku\\CLLENN\\■アシスタント\\★フォント\\★全フォント";
 
 // --- 定数 ---
 const SUB_NAME_ORDER: Record<string, number> = {};
@@ -206,8 +209,9 @@ export function FontTypesTab() {
 
   const [fontResolveMap, setFontResolveMap] = useState<Record<string, FontResolveInfo>>({});
   const [fontChecked, setFontChecked] = useState(false);
+  const [showFontBrowser, setShowFontBrowser] = useState(false);
 
-  useEffect(() => {
+  const resolveFonts = useCallback(() => {
     if (allPresetFontNames.length === 0) {
       setFontChecked(false);
       return;
@@ -222,6 +226,10 @@ export function FontTypesTab() {
       })
       .catch(console.error);
   }, [allPresetFontNames]);
+
+  useEffect(() => {
+    resolveFonts();
+  }, [resolveFonts]);
 
   const isFontMissing = (psName: string) => fontChecked && !(psName in fontResolveMap);
   const missingFontNames = useMemo(
@@ -978,13 +986,22 @@ export function FontTypesTab() {
             <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke={MISSING_FONT_COLOR} strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <div>
+            <div className="flex-1">
               <p className="text-[10px] font-bold" style={{ color: MISSING_FONT_COLOR }}>
                 未インストール: {missingFontNames.length}件
               </p>
               <p className="text-[9px] mt-0.5" style={{ color: `${MISSING_FONT_COLOR}cc` }}>
                 {missingFontNames.map((n) => fontResolveMap[n]?.display_name || n).join(", ")}
               </p>
+              <button
+                onClick={() => setShowFontBrowser(true)}
+                className="mt-1.5 text-[9px] font-bold text-white px-2.5 py-1 rounded-lg transition-colors"
+                style={{ backgroundColor: MISSING_FONT_COLOR }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+              >
+                共有フォルダから探す
+              </button>
             </div>
           </div>
         )}
@@ -1371,6 +1388,26 @@ export function FontTypesTab() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* 共有フォルダフォントブラウザモーダル */}
+      {showFontBrowser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowFontBrowser(false);
+            e.stopPropagation();
+          }}
+        >
+          <div onMouseDown={(e) => e.stopPropagation()}>
+            <FontBrowserDialog
+              basePath={FONT_SHARE_PATH}
+              missingFontNames={missingFontNames.map((n) => fontResolveMap[n]?.display_name || n)}
+              onInstalled={resolveFonts}
+              onClose={() => setShowFontBrowser(false)}
+            />
+          </div>
         </div>
       )}
     </div>
