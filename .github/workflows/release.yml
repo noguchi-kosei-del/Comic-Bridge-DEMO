@@ -3,60 +3,56 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   release:
+    runs-on: windows-latest
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: 'windows-latest'
-            args: ''
-
-    runs-on: ${{ matrix.platform }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: "lts/*"
 
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Build the app
+      - name: Download pdfium.dll
+        shell: pwsh
+        run: |
+          $pdfiumDir = "src-tauri/resources/pdfium"
+          if (!(Test-Path "$pdfiumDir/pdfium.dll")) {
+            New-Item -ItemType Directory -Force -Path $pdfiumDir | Out-Null
+            $url = "https://github.com/nicehash/pdfium-binaries/releases/latest/download/pdfium-windows-x64.zip"
+            Invoke-WebRequest -Uri $url -OutFile "pdfium.zip"
+            Expand-Archive -Path "pdfium.zip" -DestinationPath "pdfium-temp" -Force
+            Copy-Item "pdfium-temp/bin/pdfium.dll" "$pdfiumDir/pdfium.dll"
+            Remove-Item -Recurse -Force "pdfium-temp", "pdfium.zip"
+          }
+
+      - name: Build and release
         uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Comic-Bridge ${{ github.ref_name }}'
+          tagName: v__VERSION__
+          releaseName: "Comic-Bridge v__VERSION__"
           releaseBody: |
-            ## Comic-Bridge ${{ github.ref_name }}
+            Comic-Bridge v__VERSION__
 
-            ### インストール方法
-            1. `Comic-Bridge_x.x.x_x64-setup.exe` をダウンロード
-            2. インストーラーを実行してください
-
-            既存のバージョンがインストールされている場合は、自動更新機能でもアップデートできます。
+            インストーラーをダウンロードして実行してください。
+            既存のバージョンがインストールされている場合、アプリ内の自動アップデートで更新されます。
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
           updaterJsonPreferNsis: true
           includeUpdaterJson: true
