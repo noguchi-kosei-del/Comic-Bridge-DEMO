@@ -35,6 +35,7 @@ pub fn run() {
             commands::search_json_folders,
             commands::read_text_file,
             commands::write_text_file,
+            commands::write_binary_file,
             commands::delete_file,
             commands::path_exists,
             commands::run_photoshop_replace,

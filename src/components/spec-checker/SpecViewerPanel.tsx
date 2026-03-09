@@ -15,6 +15,9 @@ import type { PresetJsonData } from "../../types/scanPsd";
 import { TextLayerRow, type TextIssueFilter } from "./SpecTextGrid";
 import { LayerTree } from "../metadata/LayerTree";
 import { JsonFileBrowser } from "../scanPsd/JsonFileBrowser";
+import { CaptureOverlay } from "./CaptureOverlay";
+import { useFontBookStore } from "../../store/fontBookStore";
+import type { FontBookEntry } from "../../types/fontBook";
 
 const AA_SHARP_VALUES = new Set(["antiAliasSharp", "sharp", "Shrp"]);
 
@@ -73,6 +76,9 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
   const [showJsonBrowser, setShowJsonBrowser] = useState(false);
   // Image save in progress
   const [isSavingImage, setIsSavingImage] = useState(false);
+  // Font book capture mode
+  const [isCapturing, setIsCapturing] = useState(false);
+  const fontBookDir = useFontBookStore((s) => s.fontBookDir);
 
   // scanPsdStore — font category editing
   const currentJsonFilePath = useScanPsdStore((s) => s.currentJsonFilePath);
@@ -112,6 +118,12 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
           store.setScanData(JSON.parse(sc));
           store.setCurrentScandataFilePath(scandataPath);
         } catch { /* scandata not found, ok */ }
+        // フォント帳も読み込み
+        useFontBookStore.getState().loadFontBook(
+          store.saveDataBasePath,
+          pd.workInfo.label,
+          pd.workInfo.title
+        );
       }
     } catch (e) {
       console.error("Failed to load JSON:", e);
@@ -611,6 +623,92 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
     }
   }, [filterFont, filterIssue, filterStroke, fontInfo, imageUrl, viewerFile, viewerFileIndex]);
 
+  // フォント帳キャプチャ
+  const handleFontBookCapture = useCallback(
+    async (
+      region: { x: number; y: number; width: number; height: number },
+      font: import("../../types/scanPsd").FontPreset
+    ) => {
+      if (!imageUrl) return;
+      setIsCapturing(false);
+
+      // ストアから最新のfontBookDirを取得（コールバック閉包の古い値を避ける）
+      const store = useFontBookStore.getState();
+      let dir = store.fontBookDir;
+
+      // fontBookDirが未設定なら今のworkInfoから初期化を試みる
+      if (!dir) {
+        const scanStore = useScanPsdStore.getState();
+        const { saveDataBasePath, workInfo } = scanStore;
+        if (workInfo.label && workInfo.title) {
+          await store.loadFontBook(saveDataBasePath, workInfo.label, workInfo.title);
+          dir = useFontBookStore.getState().fontBookDir;
+        }
+      }
+      if (!dir) {
+        console.warn("Font book: fontBookDir is null, cannot save");
+        return;
+      }
+
+      try {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("Image load failed"));
+          img.src = imageUrl;
+        });
+
+        const pw = viewerFile?.metadata?.width ?? 0;
+        const ph = viewerFile?.metadata?.height ?? 0;
+        if (pw === 0 || ph === 0) return;
+
+        const scaleX = img.naturalWidth / pw;
+        const scaleY = img.naturalHeight / ph;
+
+        const sx = region.x * scaleX;
+        const sy = region.y * scaleY;
+        const sw = region.width * scaleX;
+        const sh = region.height * scaleY;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(sw);
+        canvas.height = Math.round(sh);
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
+            "image/jpeg",
+            0.92
+          );
+        });
+        const arrayBuffer = await blob.arrayBuffer();
+
+        const entry: FontBookEntry = {
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          fontPostScript: font.font,
+          fontDisplayName: font.name,
+          subName: font.subName || "",
+          sourceFile: viewerFile?.fileName || "",
+          capturedAt: new Date().toISOString(),
+        };
+
+        await useFontBookStore.getState().addEntry(entry, new Uint8Array(arrayBuffer));
+      } catch (err) {
+        console.error("Font book capture failed:", err);
+      }
+    },
+    [imageUrl, viewerFile]
+  );
+
+  // キャプチャ用フォント一覧
+  const capturefonts = useMemo(
+    () => presetSets[currentSetName] || [],
+    [presetSets, currentSetName]
+  );
+
   if (files.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-[11px] text-text-muted">
@@ -700,6 +798,20 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
           </div>
         )}
 
+        {/* Capture overlay */}
+        {isCapturing && psdWidth > 0 && imageUrl && capturefonts.length > 0 && (
+          <CaptureOverlay
+            imageUrl={imageUrl}
+            psdWidth={psdWidth}
+            psdHeight={psdHeight}
+            containerRef={viewerRef}
+            fonts={capturefonts}
+            defaultFontPostScript={filterFont}
+            onCapture={handleFontBookCapture}
+            onCancel={() => setIsCapturing(false)}
+          />
+        )}
+
         {/* Fullscreen toggle */}
         <button
           onClick={() => toggleFullscreen()}
@@ -722,6 +834,20 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
             </svg>
           )}
         </button>
+
+        {/* Font book capture button — only when JSON is loaded */}
+        {currentJsonFilePath && fontBookDir && !isCapturing && (
+          <button
+            onClick={() => setIsCapturing(true)}
+            className="absolute top-3 left-12 z-10 w-8 h-8 rounded-lg bg-black/50 hover:bg-black/70 flex items-center justify-center text-white/70 hover:text-white transition-all backdrop-blur-sm"
+            title="フォント帳にキャプチャ"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        )}
 
         {/* ESC hint (auto-fade) */}
         {isFullscreen && showEscHint && (

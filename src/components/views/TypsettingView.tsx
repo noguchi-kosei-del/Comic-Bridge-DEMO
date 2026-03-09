@@ -9,8 +9,9 @@ import { TypesettingViewerPanel } from "../typesetting-check/TypesettingViewerPa
 import { TypesettingCheckPanel } from "../typesetting-check/TypesettingCheckPanel";
 import { TypesettingConfirmPanel } from "../typesetting-confirm/TypesettingConfirmPanel";
 import { DropZone } from "../file-browser/DropZone";
+import { FontBookView } from "./FontBookView";
 
-type SubTab = "spec" | "viewer" | "check" | "confirm";
+type SubTab = "spec" | "viewer" | "fontBook" | "check" | "confirm";
 
 export function TypsettingView() {
   const files = usePsdStore((s) => s.files);
@@ -23,8 +24,8 @@ export function TypsettingView() {
 
   const hasFiles = files.length > 0;
 
-  // 写植調整・写植確認タブはPSDなしでも使用可能
-  if (!hasFiles && subTab !== "check" && subTab !== "confirm") {
+  // 写植調整・写植確認・フォント帳タブはPSDなしでも使用可能
+  if (!hasFiles && subTab !== "check" && subTab !== "confirm" && subTab !== "fontBook") {
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {/* Sub-tab bar */}
@@ -89,6 +90,19 @@ export function TypsettingView() {
           </div>
         )}
 
+        {subTab === "fontBook" && (
+          <div className="flex-1 overflow-hidden">
+            <FontBookView
+              onNavigateToViewer={(font) => {
+                setViewerFilterFont(font);
+                setViewerFilterIssue(null);
+                setViewerFilterStroke(null);
+                setSubTab("viewer");
+              }}
+            />
+          </div>
+        )}
+
         {subTab === "check" && (
           hasFiles ? (
             <>
@@ -135,6 +149,7 @@ function SubTabBar({ subTab, setSubTab }: { subTab: SubTab; setSubTab: (t: SubTa
   const tabs: { id: SubTab; label: string }[] = [
     { id: "spec", label: "写植仕様" },
     { id: "viewer", label: "DTPビューアー" },
+    { id: "fontBook", label: "フォント帳" },
     { id: "check", label: "写植調整" },
     { id: "confirm", label: "写植確認" },
   ];

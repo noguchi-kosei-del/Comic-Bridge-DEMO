@@ -2678,6 +2678,20 @@ pub async fn write_text_file(file_path: String, content: String) -> Result<(), S
         .map_err(|e| format!("Failed to write file: {}", e))
 }
 
+/// Write binary data to a file (creates parent directories if needed)
+#[tauri::command]
+pub async fn write_binary_file(file_path: String, data: Vec<u8>) -> Result<(), String> {
+    let path = Path::new(&file_path);
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+    }
+    fs::write(path, data)
+        .map_err(|e| format!("Failed to write binary file: {}", e))
+}
+
 /// Delete a file (no error if it doesn't exist)
 #[tauri::command]
 pub async fn delete_file(file_path: String) -> Result<(), String> {
@@ -3123,10 +3137,38 @@ pub async fn open_with_default_app(file_path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// ファイルをエクスプローラーで選択状態で開く（単一ファイル、後方互換）
+/// フォルダをエクスプローラーで開く（存在しない場合は最も近い親フォルダを開く）
 #[tauri::command]
 pub async fn open_folder_in_explorer(folder_path: String) -> Result<(), String> {
-    reveal_files_in_explorer(vec![folder_path]).await
+    // スラッシュをバックスラッシュに正規化（Windows）
+    let normalized = folder_path.replace('/', "\\");
+    let mut target = Path::new(&normalized).to_path_buf();
+
+    // 存在する最も近い親ディレクトリまで遡る
+    while !target.exists() {
+        match target.parent() {
+            Some(parent) => target = parent.to_path_buf(),
+            None => return Err(format!("No valid parent found for: {}", folder_path)),
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&target)
+            .spawn()
+            .map_err(|e| format!("Failed to open explorer: {}", e))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::process::Command::new("open")
+            .arg(&target)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    Ok(())
 }
 
 /// 複数ファイルをエクスプローラーで選択状態で開く
