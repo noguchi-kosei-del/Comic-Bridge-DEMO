@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import { usePsdStore } from "../../store/psdStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useHighResPreview, prefetchPreview, invalidateUrlCache } from "../../hooks/useHighResPreview";
@@ -69,6 +71,8 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
   const [categoryDropdownFont, setCategoryDropdownFont] = useState<string | null>(null);
   // JSON file browser modal
   const [showJsonBrowser, setShowJsonBrowser] = useState(false);
+  // Image save in progress
+  const [isSavingImage, setIsSavingImage] = useState(false);
 
   // scanPsdStore — font category editing
   const currentJsonFilePath = useScanPsdStore((s) => s.currentJsonFilePath);
@@ -496,6 +500,117 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [viewerFile, onOpenInPhotoshop, openFolderForFile]);
 
+  // 画像保存（現在のページ + 全マーカー描画）
+  const handleSaveAsImage = useCallback(async () => {
+    if (!imageUrl) return;
+
+    const filterLabel = filterFont
+      ? fontInfo.getFontLabel(filterFont).replace(/\s+/g, "")
+      : filterIssue ?? (filterStroke != null ? `白フチ${filterStroke}px` : "filter");
+
+    const baseName = (viewerFile?.fileName ?? "page").replace(/\.[^.]+$/, "");
+    const selected = await save({
+      defaultPath: `${filterLabel}_${baseName}.png`,
+      filters: [{ name: "PNG画像", extensions: ["png"] }],
+    });
+    if (!selected) return;
+    const outputPath = selected.replace(/\\/g, "/");
+
+    setIsSavingImage(true);
+
+    try {
+      // 画像をCanvasに直接描画（html2canvasはasset://プロトコルで失敗するため）
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Image load failed"));
+        img.src = imageUrl;
+      });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+
+      // 全マーカーを描画
+      const pw = viewerFile?.metadata?.width ?? 0;
+      const ph = viewerFile?.metadata?.height ?? 0;
+      if (pw > 0 && ph > 0) {
+        const scaleX = canvas.width / pw;
+        const scaleY = canvas.height / ph;
+
+        // 該当フォント/フィルタの全バウンズを取得
+        const currentLayers = viewerFile?.metadata?.layerTree
+          ? collectTextLayers(viewerFile.metadata.layerTree)
+          : [];
+        let bounds: import("../../types").LayerBounds[] = [];
+        if (filterFont) {
+          bounds = currentLayers
+            .filter((e) => e.textInfo?.fonts.includes(filterFont))
+            .map((e) => e.bounds)
+            .filter((b): b is import("../../types").LayerBounds => !!b);
+        } else if (filterIssue) {
+          bounds = currentLayers
+            .filter((e) => hasIssue(e, filterIssue))
+            .map((e) => e.bounds)
+            .filter((b): b is import("../../types").LayerBounds => !!b);
+        } else if (filterStroke != null) {
+          bounds = currentLayers
+            .filter((e) => e.textInfo?.strokeSize === filterStroke)
+            .map((e) => e.bounds)
+            .filter((b): b is import("../../types").LayerBounds => !!b);
+        }
+
+        const color = filterFont
+          ? fontInfo.getFontColor(filterFont)
+          : filterStroke != null ? "#00c9a7" : "#c25a5a";
+        const lineWidth = Math.max(3, pw * 0.002) * scaleX;
+
+        for (const b of bounds) {
+          const x = b.left * scaleX;
+          const y = b.top * scaleY;
+          const w = (b.right - b.left) * scaleX;
+          const h = (b.bottom - b.top) * scaleY;
+          const r = 4 * Math.min(scaleX, scaleY);
+
+          // 塗り（半透明）
+          ctx.globalAlpha = 0.09;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.roundRect(x, y, w, h, r);
+          ctx.fill();
+
+          // 枠線
+          ctx.globalAlpha = 0.44;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          ctx.roundRect(x, y, w, h, r);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
+      });
+      const arrayBuffer = await blob.arrayBuffer();
+      await writeFile(outputPath, new Uint8Array(arrayBuffer));
+
+      // 保存完了後にフォルダを開く
+      try {
+        const folderPath = outputPath.replace(/\/[^/]+$/, "").replace(/\//g, "\\");
+        await invoke("open_folder_in_explorer", { folderPath });
+      } catch { /* ignore */ }
+    } catch (err) {
+      console.error("Failed to save image:", err);
+    } finally {
+      setIsSavingImage(false);
+    }
+  }, [filterFont, filterIssue, filterStroke, fontInfo, imageUrl, viewerFile, viewerFileIndex]);
+
   if (files.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-[11px] text-text-muted">
@@ -813,12 +928,30 @@ export function SpecViewerPanel({ onOpenInPhotoshop, initialFilterFont, onFilter
                       </div>
                     )}
                     {(filterFont || filterIssue || filterStroke != null) && (
-                      <button
-                        className="ml-auto text-[9px] px-1.5 py-0.5 rounded text-accent hover:bg-accent/10 transition-all"
-                        onClick={() => { setFilterFont(null); setFilterIssue(null); setFilterStroke(null); setFilterHighlightAll(false); }}
-                      >
-                        解除
-                      </button>
+                      <>
+                        <button
+                          className={`ml-auto text-[9px] px-1.5 py-0.5 rounded border border-accent-secondary/40 text-accent-secondary transition-all flex items-center gap-1 ${isSavingImage ? "opacity-50 cursor-not-allowed" : "hover:bg-accent-secondary/10"}`}
+                          onClick={handleSaveAsImage}
+                          disabled={isSavingImage}
+                          title="現在のページを全マーカー付きで画像保存"
+                        >
+                          {isSavingImage ? (
+                            <div className="w-3 h-3 rounded-full border-2 border-accent-secondary/30 border-t-accent-secondary animate-spin" />
+                          ) : (
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                          )}
+                          画像保存
+                        </button>
+                        <button
+                          className="text-[9px] px-1.5 py-0.5 rounded text-accent hover:bg-accent/10 transition-all"
+                          onClick={() => { setFilterFont(null); setFilterIssue(null); setFilterStroke(null); setFilterHighlightAll(false); }}
+                        >
+                          解除
+                        </button>
+                      </>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-x-2 gap-y-1">

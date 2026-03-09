@@ -877,6 +877,49 @@ build.bat
 npm run dev
 ```
 
+## リリース手順
+
+新バージョンをリリースする際の手順:
+
+### 1. バージョン番号を更新（3ファイル）
+```bash
+# 以下の3ファイルのバージョンを更新する
+package.json           → "version": "x.x.x"
+src-tauri/tauri.conf.json → "version": "x.x.x"
+src-tauri/Cargo.toml      → version = "x.x.x"
+```
+
+### 2. コミット・プッシュ
+```bash
+git add -A
+git commit -m "v1.x.x: 変更内容の要約"
+git push origin main
+```
+
+### 3. タグを作成・プッシュ（CIトリガー）
+```bash
+git tag v1.x.x
+git push origin v1.x.x
+```
+
+タグのpushにより `.github/workflows/release.yml` が自動実行され、以下が生成・アップロードされる:
+- `Comic-Bridge_x.x.x_x64-setup.exe` — NSISインストーラー
+- `Comic-Bridge_x.x.x_x64-setup.exe.sig` — Tauri Updater署名ファイル
+- `latest.json` — 自動アップデート用メタデータ
+
+### 4. CI完了確認
+```bash
+gh run list --limit 3          # ワークフロー一覧
+gh run watch <run_id>          # リアルタイム進捗
+gh release view v1.x.x --json assets -q '.assets[].name'  # アセット確認
+```
+
+### 注意事項
+- **署名キー**: `TAURI_SIGNING_PRIVATE_KEY` と `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` はGitHub Secretsに設定済み（ローカルビルドでは不要）
+- **ビルド時間**: CI完了まで約14〜16分
+- **タグの再作成**: タグが既にリモートにある場合は `git push origin :refs/tags/v1.x.x` で削除してから再作成
+- **リリースページ**: `https://github.com/Ina986/COMIC-Bridge/releases/tag/v1.x.x`
+
 ## localStorage永続化
 
 ```typescript
