@@ -1046,7 +1046,7 @@ function getMaxFontSizeInFolder(layerSet) {
 var SAVE_DATA_BASE_PATH = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/編集企画_C班(AT業務推進)/DTP制作部/作品情報";
 
 // ★★★ テキストログ出力先パス（グローバル定数）★★★
-var TEXT_LOG_FOLDER_PATH = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/写植・校正用テキストログ";
+var TEXT_LOG_FOLDER_PATH = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/写植・校正用テキストログ/テキスト抽出";
 
 // メイン処理実行
 main();
@@ -5904,7 +5904,7 @@ function showPresetManagerDialog(autoDetect, scanData, jsonToImport) {
     textStatsDisplay.alignment = ["fill", "top"];
 
     // ★★★ テキストログ保存先のベースパス ★★★
-    var TEXT_LOG_BASE_PATH = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/写植・校正用テキストログ";
+    var TEXT_LOG_BASE_PATH = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/写植・校正用テキストログ/テキスト抽出";
 
     // ★★★ 保存ファイル一覧を更新する関数 ★★★
     function updateTextStatsDisplay() {
@@ -6682,7 +6682,7 @@ function showPresetManagerDialog(autoDetect, scanData, jsonToImport) {
     };
 
     // ★★★ ルビ一覧の基準フォルダ ★★★
-    var RUBY_LIST_BASE_PATH = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/写植・校正用テキストログ";
+    var RUBY_LIST_BASE_PATH = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/写植・校正用テキストログ/テキスト抽出";
 
     // ★★★ 外部ルビ一覧.txtファイルからルビを読み込む ★★★
     function loadRubyListFromExternalFile(label, title) {

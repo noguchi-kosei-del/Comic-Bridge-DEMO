@@ -18,7 +18,7 @@ const DEFAULT_JSON_FOLDER_PATH =
 const DEFAULT_SAVE_DATA_BASE_PATH =
   "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/編集企画_C班(AT業務推進)/DTP制作部/作品情報";
 const DEFAULT_TEXT_LOG_FOLDER_PATH =
-  "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/写植・校正用テキストログ";
+  "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/写植・校正用テキストログ/テキスト抽出";
 
 function loadPath(key: string, fallback: string): string {
   try {

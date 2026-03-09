@@ -7,9 +7,10 @@ import { SpecViewerPanel } from "../spec-checker/SpecViewerPanel";
 import { SpecScanJsonDialog } from "../spec-checker/SpecScanJsonDialog";
 import { TypesettingViewerPanel } from "../typesetting-check/TypesettingViewerPanel";
 import { TypesettingCheckPanel } from "../typesetting-check/TypesettingCheckPanel";
+import { TypesettingConfirmPanel } from "../typesetting-confirm/TypesettingConfirmPanel";
 import { DropZone } from "../file-browser/DropZone";
 
-type SubTab = "spec" | "viewer" | "check";
+type SubTab = "spec" | "viewer" | "check" | "confirm";
 
 export function TypsettingView() {
   const files = usePsdStore((s) => s.files);
@@ -22,8 +23,8 @@ export function TypsettingView() {
 
   const hasFiles = files.length > 0;
 
-  // 写植調整タブはPSDなしでもJSON読み込み可能
-  if (!hasFiles && subTab !== "check") {
+  // 写植調整・写植確認タブはPSDなしでも使用可能
+  if (!hasFiles && subTab !== "check" && subTab !== "confirm") {
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {/* Sub-tab bar */}
@@ -114,6 +115,10 @@ export function TypsettingView() {
             </>
           )
         )}
+
+        {subTab === "confirm" && (
+          <TypesettingConfirmPanel />
+        )}
       </div>
 
       {/* JSON登録ダイアログ */}
@@ -131,6 +136,7 @@ function SubTabBar({ subTab, setSubTab }: { subTab: SubTab; setSubTab: (t: SubTa
     { id: "spec", label: "写植仕様" },
     { id: "viewer", label: "DTPビューアー" },
     { id: "check", label: "写植調整" },
+    { id: "confirm", label: "写植確認" },
   ];
 
   return (
