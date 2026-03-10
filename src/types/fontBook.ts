@@ -23,7 +23,7 @@ export function getFontBookDir(
 ): string {
   const safeLabel = label.replace(/[\\/:*?"<>|]/g, "_");
   const safeTitle = title.replace(/[\\/:*?"<>|]/g, "_");
-  return `${textLogFolderPath}/${safeLabel}/${safeTitle}_fontbook`.replace(
+  return `${textLogFolderPath}/${safeLabel}/${safeTitle}/フォント帳`.replace(
     /\\/g,
     "/"
   );
