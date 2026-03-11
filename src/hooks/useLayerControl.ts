@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { desktopDir } from "@tauri-apps/api/path";
 import { usePsdStore } from "../store/psdStore";
 import { useLayerStore, type HideCondition, type LayerControlResult } from "../store/layerStore";
 import { matchesCondition, isTextFolder } from "../lib/layerMatcher";
@@ -557,12 +558,92 @@ export function useLayerControl() {
     updateFile,
   ]);
 
+  // レイヤー統合（背景+テキスト）— 常に別フォルダに保存
+  const applyMergeLayers = useCallback(async () => {
+    const { mergeReorganizeText, mergeOutputFolderName } = useLayerStore.getState();
+
+    const targetFiles = selectedFileIds.length > 0
+      ? files.filter((f) => selectedFileIds.includes(f.id))
+      : files;
+
+    if (targetFiles.length === 0) return;
+
+    setIsProcessing(true);
+
+    try {
+      const filePaths = targetFiles.map((f) => f.filePath);
+
+      // 元フォルダパス（KENBAN diff用）
+      const sourceFolder = filePaths[0]
+        ? filePaths[0].replace(/\\/g, "/").split("/").slice(0, -1).join("/")
+        : "";
+
+      const psResults = await invoke<PhotoshopResult[]>(
+        "run_photoshop_merge_layers",
+        {
+          filePaths,
+          reorganizeText: mergeReorganizeText,
+          saveMode: "copyToFolder", // 常に別フォルダ保存
+          outputFolderName: mergeOutputFolderName || null,
+        }
+      );
+
+      const results: LayerControlResult[] = [];
+
+      for (const psResult of psResults) {
+        const normalizedPath = psResult.filePath.replace(/\//g, "\\");
+        const file = targetFiles.find(
+          (f) => f.filePath === psResult.filePath || f.filePath === normalizedPath
+        );
+
+        if (!file) continue;
+
+        const summaryLine = psResult.changes.find((c: string) => !c.startsWith("  "));
+        const changedMatch = summaryLine ? summaryLine.match(/(\d+)/) : null;
+        const changedCount = changedMatch ? parseInt(changedMatch[1], 10) : 0;
+
+        results.push({
+          fileName: file.fileName,
+          success: psResult.success,
+          changedCount,
+          changes: psResult.changes,
+          error: psResult.error || undefined,
+        });
+      }
+
+      // 出力フォルダパスを算出（Rust側と同じロジック）
+      const folderName = mergeOutputFolderName?.trim() || (filePaths[0]
+        ? `${filePaths[0].replace(/\\/g, "/").split("/").slice(-2, -1)[0] || "output"}_統合`
+        : "output");
+      const desktop = await desktopDir().catch(() => "");
+      const desktopNorm = desktop ? desktop.replace(/\\/g, "/").replace(/\/?$/, "/") : "";
+      const outputFolder = desktopNorm
+        ? `${desktopNorm}Script_Output/レイヤー統合/${folderName}`
+        : "";
+
+      setLastResults(results, "merge", outputFolder, sourceFolder);
+
+      return results;
+    } catch (error) {
+      console.error("Merge layers failed:", error);
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [
+    files,
+    selectedFileIds,
+    setIsProcessing,
+    setLastResults,
+  ]);
+
   return {
     applyLayerVisibility,
     organizeLayersIntoFolder,
     moveLayersByConditions,
     applyCustomOperations,
     applyLayerLock,
+    applyMergeLayers,
   };
 }
 

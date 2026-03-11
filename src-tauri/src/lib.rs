@@ -25,6 +25,7 @@ pub fn run() {
             commands::run_photoshop_layer_organize,
             commands::run_photoshop_layer_move,
             commands::run_photoshop_layer_lock,
+            commands::run_photoshop_merge_layers,
             commands::run_photoshop_split,
             commands::get_high_res_preview,
             commands::cleanup_preview_files,

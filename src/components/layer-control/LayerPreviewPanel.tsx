@@ -35,6 +35,8 @@ interface AnnotatedLayer {
   customPath?: string[];
   customIndex?: number;
   customAction?: "show" | "hide" | "move";
+  // Merge mode field
+  mergeRole?: "text" | "background";
 }
 
 interface FileStats {
@@ -191,6 +193,55 @@ function annotateChildrenLock(layers: LayerNode[], unlockAll: boolean): Annotate
     willChange: unlockAll && !!layer.locked,
     children: layer.children ? annotateChildrenLock(layer.children, unlockAll) : [],
   }));
+}
+
+// --- Merge mode annotation ---
+
+/** Text group names matching merge_layers.jsx TEXT_GROUP_NAMES */
+const MERGE_TEXT_GROUP_NAMES = ["#text#", "text", "写植", "セリフ", "テキスト", "台詞"];
+
+function isMergeTextGroup(layer: LayerNode): boolean {
+  return (
+    layer.type === "group" &&
+    MERGE_TEXT_GROUP_NAMES.some(
+      (p) => layer.name.toLowerCase() === p.toLowerCase()
+    )
+  );
+}
+
+/** Annotate tree for merge mode: text groups → "text" role, everything else → "background" role */
+function annotateTreeMerge(layers: LayerNode[]): AnnotatedLayer[] {
+  return [...layers].reverse().map((layer) => {
+    const isText = isMergeTextGroup(layer);
+    return {
+      node: layer,
+      matched: true,
+      risk: "safe" as MatchRisk,
+      willChange: true,
+      mergeRole: isText ? "text" : "background",
+      children: layer.children
+        ? annotateChildrenMerge(layer.children, isText)
+        : [],
+    };
+  });
+}
+
+/** Children inside a text group inherit "text" role; others inherit "background" */
+function annotateChildrenMerge(layers: LayerNode[], parentIsText: boolean): AnnotatedLayer[] {
+  return [...layers].reverse().map((layer) => {
+    const isText = isMergeTextGroup(layer);
+    const role = parentIsText || isText ? "text" : "background";
+    return {
+      node: layer,
+      matched: false,
+      risk: "none" as MatchRisk,
+      willChange: false,
+      mergeRole: role,
+      children: layer.children
+        ? annotateChildrenMerge(layer.children, role === "text")
+        : [],
+    };
+  });
 }
 
 /** Annotate children of organize mode as non-matched (just visual context) */
@@ -498,24 +549,28 @@ export function LayerPreviewPanel({ onOpenInPhotoshop }: LayerPreviewPanelProps)
   const isLayerMoveMode = actionMode === "layerMove";
   const isCustomMode = actionMode === "custom";
   const isLockMode = actionMode === "lock";
+  const isMergeMode = actionMode === "merge";
   const hasAnyLayerMoveCondition = layerMoveCondTextLayer || layerMoveCondSubgroupTop || layerMoveCondSubgroupBottom || layerMoveCondNameEnabled;
 
   // Whether any mode has enough settings to show annotated preview
   const hasAnnotations = useMemo(() => {
+    if (isMergeMode) return true; // Always show merge preview
     if (isLockMode) return lockBottomLayer || unlockAllLayers;
     if (isCustomMode) return true; // Always show interactive tree in custom mode
     if (isOrganizeMode) return organizeTargetName.trim() !== "";
     if (isLayerMoveMode) return hasAnyLayerMoveCondition && layerMoveTargetName.trim() !== "";
     if (isHideMode && deleteHiddenText) return true;
     return hasConditions; // hide/show
-  }, [isLockMode, lockBottomLayer, unlockAllLayers, isCustomMode, isOrganizeMode, isLayerMoveMode, isHideMode, organizeTargetName, layerMoveTargetName, hasAnyLayerMoveCondition, hasConditions, deleteHiddenText]);
+  }, [isMergeMode, isLockMode, lockBottomLayer, unlockAllLayers, isCustomMode, isOrganizeMode, isLayerMoveMode, isHideMode, organizeTargetName, layerMoveTargetName, hasAnyLayerMoveCondition, hasConditions, deleteHiddenText]);
 
   const fileAnnotations = useMemo((): FileAnnotation[] => {
     return targetFiles.map((file) => {
       const layerTree = file.metadata?.layerTree ?? [];
       let annotatedTree: AnnotatedLayer[] = [];
 
-      if (isLockMode && (lockBottomLayer || unlockAllLayers)) {
+      if (isMergeMode) {
+        annotatedTree = annotateTreeMerge(layerTree);
+      } else if (isLockMode && (lockBottomLayer || unlockAllLayers)) {
         annotatedTree = annotateTreeLock(layerTree, lockBottomLayer, unlockAllLayers);
       } else if (isCustomMode) {
         const ops = customVisibilityOps.get(file.id) ?? [];
@@ -553,7 +608,7 @@ export function LayerPreviewPanel({ onOpenInPhotoshop }: LayerPreviewPanelProps)
       return { file, layerTree, annotatedTree, stats };
     });
   }, [
-    targetFiles, conditions, hasConditions, isHideMode,
+    targetFiles, conditions, hasConditions, isHideMode, isMergeMode,
     isLockMode, lockBottomLayer, unlockAllLayers,
     isCustomMode, customVisibilityOps, customMoveOps,
     isOrganizeMode, organizeTargetName, organizeIncludeSpecial,
@@ -890,7 +945,18 @@ export function LayerPreviewPanel({ onOpenInPhotoshop }: LayerPreviewPanelProps)
         </div>
         {viewMode === "layers" && hasAnnotations && (
           <div className="flex items-center gap-2.5 mt-0.5">
-            {totalStats.willChange > 0 ? (
+            {isMergeMode ? (
+              (() => {
+                const textCount = fileAnnotations.reduce((sum, fa) => sum + fa.annotatedTree.filter(i => i.mergeRole === "text").length, 0);
+                const bgCount = fileAnnotations.reduce((sum, fa) => sum + fa.annotatedTree.filter(i => i.mergeRole === "background").length, 0);
+                return (
+                  <>
+                    {textCount > 0 && <span className="text-[11px] font-medium text-emerald-500">テキスト {textCount}</span>}
+                    {bgCount > 0 && <span className="text-[11px] font-medium text-blue-500">背景 {bgCount}</span>}
+                  </>
+                );
+              })()
+            ) : totalStats.willChange > 0 ? (
               <span className={`text-[11px] font-medium ${
                 isCustomMode ? "text-sky-500"
                 : isOrganizeMode ? "text-warning"
@@ -1057,7 +1123,18 @@ export function LayerPreviewPanel({ onOpenInPhotoshop }: LayerPreviewPanelProps)
       {/* Legend */}
       {viewMode === "layers" && hasAnnotations && (
         <div className="px-3 py-1.5 border-t border-border flex-shrink-0 flex items-center gap-3">
-          {isCustomMode ? (
+          {isMergeMode ? (
+            <>
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-sm bg-emerald-500/30" />
+                <span className="text-[9px] text-text-muted">テキスト</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-sm bg-blue-500/30" />
+                <span className="text-[9px] text-text-muted">→背景に統合</span>
+              </div>
+            </>
+          ) : isCustomMode ? (
             <>
               <div className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-sm bg-accent-tertiary/30" />
@@ -1279,7 +1356,8 @@ function FileColumn({ annotation, hasAnnotations, actionMode, isChecked, onToggl
         </span>
         {hasAnnotations && stats.willChange > 0 && (
           <span className={`text-[9px] px-1 py-px rounded flex-shrink-0 ${
-            actionMode === "lock" ? (unlockAllLayers && !lockBottomLayer ? "bg-sky-500/10 text-sky-500" : "bg-amber-500/10 text-amber-500")
+            actionMode === "merge" ? "bg-emerald-500/10 text-emerald-500"
+            : actionMode === "lock" ? (unlockAllLayers && !lockBottomLayer ? "bg-sky-500/10 text-sky-500" : "bg-amber-500/10 text-amber-500")
             : actionMode === "custom" ? "bg-sky-500/10 text-sky-500"
             : actionMode === "organize" ? "bg-warning/10 text-warning"
             : actionMode === "layerMove" ? "bg-violet-500/10 text-violet-500"
@@ -1480,7 +1558,15 @@ function AnnotatedItem({ item, depth, actionMode, parentVisible = true, onToggle
     rowBg = "bg-amber-500/8";
     borderLeft = "border-l-[2px] border-amber-500";
   } else if (willChange) {
-    if (actionMode === "custom") {
+    if (actionMode === "merge") {
+      if (item.mergeRole === "text") {
+        rowBg = "bg-emerald-500/8";
+        borderLeft = "border-l-[2px] border-emerald-500/50";
+      } else {
+        rowBg = "bg-blue-500/8";
+        borderLeft = "border-l-[2px] border-blue-500/50";
+      }
+    } else if (actionMode === "custom") {
       if (item.customAction === "move") {
         rowBg = "bg-violet-500/8";
         borderLeft = "border-l-[2px] border-violet-500/50";
@@ -1515,6 +1601,13 @@ function AnnotatedItem({ item, depth, actionMode, parentVisible = true, onToggle
     rowBg = "bg-bg-tertiary/30";
     borderLeft = "border-l-[2px] border-text-muted/15";
     rowOpacity = "opacity-55";
+  } else if (item.mergeRole) {
+    // Merge mode children: subtle role-based coloring
+    if (item.mergeRole === "text") {
+      borderLeft = "border-l-[2px] border-emerald-500/20";
+    } else {
+      borderLeft = "border-l-[2px] border-blue-500/20";
+    }
   } else if (!postActionVisible) {
     rowOpacity = "opacity-35";
   }
@@ -1523,7 +1616,11 @@ function AnnotatedItem({ item, depth, actionMode, parentVisible = true, onToggle
   const badgeClass = isDeleteTarget
     ? "bg-error/12 text-error font-medium"
     : willChange
-      ? actionMode === "custom"
+      ? actionMode === "merge"
+        ? item.mergeRole === "text"
+          ? "bg-emerald-500/12 text-emerald-500 font-medium"
+          : "bg-blue-500/12 text-blue-500 font-medium"
+        : actionMode === "custom"
         ? item.customAction === "move"
           ? "bg-violet-500/12 text-violet-500 font-medium"
           : item.customAction === "hide"
@@ -1545,14 +1642,18 @@ function AnnotatedItem({ item, depth, actionMode, parentVisible = true, onToggle
   const badgeText = isDeleteTarget
     ? "→削除"
     : willChange
-      ? actionMode === "custom"
+      ? actionMode === "merge"
+        ? item.mergeRole === "text" ? "テキスト" : "→背景"
+        : actionMode === "custom"
         ? item.customAction === "move" ? "移動" : item.customAction === "hide" ? "→非表示" : "→表示"
         : actionMode === "lock" ? (node.locked ? "→解除" : "→ロック")
           : actionMode === "organize" ? "→格納"
             : actionMode === "layerMove" ? "→移動"
             : actionMode === "hide" ? "→非表示"
             : "→表示"
-      : actionMode === "lock"
+      : actionMode === "merge"
+        ? "" // children in merge mode don't need a badge
+        : actionMode === "lock"
         ? matched ? (node.locked ? "ロック済" : "解除済") : ""
         : actionMode === "organize" || actionMode === "layerMove"
           ? "対象外"

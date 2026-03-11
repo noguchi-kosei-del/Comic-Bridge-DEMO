@@ -1519,6 +1519,178 @@ pub async fn run_photoshop_layer_lock(
 }
 
 // ============================================
+// Photoshop Layer Merge (レイヤー統合)
+// ============================================
+
+#[derive(Debug, Serialize, Deserialize)]
+struct LayerMergeSettings {
+    files: Vec<String>,
+    #[serde(rename = "reorganizeText")]
+    reorganize_text: bool,
+    #[serde(rename = "outputPath")]
+    output_path: String,
+    #[serde(rename = "saveFolder", skip_serializing_if = "Option::is_none")]
+    save_folder: Option<String>,
+}
+
+/// Run Photoshop to merge layers (background + text)
+#[tauri::command]
+pub async fn run_photoshop_merge_layers(
+    app_handle: tauri::AppHandle,
+    file_paths: Vec<String>,
+    reorganize_text: bool,
+    save_mode: Option<String>,
+    output_folder_name: Option<String>,
+) -> Result<Vec<PhotoshopResult>, String> {
+    use std::process::Command;
+    use std::io::Write;
+
+    let ps_path = find_photoshop_path()
+        .ok_or_else(|| "Photoshop not found. Please install Adobe Photoshop.".to_string())?;
+
+    // Resolve script path
+    let resource_path = app_handle
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+
+    let script_path = resource_path.join("scripts").join("merge_layers.jsx");
+
+    let script_path_str = if script_path.exists() {
+        script_path.to_string_lossy().to_string()
+    } else {
+        let dev_script = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("scripts")
+            .join("merge_layers.jsx");
+        if dev_script.exists() {
+            dev_script.to_string_lossy().to_string()
+        } else {
+            return Err("Merge layers script not found".to_string());
+        }
+    };
+
+    let temp_dir = std::env::temp_dir();
+    let settings_path = temp_dir.join("psd_merge_layers_settings.json");
+    let output_path = temp_dir.join("psd_merge_layers_results.json");
+
+    let _ = fs::remove_file(&output_path);
+
+    // Compute save folder for "copyToFolder" mode
+    let save_folder = if save_mode.as_deref() == Some("copyToFolder") {
+        let home = std::env::var("USERPROFILE")
+            .unwrap_or_else(|_| std::env::var("HOME").unwrap_or_default());
+        let folder_name = output_folder_name
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                file_paths
+                    .first()
+                    .and_then(|p| {
+                        Path::new(p)
+                            .parent()
+                            .and_then(|par| par.file_name())
+                            .map(|n| format!("{}_統合", n.to_string_lossy()))
+                    })
+                    .unwrap_or_else(|| "output".to_string())
+            });
+        let base_folder = Path::new(&home)
+            .join("Desktop")
+            .join("Script_Output")
+            .join("レイヤー統合")
+            .join(&folder_name);
+        let base_str = base_folder.to_string_lossy().to_string();
+        let final_folder = if base_folder.exists() {
+            let mut counter = 1;
+            loop {
+                let candidate = format!("{} ({})", base_str, counter);
+                if !Path::new(&candidate).exists() {
+                    break candidate;
+                }
+                counter += 1;
+            }
+        } else {
+            base_str
+        };
+        let _ = fs::create_dir_all(&final_folder);
+        Some(final_folder.replace("\\", "/"))
+    } else {
+        None
+    };
+
+    // Build settings JSON
+    let settings = LayerMergeSettings {
+        files: file_paths.iter().map(|p| p.replace("\\", "/")).collect(),
+        reorganize_text,
+        output_path: output_path.to_string_lossy().to_string().replace("\\", "/"),
+        save_folder,
+    };
+
+    let settings_json = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+
+    let mut settings_file = fs::File::create(&settings_path)
+        .map_err(|e| format!("Failed to create settings file: {}", e))?;
+    settings_file.write_all(&[0xEF, 0xBB, 0xBF])
+        .map_err(|e| format!("Failed to write BOM: {}", e))?;
+    settings_file.write_all(settings_json.as_bytes())
+        .map_err(|e| format!("Failed to write settings: {}", e))?;
+
+    eprintln!("Merge layers - Photoshop: {}", ps_path);
+    eprintln!("Merge layers - Script: {}", script_path_str);
+    eprintln!("Merge layers - Files: {}", file_paths.len());
+
+    let _output = Command::new(&ps_path)
+        .arg("-r")
+        .arg(&script_path_str)
+        .output()
+        .map_err(|e| format!("Failed to run Photoshop: {}", e))?;
+
+    // Poll for results
+    let max_wait_secs = 180;
+    let poll_interval_ms = 500;
+    let max_polls = (max_wait_secs * 1000) / poll_interval_ms;
+
+    for poll in 0..max_polls {
+        if output_path.exists() {
+            if let Ok(content) = fs::read_to_string(&output_path) {
+                if content.trim().starts_with('[') && content.trim().ends_with(']') {
+                    eprintln!("Merge layers output ready after {} polls", poll);
+                    break;
+                }
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(poll_interval_ms as u64));
+
+        if poll > 0 && poll % 20 == 0 {
+            eprintln!("Still waiting for Photoshop... ({} seconds)", poll * poll_interval_ms / 1000);
+        }
+    }
+
+    if output_path.exists() {
+        let results_json = fs::read_to_string(&output_path)
+            .map_err(|e| format!("Failed to read results: {}", e))?;
+
+        let results: Vec<PhotoshopResult> = serde_json::from_str(&results_json)
+            .map_err(|e| format!("Failed to parse results: {}. JSON was: {}", e, results_json))?;
+
+        let _ = fs::remove_file(&settings_path);
+        let _ = fs::remove_file(&output_path);
+
+        if let Some(window) = app_handle.get_webview_window("main") {
+            let _ = window.set_focus();
+        }
+
+        Ok(results)
+    } else {
+        if let Some(window) = app_handle.get_webview_window("main") {
+            let _ = window.set_focus();
+        }
+        Err("Photoshop did not produce output file. Script may have failed.".to_string())
+    }
+}
+
+// ============================================
 // Photoshop Layer Move (条件ベース レイヤー整理)
 // ============================================
 

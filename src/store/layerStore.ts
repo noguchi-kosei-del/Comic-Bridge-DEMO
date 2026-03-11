@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 // 操作モード
-export type LayerActionMode = "hide" | "show" | "organize" | "layerMove" | "custom" | "lock";
+export type LayerActionMode = "hide" | "show" | "organize" | "layerMove" | "custom" | "lock" | "merge";
 
 // カスタム操作の型
 export interface CustomVisibilityOp {
@@ -109,6 +109,10 @@ interface LayerVisibilityState {
   lockBottomLayer: boolean;
   unlockAllLayers: boolean;
 
+  // 統合モード設定
+  mergeReorganizeText: boolean;
+  mergeOutputFolderName: string;
+
   // カスタム操作（個別レイヤーの表示/非表示 + 移動）
   customVisibilityOps: Map<string, CustomVisibilityOp[]>;  // fileId → ops
   customMoveOps: Map<string, CustomMoveOp[]>;               // fileId → ops
@@ -119,6 +123,8 @@ interface LayerVisibilityState {
   // 処理結果
   lastResults: LayerControlResult[];
   lastActionMode: LayerActionMode | null;
+  lastMergeOutputFolder: string | null;
+  lastMergeSourceFolder: string | null;
 
   // アクション
   setLayerVisibility: (fileId: string, layerPath: string, visible: boolean) => void;
@@ -130,7 +136,7 @@ interface LayerVisibilityState {
   removeCustomCondition: (id: string) => void;
   setIsProcessing: (processing: boolean) => void;
   getSelectedConditions: () => HideCondition[];
-  setLastResults: (results: LayerControlResult[], mode: LayerActionMode) => void;
+  setLastResults: (results: LayerControlResult[], mode: LayerActionMode, mergeOutputFolder?: string, mergeSourceFolder?: string) => void;
   clearLastResults: () => void;
   setOrganizeTargetName: (name: string) => void;
   setOrganizeIncludeSpecial: (include: boolean) => void;
@@ -147,6 +153,8 @@ interface LayerVisibilityState {
   setDeleteHiddenText: (value: boolean) => void;
   setLockBottomLayer: (value: boolean) => void;
   setUnlockAllLayers: (value: boolean) => void;
+  setMergeReorganizeText: (value: boolean) => void;
+  setMergeOutputFolderName: (name: string) => void;
 
   // カスタム操作アクション
   toggleCustomVisibility: (fileId: string, path: string[], index: number, currentVisible: boolean, layerId?: string) => void;
@@ -182,12 +190,16 @@ export const useLayerStore = create<LayerVisibilityState>((set, get) => ({
   deleteHiddenText: false,
   lockBottomLayer: true,
   unlockAllLayers: false,
+  mergeReorganizeText: true,
+  mergeOutputFolderName: "",
   customVisibilityOps: new Map(),
   customMoveOps: new Map(),
   _customOpsHistory: [],
   isProcessing: false,
   lastResults: [],
   lastActionMode: null,
+  lastMergeOutputFolder: null,
+  lastMergeSourceFolder: null,
 
   setLayerVisibility: (fileId, layerPath, visible) => {
     set((state) => {
@@ -251,11 +263,11 @@ export const useLayerStore = create<LayerVisibilityState>((set, get) => ({
     return allConditions.filter((c) => state.selectedConditions.includes(c.id));
   },
 
-  setLastResults: (results, mode) => {
-    set({ lastResults: results, lastActionMode: mode });
+  setLastResults: (results, mode, mergeOutputFolder, mergeSourceFolder) => {
+    set({ lastResults: results, lastActionMode: mode, lastMergeOutputFolder: mergeOutputFolder ?? null, lastMergeSourceFolder: mergeSourceFolder ?? null });
   },
   clearLastResults: () => {
-    set({ lastResults: [], lastActionMode: null });
+    set({ lastResults: [], lastActionMode: null, lastMergeOutputFolder: null, lastMergeSourceFolder: null });
   },
   setOrganizeTargetName: (name) => {
     set({ organizeTargetName: name });
@@ -301,6 +313,12 @@ export const useLayerStore = create<LayerVisibilityState>((set, get) => ({
   },
   setUnlockAllLayers: (value) => {
     set({ unlockAllLayers: value });
+  },
+  setMergeReorganizeText: (value) => {
+    set({ mergeReorganizeText: value });
+  },
+  setMergeOutputFolderName: (name) => {
+    set({ mergeOutputFolderName: name });
   },
 
   toggleCustomVisibility: (fileId, path, index, currentVisible, layerId) => {

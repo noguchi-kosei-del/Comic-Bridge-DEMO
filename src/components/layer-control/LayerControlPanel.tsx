@@ -66,7 +66,12 @@ export function LayerControlPanel() {
   const customMoveOps = useLayerStore((state) => state.customMoveOps);
   const clearCustomOps = useLayerStore((state) => state.clearCustomOps);
 
-  const { applyLayerVisibility, organizeLayersIntoFolder, moveLayersByConditions, applyCustomOperations, applyLayerLock } = useLayerControl();
+  const mergeReorganizeText = useLayerStore((state) => state.mergeReorganizeText);
+  const setMergeReorganizeText = useLayerStore((state) => state.setMergeReorganizeText);
+  const mergeOutputFolderName = useLayerStore((state) => state.mergeOutputFolderName);
+  const setMergeOutputFolderName = useLayerStore((state) => state.setMergeOutputFolderName);
+
+  const { applyLayerVisibility, organizeLayersIntoFolder, moveLayersByConditions, applyCustomOperations, applyLayerLock, applyMergeLayers } = useLayerControl();
 
   const targetCount = selectedFileIds.length > 0 ? selectedFileIds.length : files.length;
   const isHideMode = actionMode === "hide";
@@ -74,6 +79,7 @@ export function LayerControlPanel() {
   const isLayerMoveMode = actionMode === "layerMove";
   const isCustomMode = actionMode === "custom";
   const isLockMode = actionMode === "lock";
+  const isMergeMode = actionMode === "merge";
 
   // カスタム操作のサマリー
   const customVisCount = Array.from(customVisibilityOps.values()).reduce((acc, ops) => acc + ops.length, 0);
@@ -96,7 +102,9 @@ export function LayerControlPanel() {
 
   const handleApply = async () => {
     try {
-      if (isLockMode) {
+      if (isMergeMode) {
+        await applyMergeLayers();
+      } else if (isLockMode) {
         await applyLayerLock();
       } else if (isCustomMode) {
         await applyCustomOperations();
@@ -112,15 +120,17 @@ export function LayerControlPanel() {
     }
   };
 
-  const canExecute = isLockMode
-    ? !isProcessing && files.length > 0 && (lockBottomLayer || unlockAllLayers)
-    : isCustomMode
-      ? !isProcessing && files.length > 0 && (customTotalCount > 0 || deleteHiddenText)
-      : isOrganizeMode
-        ? !isProcessing && files.length > 0 && organizeTargetName.trim() !== ""
-        : isLayerMoveMode
-          ? !isProcessing && files.length > 0 && layerMoveTargetName.trim() !== "" && hasAnyLayerMoveCondition
-          : !isProcessing && files.length > 0 && (selectedConditions.length > 0 || (isHideMode && deleteHiddenText));
+  const canExecute = isMergeMode
+    ? !isProcessing && files.length > 0
+    : isLockMode
+      ? !isProcessing && files.length > 0 && (lockBottomLayer || unlockAllLayers)
+      : isCustomMode
+        ? !isProcessing && files.length > 0 && (customTotalCount > 0 || deleteHiddenText)
+        : isOrganizeMode
+          ? !isProcessing && files.length > 0 && organizeTargetName.trim() !== ""
+          : isLayerMoveMode
+            ? !isProcessing && files.length > 0 && layerMoveTargetName.trim() !== "" && hasAnyLayerMoveCondition
+            : !isProcessing && files.length > 0 && (selectedConditions.length > 0 || (isHideMode && deleteHiddenText));
 
   return (
     <div className="flex flex-col h-full">
@@ -130,18 +140,20 @@ export function LayerControlPanel() {
           <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
-          {isLockMode ? "レイヤーロック" : isCustomMode ? "カスタム操作" : isLayerMoveMode ? "レイヤー整理" : isOrganizeMode ? "フォルダ格納" : "レイヤー可視性"}
+          {isMergeMode ? "レイヤー統合" : isLockMode ? "レイヤーロック" : isCustomMode ? "カスタム操作" : isLayerMoveMode ? "レイヤー整理" : isOrganizeMode ? "フォルダ格納" : "レイヤー可視性"}
         </h3>
         <p className="text-xs text-text-muted mt-1">
-          {isLockMode
-            ? "レイヤーのロック・ロック解除"
-            : isCustomMode
-              ? "レイヤーを個別に操作"
-              : isLayerMoveMode
-                ? "条件に一致するレイヤーを指定グループに移動"
-                : isOrganizeMode
-                  ? "レイヤーを指定フォルダに格納"
-                  : "条件を選択してレイヤーを一括操作"
+          {isMergeMode
+            ? "背景を1枚に統合し、テキストグループを分離"
+            : isLockMode
+              ? "レイヤーのロック・ロック解除"
+              : isCustomMode
+                ? "レイヤーを個別に操作"
+                : isLayerMoveMode
+                  ? "条件に一致するレイヤーを指定グループに移動"
+                  : isOrganizeMode
+                    ? "レイヤーを指定フォルダに格納"
+                    : "条件を選択してレイヤーを一括操作"
           }
         </p>
       </div>
@@ -217,10 +229,65 @@ export function LayerControlPanel() {
               currentMode={actionMode}
               onChange={setActionMode}
             />
+            <ModeButton
+              mode="merge"
+              label="統合"
+              icon={
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              }
+              currentMode={actionMode}
+              onChange={setActionMode}
+            />
           </div>
         </div>
 
-        {isLockMode ? (
+        {isMergeMode ? (
+          /* 統合モード設定 */
+          <>
+            <div className="bg-bg-tertiary rounded-xl p-3">
+              <p className="text-xs text-text-secondary leading-relaxed">
+                テキストグループはそのまま残し、それ以外のレイヤーを1枚の背景に統合します。
+              </p>
+            </div>
+
+            {/* テキスト整理オプション */}
+            <div className="bg-bg-tertiary rounded-xl p-3 space-y-2">
+              <h4 className="text-xs font-medium text-text-muted">オプション</h4>
+              <div
+                className={`
+                  flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all duration-200
+                  ${mergeReorganizeText
+                    ? "bg-emerald-500/15 border border-emerald-500/50"
+                    : "bg-bg-secondary border border-white/5 hover:border-white/10"
+                  }
+                `}
+                onClick={() => setMergeReorganizeText(!mergeReorganizeText)}
+              >
+                <div
+                  className={`
+                    w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-200
+                    ${mergeReorganizeText
+                      ? "bg-emerald-500 border-emerald-500"
+                      : "border-text-muted/50"
+                    }
+                  `}
+                >
+                  {mergeReorganizeText && (
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <span className="text-sm text-text-primary">テキスト整理</span>
+                  <p className="text-[10px] text-text-muted mt-0.5">散在するテキストレイヤーをテキストグループに集約</p>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : isLockMode ? (
           /* ロックモード設定 */
           <>
             <div className="bg-bg-tertiary rounded-xl p-3 space-y-3">
@@ -732,21 +799,41 @@ export function LayerControlPanel() {
       {/* アクションバー */}
       <div className="p-3 border-t border-white/5 space-y-2">
         {/* 保存先切り替え */}
-        <SaveModeSelector
-          saveMode={saveMode}
-          onChange={setSaveMode}
-          folderHint={files.length > 0 ? files[0].filePath.replace(/\\/g, "/").split("/").slice(-2, -1)[0] || "" : ""}
-          isOrganizeMode={isOrganizeMode || isLayerMoveMode || isCustomMode || isLockMode}
-        />
+        {isMergeMode ? (
+          <div className="bg-bg-tertiary rounded-xl px-3 py-2 space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] text-text-muted whitespace-nowrap">出力フォルダ名</label>
+              <input
+                type="text"
+                value={mergeOutputFolderName}
+                onChange={(e) => setMergeOutputFolderName(e.target.value)}
+                placeholder={files.length > 0 ? `${files[0].filePath.replace(/\\/g, "/").split("/").slice(-2, -1)[0] || "output"}_統合` : "output"}
+                className="flex-1 min-w-0 px-2 py-0.5 text-[11px] bg-white/80 border border-black/5 rounded-lg text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
+              />
+            </div>
+            <p className="text-[10px] text-text-muted leading-tight">
+              保存先: Desktop/Script_Output/レイヤー統合/{mergeOutputFolderName.trim() || (files.length > 0 ? `${files[0].filePath.replace(/\\/g, "/").split("/").slice(-2, -1)[0] || ""}_統合` : "")}/
+            </p>
+          </div>
+        ) : (
+          <SaveModeSelector
+            saveMode={saveMode}
+            onChange={setSaveMode}
+            folderHint={files.length > 0 ? files[0].filePath.replace(/\\/g, "/").split("/").slice(-2, -1)[0] || "" : ""}
+            isOrganizeMode={isOrganizeMode || isLayerMoveMode || isCustomMode || isLockMode}
+          />
+        )}
         <div className="flex items-center justify-between text-xs text-text-muted">
           <span>対象: {targetCount} ファイル</span>
-          {isLockMode
-            ? <span>{(lockBottomLayer || unlockAllLayers) ? "1" : "0"} 条件選択中</span>
-            : isCustomMode
-              ? <span>{customTotalCount} 操作登録中</span>
-              : isLayerMoveMode
-                ? <span>{layerMoveCondCount} 条件選択中</span>
-                : !isOrganizeMode && <span>{selectedConditions.length} 条件選択中</span>
+          {isMergeMode
+            ? null
+            : isLockMode
+              ? <span>{(lockBottomLayer || unlockAllLayers) ? "1" : "0"} 条件選択中</span>
+              : isCustomMode
+                ? <span>{customTotalCount} 操作登録中</span>
+                : isLayerMoveMode
+                  ? <span>{layerMoveCondCount} 条件選択中</span>
+                  : !isOrganizeMode && <span>{selectedConditions.length} 条件選択中</span>
           }
         </div>
         <button
@@ -754,7 +841,9 @@ export function LayerControlPanel() {
           disabled={!canExecute}
           className={`
             w-full px-4 py-3 text-sm font-medium rounded-xl text-white
-            ${isLockMode
+            ${isMergeMode
+              ? "bg-gradient-to-r from-emerald-500 to-teal-500 shadow-[0_4px_15px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.4)]"
+              : isLockMode
               ? "bg-gradient-to-r from-amber-500 to-yellow-500 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.4)]"
               : isCustomMode
               ? "bg-gradient-to-r from-sky-500 to-blue-500 shadow-[0_4px_15px_rgba(14,165,233,0.3)] hover:shadow-[0_6px_20px_rgba(14,165,233,0.4)]"
@@ -776,6 +865,13 @@ export function LayerControlPanel() {
             <>
               <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
               処理中...
+            </>
+          ) : isMergeMode ? (
+            <>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              レイヤーを統合
             </>
           ) : isLockMode ? (
             <>
@@ -850,6 +946,7 @@ function ModeButton({
     : mode === "layerMove" ? "bg-violet-500 text-white"
     : mode === "custom" ? "bg-sky-500 text-white"
     : mode === "lock" ? "bg-amber-500 text-white"
+    : mode === "merge" ? "bg-emerald-500 text-white"
     : "bg-warning text-white";
 
   return (
