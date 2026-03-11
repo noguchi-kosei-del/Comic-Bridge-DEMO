@@ -2956,7 +2956,7 @@ pub async fn list_all_files(
     Ok(files)
 }
 
-/// Search JSON files across subfolders (depth=2: basePath/label/title.json)
+/// Search folders by name across all child hierarchies
 #[derive(Debug, Serialize)]
 pub struct JsonSearchResult {
     pub label: String,
@@ -2978,30 +2978,22 @@ pub async fn search_json_folders(
     let mut results: Vec<JsonSearchResult> = Vec::new();
 
     for entry in walkdir::WalkDir::new(&path)
-        .min_depth(2)
-        .max_depth(2)
+        .min_depth(1)
         .into_iter()
         .filter_map(|e| e.ok())
     {
         let entry_path = entry.path();
-        if !entry_path.is_file() {
-            continue;
-        }
-        let ext = entry_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
-        if ext.to_lowercase() != "json" {
+        if !entry_path.is_dir() {
             continue;
         }
 
-        let title = entry_path
-            .file_stem()
+        let folder_name = entry_path
+            .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_string();
 
-        if title.to_lowercase().contains(&query_lower) {
+        if folder_name.to_lowercase().contains(&query_lower) {
             let label = entry_path
                 .parent()
                 .and_then(|p| p.file_name())
@@ -3011,7 +3003,7 @@ pub async fn search_json_folders(
 
             results.push(JsonSearchResult {
                 label,
-                title,
+                title: folder_name,
                 path: entry_path.to_string_lossy().to_string(),
             });
         }

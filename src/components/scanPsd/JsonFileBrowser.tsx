@@ -104,10 +104,14 @@ export function JsonFileBrowser({ basePath, onSelect, onCancel, mode, defaultFil
     return () => clearTimeout(timer);
   }, [searchQuery, normalizedBase]);
 
-  // 検索結果クリック → 直接ファイル選択
+  // 検索結果クリック → フォルダに移動
   const handleSearchSelect = useCallback((result: SearchResult) => {
-    onSelect(result.path);
-  }, [onSelect]);
+    const normalized = result.path.replace(/\\/g, "/").replace(/\/+$/, "");
+    setSearchQuery("");
+    setIsSearchMode(false);
+    setSearchResults([]);
+    loadFolder(normalized);
+  }, [loadFolder]);
 
   // basePath からの相対パスをパンくずに表示
   const relativePath = currentPath.slice(normalizedBase.length);
@@ -127,7 +131,7 @@ export function JsonFileBrowser({ basePath, onSelect, onCancel, mode, defaultFil
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="タイトルで検索..."
+              placeholder="作品名で検索..."
               className="w-full pl-8 pr-8 py-1.5 text-xs bg-bg-elevated border border-border/50 rounded-lg text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:border-accent/50"
             />
             {searchQuery && (
@@ -213,8 +217,8 @@ export function JsonFileBrowser({ basePath, onSelect, onCancel, mode, defaultFil
                 onClick={() => handleSearchSelect(result)}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-bg-tertiary transition-colors"
               >
-                <svg className="w-4 h-4 text-text-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <svg className="w-4 h-4 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
                 <div className="truncate">
                   <span className="text-[9px] text-accent/70 mr-1.5">{result.label}</span>
