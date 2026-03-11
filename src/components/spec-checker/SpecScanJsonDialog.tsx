@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { usePsdStore } from "../../store/psdStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { performLoadPresetJson, performPresetJsonSave, performExportTextLog } from "../../hooks/useScanPsdProcessor";
-import { buildScanDataFromFiles } from "../../lib/agPsdScanner";
+import { buildScanDataFromFiles, mergeScanData } from "../../lib/agPsdScanner";
 import { getAutoSubName } from "../../types/scanPsd";
 import { GENRE_LABELS, JSON_BASE_PATH } from "../../types/tiff";
 import type { LayerNode } from "../../types";
@@ -141,11 +141,17 @@ export function SpecScanJsonDialog({ onClose }: SpecScanJsonDialogProps) {
 
       // 4. ScanData構築（ag-psdベース、Photoshop不要）
       const scanPsdState = useScanPsdStore.getState();
-      const scanData = buildScanDataFromFiles(allFiles, {
+      const existingScanData = scanPsdState.scanData;
+      let scanData = buildScanDataFromFiles(allFiles, {
         fontResolveMap,
         volume,
         existingWorkInfo: scanPsdState.workInfo.title ? scanPsdState.workInfo : undefined,
       });
+
+      // 既存JSONから読み込んだscanDataがあれば蓄積マージ（フォント・サイズ等を累積）
+      if (existingScanData) {
+        scanData = mergeScanData(existingScanData, scanData);
+      }
 
       // 5. scanPsdStore にデータ反映
       scanPsdState.setScanData(scanData);

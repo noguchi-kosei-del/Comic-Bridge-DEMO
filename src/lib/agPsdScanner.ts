@@ -293,3 +293,148 @@ export function buildScanDataFromFiles(
     startVolume: volume,
   };
 }
+
+/**
+ * 既存の ScanData に新しい ScanData をマージ（蓄積）する
+ * fonts, sizeStats, allFontSizes, strokeStats, textLayersByDoc, scannedFolders を累積マージ
+ * guideSets は重複を除いてマージ
+ */
+export function mergeScanData(existing: ScanData, incoming: ScanData): ScanData {
+  // --- fonts マージ（name で合算） ---
+  const fontMap = new Map<string, ScanFontEntry>();
+  for (const f of existing.fonts) {
+    fontMap.set(f.name, { ...f, sizes: [...f.sizes] });
+  }
+  for (const f of incoming.fonts) {
+    const ex = fontMap.get(f.name);
+    if (ex) {
+      ex.count += f.count;
+      // sizes をマージ
+      const sizeMap = new Map<number, number>();
+      for (const s of ex.sizes) sizeMap.set(s.size, s.count);
+      for (const s of f.sizes) sizeMap.set(s.size, (sizeMap.get(s.size) || 0) + s.count);
+      ex.sizes = [...sizeMap.entries()]
+        .map(([size, count]) => ({ size, count }))
+        .sort((a, b) => b.count - a.count);
+      // displayName は新しい方を優先（解決済みなら更新）
+      if (f.displayName && f.displayName !== f.name) ex.displayName = f.displayName;
+    } else {
+      fontMap.set(f.name, { ...f, sizes: [...f.sizes] });
+    }
+  }
+  const fonts = [...fontMap.values()].sort((a, b) => b.count - a.count);
+
+  // --- allFontSizes マージ ---
+  const allFontSizes: Record<string, number> = { ...existing.allFontSizes };
+  for (const [size, count] of Object.entries(incoming.allFontSizes || {})) {
+    allFontSizes[size] = (allFontSizes[size] || 0) + count;
+  }
+
+  // --- sizeStats 再構築 ---
+  const sizeCountMap = new Map<number, number>();
+  for (const s of existing.sizeStats.sizes) sizeCountMap.set(s.size, s.count);
+  for (const s of incoming.sizeStats.sizes) {
+    sizeCountMap.set(s.size, (sizeCountMap.get(s.size) || 0) + s.count);
+  }
+  const mergedSizes: ScanFontSizeEntry[] = [...sizeCountMap.entries()]
+    .map(([size, count]) => ({ size, count }))
+    .sort((a, b) => b.count - a.count);
+  const mostFrequent = mergedSizes.length > 0 ? mergedSizes[0] : null;
+  const sizeStats: ScanSizeStats = {
+    mostFrequent,
+    sizes: mergedSizes,
+    excludeRange: incoming.sizeStats.excludeRange ?? existing.sizeStats.excludeRange,
+    allSizes: allFontSizes,
+  };
+
+  // --- strokeStats マージ ---
+  const strokeMap = new Map<number, { count: number; fontSizes: Set<number>; maxFontSize: number | null }>();
+  for (const s of existing.strokeStats?.sizes || []) {
+    strokeMap.set(s.size, { count: s.count, fontSizes: new Set(s.fontSizes), maxFontSize: s.maxFontSize });
+  }
+  for (const s of incoming.strokeStats?.sizes || []) {
+    const ex = strokeMap.get(s.size);
+    if (ex) {
+      ex.count += s.count;
+      for (const fs of s.fontSizes) ex.fontSizes.add(fs);
+      if (s.maxFontSize != null && (ex.maxFontSize == null || s.maxFontSize > ex.maxFontSize)) {
+        ex.maxFontSize = s.maxFontSize;
+      }
+    } else {
+      strokeMap.set(s.size, { count: s.count, fontSizes: new Set(s.fontSizes), maxFontSize: s.maxFontSize });
+    }
+  }
+  const strokeSizes: ScanStrokeEntry[] = [...strokeMap.entries()]
+    .map(([size, data]) => ({
+      size,
+      count: data.count,
+      fontSizes: [...data.fontSizes].sort((a, b) => b - a),
+      maxFontSize: data.maxFontSize,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // --- textLayersByDoc マージ（新が優先、既存は保持） ---
+  const textLayersByDoc = {
+    ...existing.textLayersByDoc,
+    ...incoming.textLayersByDoc,
+  };
+
+  // --- scannedFolders マージ ---
+  const scannedFolders = {
+    ...existing.scannedFolders,
+    ...incoming.scannedFolders,
+  };
+
+  // --- textLogByFolder マージ ---
+  const textLogByFolder = { ...existing.textLogByFolder };
+  for (const [folder, docs] of Object.entries(incoming.textLogByFolder || {})) {
+    textLogByFolder[folder] = { ...(textLogByFolder[folder] || {}), ...docs };
+  }
+
+  // --- guideSets マージ（キーで重複排除） ---
+  const guideSetKeys = new Set<string>();
+  const guideSets: ScanGuideSet[] = [];
+  const addGuideSet = (gs: ScanGuideSet) => {
+    const key = `${gs.horizontal.join(",")}_${gs.vertical.join(",")}_${gs.docWidth}x${gs.docHeight}`;
+    if (!guideSetKeys.has(key)) {
+      guideSetKeys.add(key);
+      guideSets.push(gs);
+    } else {
+      // 同じガイドセットの count を加算
+      const existing = guideSets.find((g) =>
+        `${g.horizontal.join(",")}_${g.vertical.join(",")}_${g.docWidth}x${g.docHeight}` === key
+      );
+      if (existing) {
+        existing.count += gs.count;
+        for (const dn of gs.docNames) {
+          if (!existing.docNames.includes(dn)) existing.docNames.push(dn);
+        }
+      }
+    }
+  };
+  for (const gs of existing.guideSets) addGuideSet(gs);
+  for (const gs of incoming.guideSets) addGuideSet(gs);
+  guideSets.sort((a, b) => b.count - a.count);
+
+  // --- folderVolumeMapping マージ ---
+  const folderVolumeMapping = {
+    ...(existing.folderVolumeMapping || {}),
+    ...(incoming.folderVolumeMapping || {}),
+  };
+
+  return {
+    fonts,
+    sizeStats,
+    allFontSizes,
+    strokeStats: { sizes: strokeSizes },
+    guideSets,
+    textLayersByDoc,
+    scannedFolders,
+    processedFiles: existing.processedFiles + incoming.processedFiles,
+    workInfo: incoming.workInfo,
+    textLogByFolder,
+    folderVolumeMapping,
+    startVolume: incoming.startVolume,
+    editedRubyList: existing.editedRubyList || incoming.editedRubyList,
+  };
+}

@@ -7,7 +7,7 @@ import { useScanPsdStore } from "../store/scanPsdStore";
 import type { TiffResult, TiffFileOverride, TiffCropBounds } from "../types/tiff";
 import type { PsdFile } from "../types";
 import type { FontResolveInfo } from "./useFontResolver";
-import { buildScanDataFromFiles } from "../lib/agPsdScanner";
+import { buildScanDataFromFiles, mergeScanData } from "../lib/agPsdScanner";
 import { performPresetJsonSave, performExportTextLog } from "./useScanPsdProcessor";
 import { getAutoSubName } from "../types/scanPsd";
 
@@ -244,11 +244,17 @@ export function useTiffProcessor() {
 
       // 2. ScanData構築
       const scanPsdState = useScanPsdStore.getState();
-      const scanData = buildScanDataFromFiles(allFiles, {
+      const existingScanData = scanPsdState.scanData;
+      let scanData = buildScanDataFromFiles(allFiles, {
         fontResolveMap,
         volume: tiffState.autoScanVolume,
         existingWorkInfo: scanPsdState.workInfo.title ? scanPsdState.workInfo : undefined,
       });
+
+      // 既存JSONから読み込んだscanDataがあれば蓄積マージ（フォント・サイズ等を累積）
+      if (existingScanData) {
+        scanData = mergeScanData(existingScanData, scanData);
+      }
 
       // 3. scanPsdStore にデータ反映
       scanPsdState.setScanData(scanData);
