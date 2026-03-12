@@ -21,6 +21,7 @@ import { DropZone } from "../file-browser/DropZone";
 
 import { THUMBNAIL_SIZES, type ThumbnailSize } from "../../types";
 import { invoke } from "@tauri-apps/api/core";
+import { TextExtractButton } from "../common/TextExtractButton";
 
 export function SpecCheckView() {
   const files = usePsdStore((state) => state.files);
@@ -520,24 +521,23 @@ export function SpecCheckView() {
           {viewMode === "layers" && <SpecLayerGrid />}
           {viewMode === "layerCheck" && <LayerSeparationPanel onOpenInPhotoshop={openFileInPhotoshop} />}
 
-          {/* Floating Action Buttons (thumbnails mode only) */}
-          {viewMode === "thumbnails" && (
-            <div className="absolute bottom-6 right-6 flex flex-col items-end gap-4 z-10">
-              {stats.noGuides > 0 && (
-                <button
-                  className="h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary border-2 border-guide-v/50 text-guide-v hover:bg-bg-elevated hover:border-guide-v/70 hover:shadow-[0_8px_30px_rgba(0,188,212,0.25)] active:scale-[0.97]"
-                  onClick={openEditor}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                  ガイドを編集
-                  <span className="px-2 py-1 rounded-lg bg-warning/15 text-warning text-sm font-bold">
-                    {stats.noGuides}
-                  </span>
-                </button>
-              )}
-              {stats.failed > 0 && isPhotoshopInstalled && (
+          {/* Floating Action Buttons */}
+          <div className="absolute bottom-6 right-6 flex flex-col items-end gap-4 z-10">
+            {viewMode === "thumbnails" && stats.noGuides > 0 && (
+              <button
+                className="h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary border-2 border-guide-v/50 text-guide-v hover:bg-bg-elevated hover:border-guide-v/70 hover:shadow-[0_8px_30px_rgba(0,188,212,0.25)] active:scale-[0.97]"
+                onClick={openEditor}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+                ガイドを編集
+                <span className="px-2 py-1 rounded-lg bg-warning/15 text-warning text-sm font-bold">
+                  {stats.noGuides}
+                </span>
+              </button>
+            )}
+            {viewMode === "thumbnails" && stats.failed > 0 && isPhotoshopInstalled && (
                 <div className="relative">
                   {/* Guide Prompt Popover */}
                   {showGuidePrompt && (
@@ -617,37 +617,42 @@ export function SpecCheckView() {
                   </button>
                 </div>
               )}
-              {/* PDF化ボタン（Tachimi連携） - 常時表示、全OK時に強調 */}
-              <button
-                className={`h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary active:scale-[0.97] ${
-                  allPassed
-                    ? "border-2 border-[#ff8a6b]/60 text-[#ff8a6b] hover:bg-bg-elevated hover:border-[#ff8a6b]/80 hover:shadow-[0_8px_30px_rgba(255,138,107,0.25)]"
-                    : "border-2 border-[#c8806a]/30 text-[#c8806a]/70 hover:bg-bg-elevated hover:border-[#c8806a]/50 hover:text-[#c8806a]"
-                }`}
-                onClick={handleLaunchTachimi}
-                title="Tachimiを起動してPDF作成"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-                PDF化
-                <span className={`px-2 py-1 rounded-lg text-sm font-bold ${
-                  allPassed ? "bg-[#ff8a6b]/15" : "bg-[#c8806a]/10"
-                }`}>
-                  {files.length}
-                </span>
-              </button>
-              {/* Tachimi起動エラー */}
-              {tachimiError && (
-                <div className="px-4 py-2 rounded-xl bg-error/10 border border-error/30 text-xs text-error max-w-xs">
-                  {tachimiError}
-                  <button onClick={() => setTachimiError(null)} className="ml-2 underline">
-                    閉じる
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+            {viewMode === "thumbnails" && (
+              <>
+                {/* PDF化ボタン（Tachimi連携） */}
+                <button
+                  className={`h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary active:scale-[0.97] ${
+                    allPassed
+                      ? "border-2 border-[#ff8a6b]/60 text-[#ff8a6b] hover:bg-bg-elevated hover:border-[#ff8a6b]/80 hover:shadow-[0_8px_30px_rgba(255,138,107,0.25)]"
+                      : "border-2 border-[#c8806a]/30 text-[#c8806a]/70 hover:bg-bg-elevated hover:border-[#c8806a]/50 hover:text-[#c8806a]"
+                  }`}
+                  onClick={handleLaunchTachimi}
+                  title="Tachimiを起動してPDF作成"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  PDF化
+                  <span className={`px-2 py-1 rounded-lg text-sm font-bold ${
+                    allPassed ? "bg-[#ff8a6b]/15" : "bg-[#c8806a]/10"
+                  }`}>
+                    {files.length}
+                  </span>
+                </button>
+                {/* Tachimi起動エラー */}
+                {tachimiError && (
+                  <div className="px-4 py-2 rounded-xl bg-error/10 border border-error/30 text-xs text-error max-w-xs">
+                    {tachimiError}
+                    <button onClick={() => setTachimiError(null)} className="ml-2 underline">
+                      閉じる
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+            {/* テキスト抽出ボタン（常時表示） */}
+            <TextExtractButton />
+          </div>
         </div>
       </div>
 

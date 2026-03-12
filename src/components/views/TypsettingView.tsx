@@ -10,6 +10,7 @@ import { TypesettingCheckPanel } from "../typesetting-check/TypesettingCheckPane
 import { TypesettingConfirmPanel } from "../typesetting-confirm/TypesettingConfirmPanel";
 import { DropZone } from "../file-browser/DropZone";
 import { FontBookView } from "./FontBookView";
+import { TextExtractButton } from "../common/TextExtractButton";
 
 type SubTab = "spec" | "viewer" | "fontBook" | "check" | "confirm";
 
@@ -55,21 +56,22 @@ export function TypsettingView() {
                 onFilterIssue={(issue) => { setViewerFilterIssue(issue); setViewerFilterFont(null); setViewerFilterStroke(null); setSubTab("viewer"); }}
                 onFilterStroke={(size) => { setViewerFilterStroke(size); setViewerFilterFont(null); setViewerFilterIssue(null); setSubTab("viewer"); }}
               />
-              {/* JSON登録フローティングボタン */}
+              {/* フローティングボタン群 */}
               {files.length > 0 && (
-                <div className="absolute bottom-6 right-6 z-10">
+                <div className="absolute bottom-6 right-6 z-10 flex flex-col items-end gap-4">
                   <button
-                    className="h-14 px-7 text-base font-bold rounded-2xl shadow-lg transition-all duration-200 flex items-center justify-center gap-2.5 bg-bg-secondary border-2 border-accent/40 text-accent hover:bg-bg-elevated hover:border-accent/60 hover:shadow-[0_6px_24px_rgba(255,90,138,0.25)] active:scale-[0.97]"
+                    className="h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary border-2 border-accent/40 text-accent hover:bg-bg-elevated hover:border-accent/60 hover:shadow-[0_6px_24px_rgba(255,90,138,0.25)] active:scale-[0.97]"
                     onClick={() => setShowScanJsonDialog(true)}
                   >
-                    <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     JSON登録
-                    <span className="px-2 py-0.5 rounded-lg bg-accent/10 text-accent text-sm font-bold">
+                    <span className="px-2 py-1 rounded-lg bg-accent/10 text-accent text-sm font-bold">
                       {files.length}
                     </span>
                   </button>
+                  <TextExtractButton />
                 </div>
               )}
             </div>
@@ -106,8 +108,11 @@ export function TypsettingView() {
         {subTab === "check" && (
           hasFiles ? (
             <>
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 overflow-hidden relative">
                 <TypesettingViewerPanel />
+                <div className="absolute bottom-6 right-6 z-10">
+                  <TextExtractButton />
+                </div>
               </div>
               <div className="w-[480px] flex-shrink-0 border-l border-border overflow-hidden flex flex-col bg-bg-secondary">
                 <TypesettingCheckPanel />
