@@ -1,6 +1,6 @@
 [package]
 name = "comic-bridge"
-version = "1.9.3"
+version = "2.0.0"
 description = "漫画原稿の入稿チェック・差替え・分割を行うデスクトップアプリ"
 authors = ["Ina986"]
 edition = "2021"
@@ -41,6 +41,12 @@ notify = "7"
 
 # Parallel processing
 rayon = "1.10"
+
+# KENBAN module dependencies
+base64 = "0.22"
+open = "5"
+dirs = "5"
+natord = "1.0"
 
 # Async runtime
 tokio = { version = "1", features = ["rt", "sync"] }

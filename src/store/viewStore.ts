@@ -9,7 +9,10 @@ export type AppView =
   | "rename"
   | "tiff"
   | "scanPsd"
-  | "typesetting";
+  | "typesetting"
+  | "kenban"
+  | "progen"
+  | "unifiedViewer";
 
 interface ViewState {
   activeView: AppView;

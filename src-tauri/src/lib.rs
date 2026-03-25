@@ -1,7 +1,9 @@
 use tauri::{Emitter, Manager};
 
 mod commands;
+pub mod kenban;
 pub mod pdf;
+pub mod progen;
 pub mod psd_metadata;
 pub mod watcher;
 
@@ -12,6 +14,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .manage(kenban::KenbanState::default())
+        .manage(progen::ProgenState::default())
         .invoke_handler(tauri::generate_handler![
             commands::resample_image,
             commands::batch_resample_images,
@@ -68,6 +72,54 @@ pub fn run() {
             commands::stop_file_watcher,
             commands::invalidate_file_cache,
             commands::check_handoff,
+            // KENBAN commands
+            kenban::kenban_parse_psd,
+            kenban::kenban_open_file_with_default_app,
+            kenban::kenban_open_file_in_photoshop,
+            kenban::kenban_save_screenshot,
+            kenban::open_folder,
+            kenban::open_pdf_in_mojiq,
+            kenban::decode_and_resize_image,
+            kenban::preload_images,
+            kenban::clear_image_cache,
+            kenban::kenban_list_files_in_folder,
+            kenban::kenban_cleanup_preview_cache,
+            kenban::compute_diff_simple,
+            kenban::compute_diff_heatmap,
+            kenban::check_diff_simple,
+            kenban::check_diff_heatmap,
+            kenban::compute_pdf_diff,
+            kenban::kenban_render_pdf_page,
+            kenban::kenban_get_pdf_page_count,
+            kenban::kenban_get_cli_args,
+            kenban::kenban_read_text_file,
+            kenban::kenban_write_text_file,
+            // ProGen commands
+            progen::progen_get_json_folder_path,
+            progen::progen_list_directory,
+            progen::progen_read_json_file,
+            progen::progen_write_json_file,
+            progen::progen_read_master_rule,
+            progen::progen_write_master_rule,
+            progen::progen_create_master_label,
+            progen::progen_get_master_label_list,
+            progen::progen_create_txt_work_folder,
+            progen::progen_get_txt_folder_path,
+            progen::progen_list_txt_directory,
+            progen::progen_read_txt_file,
+            progen::progen_write_text_file,
+            progen::progen_read_dropped_txt_files,
+            progen::progen_show_save_text_dialog,
+            progen::progen_save_calibration_data,
+            progen::progen_print_to_pdf,
+            progen::progen_list_image_files,
+            progen::progen_list_image_files_from_paths,
+            progen::progen_load_image_preview,
+            progen::progen_show_open_image_folder_dialog,
+            progen::progen_show_save_json_dialog,
+            progen::progen_open_and_read_json_dialog,
+            progen::progen_launch_comic_bridge,
+            progen::progen_get_comicpot_handoff,
         ])
         .setup(|app| {
             // CLI引数から校正データJSONパスを検出してフロントエンドに通知

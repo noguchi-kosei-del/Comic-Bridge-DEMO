@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Comic-Bridge",
-  "version": "1.9.3",
+  "productName": "COMIC-Bridge_統合版",
+  "version": "2.0.0",
   "identifier": "com.comic-bridge.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Comic-Bridge",
+        "title": "COMIC-Bridge 統合版",
         "width": 1400,
         "height": 900,
         "minWidth": 1000,
@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' https://github.com https://api.github.com https://*.githubusercontent.com; img-src 'self' asset: http://asset.localhost https://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'",
+      "csp": "default-src 'self'; connect-src 'self' https://github.com https://api.github.com https://*.githubusercontent.com; img-src 'self' asset: http://asset.localhost https://asset.localhost blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-eval' blob:; worker-src 'self' blob:; frame-src 'self'",
       "assetProtocol": {
         "enable": true,
         "scope": ["$TEMP/**", "**"]
@@ -60,7 +60,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/Ina986/COMIC-Bridge/releases/latest/download/latest.json"
+        "https://github.com/yamamoto-ryusei-ux/COMIC-Bridge-integrated/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI2OUYxRkIwNjc4OTBCODYKUldTR0M0bG5zQitmdGxTNHFBTzk4TmVzZWVlQUNjekp5d1JmUnplcHlUSFJha2l0MytFS01Fa1IK"
     }

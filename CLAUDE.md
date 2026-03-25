@@ -4,7 +4,7 @@
 
 ## 概要
 
-漫画制作者や編集者が入稿前にPSDファイルの仕様をチェックし、必要に応じてPhotoshopと連携して一括修正できるツール。
+漫画制作者や編集者が入稿前にPSDファイルの仕様をチェックし、必要に応じてPhotoshopと連携して一括修正できるツール。KENBAN（ビジュアル差分検版ツール）とProGen（テキスト抽出・校正プロンプト生成ツール）を統合タブとして内蔵。
 
 ## 技術スタック
 
@@ -15,6 +15,8 @@
 - **PSD処理**: ag-psd（読み取り専用）、Photoshop ExtendScript（変換・書き込み）
 - **PDF処理**: pdfium-render（プレビュー/サムネイル）、Photoshop PDFOpenOptions（分割処理）
 - **バックエンド**: Rust
+- **KENBANタブ**: pdfjs-dist, pdf-lib, jspdf, diff, lucide-react（React統合、kenban-scope CSSで隔離）
+- **ProGenタブ**: バニラJS（iframe経由で埋め込み、Reactとは独立）
 
 ## 設計思想
 
@@ -88,6 +90,7 @@
 - 処理完了後にアプリウィンドウを前面に復帰（`window.set_focus()`）
 
 ### 6. レイヤー制御（Photoshop JSX経由）
+- **サブタブ構成**: 「レイヤー制御」「リネーム」の2タブ。リネームタブはRenameViewをそのまま内蔵
 - **5つのアクションモード**: hide（非表示）/ show（復元）/ custom（カスタム）/ organize（フォルダ格納）/ layerMove（レイヤー整理）
 - レイヤー表示/非表示の一括切り替え（`hide_layers.jsx`）
 - 条件指定: テキストレイヤー、テキストフォルダ、レイヤー名、フォルダ名、カスタム条件
@@ -357,16 +360,58 @@
 **フォルダ検出** (`detect_psd_folders` Rustコマンド):
 - 指定フォルダ内のPSDファイルを含むサブフォルダを検出
 
+### 20. KENBAN検版（統合タブ）
+- **差分検出**: TIFF/PSD/PDF の pixel-level比較（ヒートマップ/マーカー表示）
+- **並列ビュー**: 同期/非同期スクロール、見開き分割モード
+- **テキスト照合**: PSDテキストレイヤーとメモテキストの差分比較
+- **5つの比較モード**: tiff-tiff, psd-psd, pdf-pdf, psd-tiff, text-verify
+- **Rust並列処理**（rayon）による高速画像差分計算
+- **3層キャッシュ**（メモリ→ディスク→再生成）
+- **Web Worker** によるテキスト抽出のオフロード
+- **状態保持型タブ**（display切替、アンマウントしない）
+
+### 21. ProGen（統合タブ）
+- **テキスト抽出プロンプト生成**（Google Gemini向け）
+- **校正チェック**（シンプル/バリエーション）
+- **テキスト成形エディタ**（COMIC-POT互換）
+- **マスタールールJSON管理**（Gドライブ連携）
+- **画像ビューアー**（PSD/TIFF/PDF対応）
+- **iframe内で動作**（バニラJS、Reactとは独立）
+- 全コマンドは `progen_` プレフィックス付き
+
+### 22. 統合ビューアータブ（UnifiedViewerView）
+- **6サブタブ構成**: 画像ビューアー / 写植調整 / 写植確認 / 差分モード / 分割ビューアー / ProGen
+- **画像ビューアー**: SpecViewerPanel（高解像度プレビュー、レイヤーツリー、フォント情報、全画面対応）
+- **写植調整**: TypesettingViewerPanel + TypesettingCheckPanel（PSDプレビュー＋校正JSON結果表示の2カラム）
+- **写植確認**: TypesettingConfirmPanel（フォント指定＋テキスト編集＋ビューアー連動）
+- **差分モード**: KenbanApp（defaultAppMode="diff-check"）— モード選択画面をスキップして直接差分モードで起動
+- **分割ビューアー**: KenbanApp（defaultAppMode="parallel-view"）— 直接並列ビューモードで起動
+- **ProGen**: ProgenImageViewer（React製ネイティブコンポーネント）
+  - 左パネル: 画像ビューアー（ズーム/パン/PDF展開） + 正誤チェック結果 + 提案チェック結果の3タブ
+  - 右パネル: テキストエディタ（選択モード/編集モード切替、ページ連動）
+  - ツールバー: フォルダ / 開く / 保存 / 別名保存 / コピー / JSON読込 / ページ連動
+  - D&D対応: 画像→ビューアー、.txt→テキストパネル、.json→校正結果パネルに自動振り分け
+  - テキスト色は黒（bg-white text-black）
+- **KenbanApp**: `defaultAppMode` プロップ追加。指定時はモード選択画面をスキップ
+- 状態保持型マウント: diff/parallel/progenは一度マウント後display切替で非表示化
+
 ## UI構成
 
 ### レイアウト
-- **TopNav**: 上部ナビゲーション。タブでビュー切替（完成原稿チェック/レイヤー制御/写植関連/差替え/合成/TIFF化/スキャナー/見開き分割/リネーム）
-- **ViewRouter + viewStore**: タブベースのビュー切替管理（AppView: specCheck | layers | typesetting | split | replace | compose | rename | tiff | scanPsd）
+- **TopNav**: 上部ナビゲーション。12タブでビュー切替（完成原稿チェック / レイヤー制御 / 写植関連 / 差替え / 合成 / TIFF化 / スキャナー / 見開き分割 / リネーム / 検版 / ProGen / ビューアー）
+- **ViewRouter + viewStore**: タブベースのビュー切替管理。AppView型:
+  ```typescript
+  export type AppView =
+    | "specCheck" | "layers" | "split" | "replace" | "compose"
+    | "rename" | "tiff" | "scanPsd" | "typesetting"
+    | "kenban" | "progen" | "unifiedViewer";
+  ```
+  kenban / progen / unifiedViewer は状態保持型マウント（display切替、アンマウントしない）
 - **AppLayout**: TopNav + フルワイドビュー構成（旧3カラムサイドバーは廃止済み）、グローバルD&Dリスナー（useGlobalDragDrop）。`handleMouseDown`で領域外クリック時に選択解除（モーダルは`onMouseDown stopPropagation`で保護が必要）
 
 ### ビュー
 - **FileView**: ファイル一覧・サムネイル・メタデータ表示
-- **LayerControlView**: レイヤー制御パネル + LayerPreviewPanel（レイヤー構造タブ + ビューアータブ）
+- **LayerControlView**: レイヤー制御パネル + LayerPreviewPanel（レイヤー構造タブ + ビューアータブ）。**サブタブ構成**: 「レイヤー制御」「リネーム」の2タブ。リネームタブはRenameViewをそのまま内蔵
 - **SpecCheckView**: 仕様チェック（3カラム: CompactFileList | MetadataPanel | サムネイル/レイヤー構造/写植仕様タブ切替）
   - viewMode切替: サムネイル（PreviewGrid）、レイヤー構造（SpecLayerGrid）、写植仕様（SpecTextGrid）
   - SpecTextGrid: 使用フォントサマリー（種類数・レイヤー数）、サイズ統計（頻度順・基本ポイント数）、ファイル別テキストレイヤー一覧。フォント切替（デフォルト/プレビュー）、ソート切替（昇順/降順）
@@ -379,6 +424,9 @@
 - **RenameView**: リネーム（レイヤーリネーム / ファイルリネーム）
 - **TiffView**: TIFF化（3カラム: TiffSettingsPanel | TiffFileList | Center(プレビュー/一覧/ビューアータブ切替)）。TiffFileListヘッダーとTiffBatchQueueヘッダーにサブフォルダチェックを配置
 - **ScanPsdView**: Scan PSD（2カラム: ScanPsdPanel(5タブ) | ScanPsdContent(モード選択/スキャン/サマリー)）
+- **KenbanView**: KENBAN検版（kenban-scope CSS、状態保持型マウント）
+- **ProgenView**: ProGen（iframe `/progen/index.html`、状態保持型マウント）
+- **UnifiedViewerView**: 統合ビューアータブ（6サブタブ: 画像ビューアー / 写植調整 / 写植確認 / 差分モード / 分割ビューアー / ProGen）。状態保持型マウント（display切替）
 
 ### レイヤーツリー (LayerPreviewPanel)
 - **タブ切替**: 「レイヤー構造」（デフォルト）/ 「ビューアー」のセグメントボタン
@@ -433,6 +481,17 @@ src/
 │   │   ├── AppLayout.tsx         # メインレイアウト（TopNav + ビュー）
 │   │   ├── TopNav.tsx            # 上部ナビゲーション（タブ切替）
 │   │   └── ViewRouter.tsx        # ビュー切替ルーター
+│   ├── unified-viewer/   # 統合ビューアー
+│   │   └── ProgenImageViewer.tsx    # ProGen画像ビューアー（React製、COMIC-POTスタイル）
+│   ├── kenban/           # KENBAN統合タブ
+│   │   ├── KenbanApp.tsx         # メインアプリ（元App.tsx）
+│   │   ├── KenbanDiffViewer.tsx  # 差分ビューア
+│   │   ├── KenbanParallelViewer.tsx # 並列ビューア
+│   │   ├── KenbanTextVerifyViewer.tsx # テキスト照合
+│   │   ├── KenbanSidebar.tsx     # サイドバー
+│   │   ├── KenbanHeader.tsx      # ヘッダー
+│   │   ├── KenbanScreenshotEditor.tsx
+│   │   └── KenbanGDriveFolderBrowser.tsx
 │   ├── views/             # ビューコンポーネント
 │   │   ├── FileView.tsx          # ファイル一覧ビュー
 │   │   ├── FontBookView.tsx      # フォント帳ビュー
@@ -445,7 +504,10 @@ src/
 │   │   ├── SplitView.tsx         # 見開き分割ビュー
 │   │   ├── RenameView.tsx        # リネームビュー（fileEntries→psdStore自動同期）
 │   │   ├── TiffView.tsx          # TIFF化ビュー（3カラム: FileList|Center|Settings）
-│   │   └── ScanPsdView.tsx      # Scan PSDビュー（ScanPsdPanel + ScanPsdContent）
+│   │   ├── ScanPsdView.tsx      # Scan PSDビュー（ScanPsdPanel + ScanPsdContent）
+│   │   ├── KenbanView.tsx       # KENBANラッパー（kenban-scope）
+│   │   ├── ProgenView.tsx       # ProGenラッパー（iframe）
+│   │   └── UnifiedViewerView.tsx # 統合ビューアー（6サブタブ）
 │   ├── metadata/          # メタデータ表示
 │   │   ├── MetadataPanel.tsx
 │   │   └── LayerTree.tsx
@@ -587,6 +649,19 @@ src/
 │   └── typesettingCheckStore.ts  # 写植チェック（checkData, checkTabMode, searchQuery, navigateToPage）
 ├── styles/
 │   └── globals.css
+├── kenban-utils/         # KENBAN ユーティリティ
+│   ├── textExtract.ts   # テキスト抽出・差分計算
+│   ├── memoParser.ts    # メモ解析
+│   ├── pdf.ts           # PDF処理（pdfjs-dist）
+│   ├── kenbanTypes.ts   # KENBAN型定義
+│   ├── kenban.css       # KENBANスコープCSS
+│   └── kenbanApp.css    # KENBANアプリCSS
+├── kenban-hooks/         # KENBAN フック
+│   └── useTextExtractWorker.ts
+├── kenban-workers/       # KENBAN Web Worker
+│   └── textExtractWorker.ts
+├── kenban-assets/        # KENBANアセット
+│   └── kenpan_logo.png
 └── types/
     ├── index.ts           # PsdFile, PsdMetadata, LayerNode, TextInfo, Specification, SpecRule, SpecCheckResult, IMAGE_EXTENSIONS等
     ├── fontBook.ts        # FontBookEntry, FontBookData, FontBookParams
@@ -595,6 +670,18 @@ src/
     ├── tiff.ts            # TiffSettings, TiffCropBounds, TiffCropPreset, TiffScandataFile等
     ├── scanPsd.ts         # ScanData, PresetJsonData, ScanGuideSet, ScanWorkInfo, FontPreset, GENRE_LABELS, FONT_SUB_NAME_MAP等
     └── typesettingCheck.ts # ProofreadingCheckData, CheckItem, CheckKind等
+
+public/
+├── progen/              # ProGen静的ファイル（iframe用）
+│   ├── index.html       # ProGenメインHTML
+│   ├── css/progen.css   # ProGenスタイル
+│   ├── js/              # ProGen全JSモジュール（17ファイル）
+│   │   ├── tauri-bridge.js    # Tauri API ブリッジ（progen_プレフィックス付き）
+│   │   ├── progen-main.js     # エントリポイント
+│   │   ├── progen-state.js    # グローバルstate
+│   │   └── ...               # 他14モジュール
+│   └── logo/            # ProGenロゴ/アイコン
+├── pdfjs-wasm/          # PDF.js WASM（KENBAN用）
 
 src-tauri/
 ├── scripts/
@@ -625,7 +712,9 @@ src-tauri/
     ├── commands.rs        # 全Tauriコマンド
     ├── pdf.rs             # PDFレンダリング内部ヘルパー（pdfium-render）
     ├── psd_metadata.rs    # PSDメタデータ抽出ユーティリティ
-    └── watcher.rs         # ファイル変更監視（外部ファイル変更検出）
+    ├── watcher.rs         # ファイル変更監視（外部ファイル変更検出）
+    ├── kenban.rs          # KENBANバックエンド（21コマンド）
+    └── progen.rs          # ProGenバックエンド（26コマンド）
 ```
 
 ## 重要な型定義
@@ -789,7 +878,7 @@ pdfium-renderによるPDFプレビュー/サムネイル生成:
 5. **キャッシュ**: ディスクキャッシュ `manga_pdf_preview_{name}_{mtime}_{page}_{size}.jpg`（既存PSDキャッシュと同一パターン）
 6. **pdfium-render API注意**: ページインデックスは`u16`型（`PdfPageIndex`）、`PdfPoints`は`.value: f32`、`as_image()`は`DynamicImage`を直接返す
 
-## Rustコマンド一覧（commands.rs — 55コマンド）
+## Rustコマンド一覧（commands.rs — 55コマンド、kenban.rs — 21コマンド、progen.rs — 26コマンド、合計102コマンド）
 
 ### Photoshop連携
 | コマンド | 引数 | 戻り値 | 用途 |
@@ -878,6 +967,64 @@ pdfium-renderによるPDFプレビュー/サムネイル生成:
 | `launch_progen` | `handoff_text_path?` | `()` | ProGenツール起動 |
 | `check_handoff` | — | `Option<HandoffData>` | ハンドオフデータ確認 |
 
+## KENBAN統合 (kenban.rs — 21コマンド)
+
+| コマンド | 用途 |
+|---------|------|
+| `kenban_parse_psd` | PSD解析→JPEG変換 |
+| `kenban_list_files_in_folder` | フォルダ内ファイル一覧（自然順） |
+| `kenban_render_pdf_page` | PDFページレンダリング |
+| `kenban_get_pdf_page_count` | PDFページ数取得 |
+| `kenban_open_file_in_photoshop` | Photoshopで開く |
+| `kenban_save_screenshot` | スクリーンショット保存 |
+| `kenban_read_text_file` | テキストファイル読込 |
+| `kenban_write_text_file` | テキストファイル書込 |
+| `kenban_cleanup_preview_cache` | プレビューキャッシュ削除 |
+| `kenban_open_file_with_default_app` | デフォルトアプリで開く |
+| `kenban_get_cli_args` | CLI引数取得 |
+| `compute_diff_simple` | シンプル差分計算 |
+| `check_diff_simple` | 差分有無チェック |
+| `compute_diff_heatmap` | ヒートマップ差分計算 |
+| `check_diff_heatmap` | ヒートマップ差分チェック |
+| `decode_and_resize_image` | 画像デコード＆リサイズ |
+| `preload_images` | 画像プリロード |
+| `clear_image_cache` | 画像キャッシュクリア |
+| `compute_pdf_diff` | PDF差分計算 |
+| `open_folder` | フォルダを開く |
+| `open_pdf_in_mojiq` | MojiQでPDF開く |
+
+## ProGen統合 (progen.rs — 26コマンド)
+
+全コマンドに `progen_` プレフィックス付き:
+
+| コマンド | 用途 |
+|---------|------|
+| `progen_get_json_folder_path` | JSONフォルダパス取得 |
+| `progen_list_directory` | フォルダ一覧 |
+| `progen_read_json_file` | JSON読込 |
+| `progen_write_json_file` | JSON書込 |
+| `progen_read_master_rule` | マスタールール読込 |
+| `progen_write_master_rule` | マスタールール書込 |
+| `progen_create_master_label` | レーベル作成 |
+| `progen_get_master_label_list` | レーベル一覧 |
+| `progen_create_txt_work_folder` | テキストフォルダ作成 |
+| `progen_get_txt_folder_path` | TXTフォルダパス |
+| `progen_list_txt_directory` | TXTフォルダ一覧 |
+| `progen_read_txt_file` | TXT読込 |
+| `progen_write_text_file` | TXT書込 |
+| `progen_read_dropped_txt_files` | D&D TXT読込 |
+| `progen_show_save_text_dialog` | TXT保存ダイアログ |
+| `progen_save_calibration_data` | 校正データ保存 |
+| `progen_print_to_pdf` | PDF出力（Edge経由） |
+| `progen_list_image_files` | 画像ファイル一覧 |
+| `progen_list_image_files_from_paths` | パスから画像一覧 |
+| `progen_load_image_preview` | 画像プレビュー生成 |
+| `progen_show_open_image_folder_dialog` | フォルダ選択ダイアログ |
+| `progen_show_save_json_dialog` | JSON保存ダイアログ |
+| `progen_open_and_read_json_dialog` | JSON読込ダイアログ |
+| `progen_launch_comic_bridge` | COMIC-Bridge起動 |
+| `progen_get_comicpot_handoff` | COMIC-POTハンドオフ |
+
 ## デフォルト仕様
 
 ### モノクロ原稿
@@ -939,11 +1086,18 @@ warning: "#f59e0b"       // オレンジ
 - Tailwind CSS 3.4.15、Vite 5.4.0、TypeScript
 - @tauri-apps/api 2.0.0
 - Tauriプラグイン: dialog, fs, process, updater
+- diff 8.0.3（KENBAN text diff）
+- jspdf 4.0.0（KENBAN PDF generation）
+- lucide-react 0.562.0（KENBAN icons）
+- pdf-lib 1.17.1（KENBAN PDF manipulation）
+- pdfjs-dist 5.4.530（KENBAN PDF rendering）
+- utif 3.1.0（KENBAN TIFF decoding）
 
 ### Rust
 - tauri 2.0、tokio（非同期ランタイム）、serde（シリアライズ）
 - pdfium-render（PDF処理）、fontdb + ttf-parser（フォント解決）
 - image（画像処理）
+- base64 0.22, open 5, dirs 5, natord 1.0（KENBAN/ProGen用）
 
 ## 開発コマンド
 
@@ -1081,3 +1235,23 @@ textLogFolderPath: string      // テキストログフォルダパス
 | 次のページ | →/↓ | レイヤー制御ビューアー・ビューアータブ |
 | ページ送り | マウスホイール | レイヤー制御ビューアー・ビューアータブ |
 | 全画面切替 | ボタン | ビューアータブ（Esc で解除） |
+
+## CSP（Content Security Policy）
+
+- `worker-src blob:` — KENBAN Web Worker用
+- `script-src 'unsafe-eval' blob:` — pdfjs-dist等のワーカー実行用
+- `frame-src 'self'` — ProGen iframe埋め込み用
+
+## 統合アーキテクチャ（KENBAN・ProGen）
+
+### KENBAN統合方式
+- React統合: KenbanApp.tsx をKenbanView.tsx でラップ
+- **スタイル隔離**: `kenban-scope` CSSクラスで全スタイルをスコープ化（Tailwind v4→v3変換対応）。KENBANのCSS（kenban.css, kenbanApp.css）はkenban-scopeクラス内でのみ有効
+- **状態保持型マウント**: ViewRouterでdisplay切替（`display: none`/`block`）によりコンポーネントをアンマウントせず状態を保持。kenban / progen / unifiedViewer の3ビューが対象
+- Rust側: kenban.rs に21コマンドを集約。rayon並列処理で画像差分を高速計算
+
+### ProGen統合方式
+- **iframe隔離**: `public/progen/index.html` をiframeで埋め込み。バニラJSはReactと完全に独立
+- **Tauriブリッジ**: `tauri-bridge.js` が `window.__TAURI__` 経由でRustコマンドを呼び出し。全コマンドは `progen_` プレフィックス付き
+- **状態保持型マウント**: KENBANと同様にdisplay切替で状態保持
+- Rust側: progen.rs に26コマンドを集約

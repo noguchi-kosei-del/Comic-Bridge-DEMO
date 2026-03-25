@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useViewStore } from "../../store/viewStore";
 import { SpecCheckView } from "../views/SpecCheckView";
 import { LayerControlView } from "../views/LayerControlView";
@@ -8,12 +9,27 @@ import { RenameView } from "../views/RenameView";
 import { TiffView } from "../views/TiffView";
 import { ScanPsdView } from "../views/ScanPsdView";
 import { TypsettingView } from "../views/TypsettingView";
+import { KenbanView } from "../views/KenbanView";
+import { ProgenView } from "../views/ProgenView";
+import { UnifiedViewerView } from "../views/UnifiedViewerView";
 
 export function ViewRouter() {
   const activeView = useViewStore((s) => s.activeView);
 
+  // State-preserving mount for heavy tabs (once mounted, never unmount)
+  const [kenbanMounted, setKenbanMounted] = useState(false);
+  const [progenMounted, setProgenMounted] = useState(false);
+  const [unifiedViewerMounted, setUnifiedViewerMounted] = useState(false);
+
+  useEffect(() => {
+    if (activeView === "kenban") setKenbanMounted(true);
+    if (activeView === "progen") setProgenMounted(true);
+    if (activeView === "unifiedViewer") setUnifiedViewerMounted(true);
+  }, [activeView]);
+
   return (
     <div className="flex-1 overflow-hidden bg-bg-primary relative">
+      {/* Standard conditional rendering for lightweight tabs */}
       {activeView === "specCheck" && <SpecCheckView />}
       {activeView === "layers" && <LayerControlView />}
       {activeView === "typesetting" && <TypsettingView />}
@@ -23,6 +39,27 @@ export function ViewRouter() {
       {activeView === "rename" && <RenameView />}
       {activeView === "tiff" && <TiffView />}
       {activeView === "scanPsd" && <ScanPsdView />}
+
+      {/* KENBAN: display toggle for state preservation */}
+      {kenbanMounted && (
+        <div style={{ display: activeView === "kenban" ? "contents" : "none" }}>
+          <KenbanView />
+        </div>
+      )}
+
+      {/* ProGen: display toggle for state preservation */}
+      {progenMounted && (
+        <div style={{ display: activeView === "progen" ? "contents" : "none" }}>
+          <ProgenView />
+        </div>
+      )}
+
+      {/* Unified Viewer: display toggle for state preservation */}
+      {unifiedViewerMounted && (
+        <div style={{ display: activeView === "unifiedViewer" ? "contents" : "none" }}>
+          <UnifiedViewerView />
+        </div>
+      )}
     </div>
   );
 }
