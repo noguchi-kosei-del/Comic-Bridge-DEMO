@@ -1,0 +1,11 @@
+まず最初に、下記のCLAUDE.mdを読み込んでから作業を開始してください。
+C:\Users\yamamoto-ryusei\Documents\6_スクリプト\アプリデータ\COMIC-Bridge_統合版\CLAUDE.md
+
+このファイルにはプロジェクトの技術スタック、設計思想、注意事項が記載されています。
+必ず内容を理解したうえで、改修作業を進めてください。
+
+対象プロジェクト:
+C:\Users\yamamoto-ryusei\Documents\6_スクリプト\アプリデータ\COMIC-Bridge_統合版\
+
+改修内容:
+（ここに具体的な修正内容を記載）
