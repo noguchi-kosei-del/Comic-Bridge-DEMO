@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "COMIC-Bridge_統合版",
+  "productName": "COMIC-Bridge",
   "version": "2.2.0",
   "identifier": "com.comic-bridge.app",
   "build": {
