@@ -78,10 +78,13 @@ export function TiffPartialBlurModal({
   onClose,
   externalEntries,
   onSave,
+  initialPageNumber,
 }: {
   onClose: () => void;
   externalEntries?: PartialBlurEntry[];
   onSave?: (entries: PartialBlurEntry[]) => void;
+  /** 開いた時に選択するページ番号 (1-based) */
+  initialPageNumber?: number;
 }) {
   const files = usePsdStore((s) => s.files);
   const partialBlurEntries = useTiffStore((s) => s.settings.partialBlurEntries);
@@ -99,6 +102,17 @@ export function TiffPartialBlurModal({
     return initial;
   });
   const [activeEntryIndex, setActiveEntryIndex] = useState<number>(() => {
+    // initialPageNumberが指定されている場合、そのページのエントリを選択
+    if (initialPageNumber && initialPageNumber > 0) {
+      const match = entries.findIndex((e) => e.pageNumber === initialPageNumber);
+      if (match >= 0) return match;
+      // 該当ページがなければ空きエントリにページ番号を設定
+      const emptyIdx = entries.findIndex((e) => e.pageNumber === 0);
+      if (emptyIdx >= 0) {
+        entries[emptyIdx] = { ...entries[emptyIdx], pageNumber: initialPageNumber };
+        return emptyIdx;
+      }
+    }
     const firstActive = entries.findIndex((e) => e.pageNumber > 0);
     return firstActive >= 0 ? firstActive : 0;
   });

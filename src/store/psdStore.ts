@@ -20,6 +20,7 @@ interface PsdStore {
   specViewMode: "thumbnails" | "list" | "layers" | "layerCheck";
   psdOnlyFilter: boolean;
   pdfDisplayMode: "page" | "file"; // page=ページごと展開, file=ファイル単位
+  contentLocked: boolean; // 中央画面ロック（アドレス変更時にファイルリストを保持）
 
   // Actions
   setFiles: (files: PsdFile[]) => void;
@@ -49,6 +50,7 @@ interface PsdStore {
   setSpecViewMode: (mode: "thumbnails" | "list" | "layers" | "layerCheck") => void;
   setPsdOnlyFilter: (v: boolean) => void;
   setPdfDisplayMode: (mode: "page" | "file") => void;
+  setContentLocked: (locked: boolean) => void;
 
   // Helpers
   getSelectedFiles: () => PsdFile[];
@@ -70,6 +72,7 @@ export const usePsdStore = create<PsdStore>((set, get) => ({
   specViewMode: "thumbnails",
   psdOnlyFilter: false,
   pdfDisplayMode: "page",
+  contentLocked: false,
 
   // File actions
   setFiles: (files) => set({ files, selectedFileIds: [], activeFileId: null }),
@@ -167,6 +170,7 @@ export const usePsdStore = create<PsdStore>((set, get) => ({
   setSpecViewMode: (specViewMode) => set({ specViewMode }),
   setPsdOnlyFilter: (psdOnlyFilter) => set({ psdOnlyFilter }),
   setPdfDisplayMode: (pdfDisplayMode) => set({ pdfDisplayMode }),
+  setContentLocked: (contentLocked) => set({ contentLocked }),
 
   // Helpers
   getSelectedFiles: () => {

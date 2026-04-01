@@ -24,7 +24,12 @@ import { CaptureOverlay } from "./CaptureOverlay";
 import { useFontBookStore } from "../../store/fontBookStore";
 import type { FontBookEntry } from "../../types/fontBook";
 
-const AA_SHARP_VALUES = new Set(["antiAliasSharp", "sharp", "Shrp"]);
+/** シャープ判定: 小文字で"sharp"を含む or "ansh" */
+function isSharpAA(aa: string | undefined): boolean {
+  if (!aa) return true; // 未設定はシャープ扱い
+  const lower = aa.toLowerCase();
+  return lower.includes("sharp") || lower === "ansh";
+}
 
 function hasIssue(
   entry: { textInfo?: import("../../types").TextInfo },
@@ -32,8 +37,7 @@ function hasIssue(
 ): boolean {
   if (!entry.textInfo) return false;
   if (issue === "antiAlias") {
-    const aa = entry.textInfo.antiAlias;
-    return !!aa && !AA_SHARP_VALUES.has(aa);
+    return !isSharpAA(entry.textInfo.antiAlias);
   }
   if (issue === "tracking") {
     const t = entry.textInfo.tracking;

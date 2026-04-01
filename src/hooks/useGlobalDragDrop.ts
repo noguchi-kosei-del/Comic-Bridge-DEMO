@@ -30,6 +30,9 @@ export function useGlobalDragDrop() {
           const paths = event.payload.paths;
           if (!paths || paths.length === 0) return;
 
+          // D&D時に自動ロック
+          usePsdStore.getState().setContentLocked(true);
+
           // ドロップされたフォルダパスを記録（サブフォルダ再スキャン用）
           const folderPaths: string[] = [];
           const imageFiles: string[] = [];

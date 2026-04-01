@@ -47,29 +47,36 @@ export function PanelTabBtn({ children, active, onClick, badge }: {
 }
 
 // ─── LayerTreeView ──────────────────────────────────────
-export function LayerTreeView({ nodes, depth = 0 }: { nodes: LayerNode[]; depth?: number }) {
+export function LayerTreeView({ nodes, depth = 0, _counter }: { nodes: LayerNode[]; depth?: number; _counter?: { v: number } }) {
+  const c = _counter || { v: 0 };
   return (
     <>
-      {nodes.map((node) => (
-        <div key={node.id}>
-          <div
-            className={`flex items-center gap-1 py-0.5 text-[11px] ${
-              !node.visible ? "opacity-40" : ""
-            }`}
-            style={{ paddingLeft: depth * 12 + 4 }}
-          >
-            <span className={`w-3 text-center text-[9px] ${
-              node.type === "group" ? "text-accent-secondary" :
-              node.type === "text" ? "text-accent" :
-              "text-text-muted"
-            }`}>
-              {node.type === "group" ? "G" : node.type === "text" ? "T" : node.type === "adjustment" ? "A" : "L"}
-            </span>
-            <span className="truncate text-text-secondary">{node.name}</span>
+      {nodes.map((node) => {
+        const rowIdx = c.v++;
+        return (
+          <div key={node.id}>
+            <div
+              className={`flex items-center gap-1 py-0.5 text-[11px] border-b border-border/15 ${
+                !node.visible ? "opacity-40" : ""
+              }`}
+              style={{
+                paddingLeft: depth * 12 + 4,
+                backgroundColor: rowIdx % 2 === 0 ? "#ffffff" : "#f0f8f0",
+              }}
+            >
+              <span className={`w-3 text-center text-[9px] ${
+                node.type === "group" ? "text-accent-secondary" :
+                node.type === "text" ? "text-accent" :
+                "text-text-muted"
+              }`}>
+                {node.type === "group" ? "G" : node.type === "text" ? "T" : node.type === "adjustment" ? "A" : "L"}
+              </span>
+              <span className="truncate text-text-secondary">{node.name}</span>
+            </div>
+            {node.children && <LayerTreeView nodes={node.children} depth={depth + 1} _counter={c} />}
           </div>
-          {node.children && <LayerTreeView nodes={node.children} depth={depth + 1} />}
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }

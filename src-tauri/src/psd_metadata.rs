@@ -93,6 +93,9 @@ pub struct TextInfo {
     /// カーニング（トラッキング）値のリスト（0以外の値のみ収集）
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tracking: Vec<f64>,
+    /// メトリクスカーニングが含まれるか
+    #[serde(rename = "hasMetricsKerning", skip_serializing_if = "Option::is_none")]
+    pub has_metrics_kerning: Option<bool>,
 }
 
 // ================================================================
@@ -135,6 +138,7 @@ struct TyShData {
     font_sizes: Vec<f64>,
     anti_alias: Option<String>,
     tracking: Vec<f64>,
+    has_metrics_kerning: bool,
     /// Transform matrix [a, b, c, d, tx, ty] — tx,ty are pixel coordinates
     transform: Option<[f64; 6]>,
     /// Text bounding box from descriptor (in Points, relative to transform origin)
@@ -836,6 +840,7 @@ fn build_layer_tree(raw_layers: &[RawLayer], dpi: u32) -> Vec<LayerNode> {
                         stroke_size: raw.stroke_size,
                         anti_alias: td.anti_alias.clone(),
                         tracking: td.tracking.clone(),
+                        has_metrics_kerning: if td.has_metrics_kerning { Some(true) } else { None },
                     }
                 });
 
@@ -949,13 +954,13 @@ fn parse_tysh_data(data: &[u8]) -> Option<TyShData> {
 
     // Extract font names and sizes from EngineData
     // Note: font sizes are in document pixels; DPI conversion happens in build_layer_tree
-    let (fonts, font_sizes, tracking) = match engine_data {
+    let (fonts, font_sizes, tracking, has_metrics_kerning) = match engine_data {
         Some(ed) => extract_from_engine_data(&ed),
-        None => (Vec::new(), Vec::new(), Vec::new()),
+        None => (Vec::new(), Vec::new(), Vec::new(), false),
     };
 
     Some(TyShData {
-        text, fonts, font_sizes, anti_alias, tracking,
+        text, fonts, font_sizes, anti_alias, tracking, has_metrics_kerning,
         transform: Some(transform),
         bounding_box,
     })
@@ -1240,7 +1245,7 @@ fn parse_frfx_descriptor<R: Read + Seek>(r: &mut R) -> Option<f64> {
 /// Builds a font index from /FontSet, then only returns fonts actually
 /// referenced by /Font indices in style runs (filtering out Photoshop
 /// internal fonts like AdobeInvisFont and CJK fallbacks).
-fn extract_from_engine_data(data: &[u8]) -> (Vec<String>, Vec<f64>, Vec<f64>) {
+fn extract_from_engine_data(data: &[u8]) -> (Vec<String>, Vec<f64>, Vec<f64>, bool) {
     // 1. Build indexed font name list from /FontSet
     let mut font_index: Vec<String> = Vec::new();
     if let Some(font_set_pos) = find_subsequence(data, b"/FontSet") {
@@ -1341,7 +1346,11 @@ fn extract_from_engine_data(data: &[u8]) -> (Vec<String>, Vec<f64>, Vec<f64>) {
     }
     let tracking: Vec<f64> = tracking_set.iter().map(|&v| v as f64 / 1000.0).collect();
 
-    (fonts, font_sizes, tracking)
+    // Note: /AutoKerning true in EngineData does not reliably distinguish
+    // "metrics" from other kerning modes. Disabled until proper detection method is found.
+    let has_metrics_kerning = false;
+
+    (fonts, font_sizes, tracking, has_metrics_kerning)
 }
 
 fn is_ed_whitespace(b: u8) -> bool {

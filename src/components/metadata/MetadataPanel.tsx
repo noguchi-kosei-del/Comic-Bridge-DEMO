@@ -43,6 +43,8 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
   const { outlierFileIds, majoritySize } = useCanvasSizeCheck();
   const isCanvasOutlier = outlierFileIds.has(file.id);
 
+  // 写植サマリーは中央SpecLayerGridに統合済み
+
   return (
     <div className="p-4 space-y-5">
       {file.metadata ? (
@@ -223,6 +225,7 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
                 {file.metadata.layerCount}
               </span>
             </h3>
+            {/* 写植サマリーは中央のSpecLayerGridに統合 */}
             <label className="flex items-center gap-1.5 mb-1.5 cursor-pointer text-[10px] text-text-muted hover:text-text-secondary">
               <input
                 type="checkbox"
@@ -232,6 +235,7 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
               />
               テキストのみ表示（非表示レイヤー除く）
             </label>
+            <div className="border-t border-border/40 pt-1.5 mt-1.5" />
             <div className="bg-bg-tertiary rounded-xl p-2 max-h-72 overflow-auto">
               <LayerTree layers={textLayersOnly ? filterTextLayers(file.metadata.layerTree) : file.metadata.layerTree} />
             </div>

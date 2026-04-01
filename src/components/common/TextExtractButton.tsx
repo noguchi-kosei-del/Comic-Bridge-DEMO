@@ -1,7 +1,9 @@
 import { useState, useCallback } from "react";
 import { usePsdStore } from "../../store/psdStore";
+import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { invoke } from "@tauri-apps/api/core";
 import { desktopDir } from "@tauri-apps/api/path";
+import { readFile } from "@tauri-apps/plugin-fs";
 import type { LayerNode, PsdFile } from "../../types";
 
 /**
@@ -72,6 +74,15 @@ export function TextExtractButton({ compact = false }: { compact?: boolean }) {
         message: `${fileName} に保存しました`,
         filePath,
       });
+
+      // 統合ビューアーに自動読み込み
+      try {
+        const bytes = await readFile(filePath);
+        const textContent = new TextDecoder("utf-8").decode(bytes);
+        const viewerStore = useUnifiedViewerStore.getState();
+        viewerStore.setTextContent(textContent);
+        viewerStore.setTextFilePath(filePath);
+      } catch { /* ignore */ }
 
       // 出力フォルダを開く
       await invoke("open_folder_in_explorer", { folderPath: outputDir }).catch(() => {});

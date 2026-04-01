@@ -135,6 +135,9 @@ export function UnifiedViewer() {
 
   // Text editor local
   const [selectedChunk, setSelectedChunk] = useState(-1);
+  // テキスト編集: ローカルバッファ（確定まで反映しない）
+  const [editBuffer, setEditBuffer] = useState<string | null>(null);
+  const [editCursorPos, setEditCursorPos] = useState<number | null>(null);
   const [chunks, setChunks] = useState<{ text: string; page: number }[]>([]);
 
   // Check panel local
@@ -394,6 +397,24 @@ export function UnifiedViewer() {
     },
     [store.textPages],
   );
+
+  // 編集モード切替時にバッファを初期化
+  useEffect(() => {
+    if (store.editMode === "edit") {
+      setEditBuffer(store.textContent);
+      setEditCursorPos(null);
+    } else {
+      setEditBuffer(null);
+    }
+  }, [store.editMode]);
+
+  // カーソル位置復元
+  useEffect(() => {
+    if (editCursorPos !== null && textareaRef.current) {
+      textareaRef.current.selectionStart = editCursorPos;
+      textareaRef.current.selectionEnd = editCursorPos;
+    }
+  }, [editBuffer, editCursorPos]);
 
   // ═══ Text chunks (for select mode) ═══
   const parseChunks = useCallback((content: string) => {
@@ -1276,17 +1297,50 @@ export function UnifiedViewer() {
                   </button>
                 </div>
               ) : store.editMode === "edit" ? (
-                <textarea
-                  ref={textareaRef}
-                  className="w-full h-full p-3 text-sm font-mono bg-white text-black resize-none outline-none border-none"
-                  value={store.textContent}
-                  onChange={(e) => {
-                    store.setTextContent(e.target.value);
-                    parseChunks(e.target.value);
-                    store.setIsDirty(true);
-                  }}
-                  spellCheck={false}
-                />
+                <div className="flex flex-col h-full">
+                  <textarea
+                    ref={textareaRef}
+                    className="flex-1 w-full p-3 text-sm font-mono bg-white text-black resize-none outline-none border-none"
+                    value={editBuffer ?? store.textContent}
+                    onChange={(e) => {
+                      const pos = e.target.selectionStart;
+                      setEditBuffer(e.target.value);
+                      setEditCursorPos(pos);
+                    }}
+                    spellCheck={false}
+                  />
+                  <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 border-t border-border/30 bg-bg-tertiary/30">
+                    {editBuffer !== null && editBuffer !== store.textContent && (
+                      <span className="text-[10px] text-warning">未確定の変更あり</span>
+                    )}
+                    <div className="flex-1" />
+                    <button
+                      onClick={() => {
+                        setEditBuffer(store.textContent);
+                        setEditCursorPos(null);
+                      }}
+                      className="px-3 py-1 text-[10px] text-text-muted hover:text-text-primary bg-bg-tertiary rounded transition-colors"
+                    >
+                      リセット
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (editBuffer !== null) {
+                          store.setTextContent(editBuffer);
+                          parseChunks(editBuffer);
+                          store.setIsDirty(true);
+                          const { header, pages } = parseComicPotText(editBuffer);
+                          store.setTextHeader(header);
+                          store.setTextPages(pages);
+                        }
+                      }}
+                      disabled={editBuffer === null || editBuffer === store.textContent}
+                      className="px-3 py-1 text-[10px] font-medium text-white bg-accent rounded disabled:opacity-30 transition-colors"
+                    >
+                      確定
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div className="p-2">
                   {store.textPages.length > 0 ? (
@@ -1579,7 +1633,7 @@ export function UnifiedViewer() {
         return null;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files, idx, cur, layerTree, textLayers, postScriptNames, allFilesFontMap, activeFontFilter, highlightBounds, store.fontPresets, store.textContent, store.editMode, store.textPages, store.selectedBlockIds, store.checkTabMode, textDiffResults, diffMatchDisplay, diffSplitMode, fileDiffStatusMap, checkData, filteredCheckItems, activeCheckItems, categories, checkFilterCategory, chunks, selectedChunk, pageSync, navigateToTextPage, fontResolveMap, fontResolved]);
+  }, [files, idx, cur, layerTree, textLayers, postScriptNames, allFilesFontMap, activeFontFilter, highlightBounds, store.fontPresets, store.textContent, store.editMode, store.textPages, store.selectedBlockIds, store.checkTabMode, textDiffResults, diffMatchDisplay, diffSplitMode, fileDiffStatusMap, editBuffer, checkData, filteredCheckItems, activeCheckItems, categories, checkFilterCategory, chunks, selectedChunk, pageSync, navigateToTextPage, fontResolveMap, fontResolved]);
 
   // ═══════════════════════════════════════════════════════
   // RENDER

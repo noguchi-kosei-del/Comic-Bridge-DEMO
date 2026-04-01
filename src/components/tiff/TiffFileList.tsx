@@ -401,6 +401,7 @@ export function TiffFileList({ onOpenCropEditor }: TiffFileListProps) {
         <TiffPartialBlurModal
           onClose={() => setPartialBlurFileId(null)}
           externalEntries={fileOverrides.get(partialBlurFileId)?.partialBlurEntries}
+          initialPageNumber={files.findIndex((f) => f.id === partialBlurFileId) + 1}
           onSave={(entries) =>
             setFileOverride(partialBlurFileId, {
               partialBlurEntries: entries.length > 0 ? entries : undefined,

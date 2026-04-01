@@ -17,6 +17,11 @@ export function GlobalAddressBar() {
   const navigateTo = useCallback(async (path: string, addToHistory = true) => {
     const trimmed = path.trim().replace(/\/+$|\\+$/g, "");
     if (!trimmed) return;
+    // ロック中はアドレスバーの表示のみ更新（ファイルリストは変更しない）
+    if (usePsdStore.getState().contentLocked) {
+      setAddressInput(trimmed);
+      return;
+    }
     usePsdStore.getState().setCurrentFolderPath(trimmed);
     setAddressInput(trimmed);
     try { await loadFolder(trimmed); } catch { /* ignore */ }
@@ -83,7 +88,15 @@ export function GlobalAddressBar() {
         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
       </button>
       <button
-        onClick={() => { if (currentFolderPath) navigateTo(currentFolderPath); }}
+        onClick={async () => {
+          if (currentFolderPath) {
+            // ロックを解除
+            usePsdStore.getState().setContentLocked(false);
+            // メイン画面のファイルを再読み込み
+            usePsdStore.getState().setCurrentFolderPath(currentFolderPath);
+            try { await loadFolder(currentFolderPath); } catch { /* ignore */ }
+          }
+        }}
         disabled={!currentFolderPath}
         className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-primary disabled:opacity-20 rounded hover:bg-bg-tertiary"
         title="再読み込み"

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useScanPsdStore } from "../../store/scanPsdStore";
@@ -9,6 +9,7 @@ import { FontTypesTab } from "./tabs/FontTypesTab";
 import { FontSizesTab } from "./tabs/FontSizesTab";
 import { GuideLinesTab } from "./tabs/GuideLinesTab";
 import { TextRubyTab } from "./tabs/TextRubyTab";
+import { FontBookView } from "../views/FontBookView";
 
 interface PendingFolder {
   path: string;
@@ -55,10 +56,22 @@ export function ScanPsdEditView() {
   const workInfo = useScanPsdStore((s) => s.workInfo);
   const pendingTitleLabel = useScanPsdStore((s) => s.pendingTitleLabel);
   const scanData = useScanPsdStore((s) => s.scanData);
+  const presetSets = useScanPsdStore((s) => s.presetSets);
   const { savePresetJson, startScan, removeVolumeData } = useScanPsdProcessor();
+
+  // 未登録フォント数
+  const unregisteredCount = useMemo(() => {
+    if (!scanData?.fonts) return 0;
+    const allRegistered = new Set<string>();
+    for (const arr of Object.values(presetSets)) {
+      for (const fp of arr) allRegistered.add(fp.font);
+    }
+    return scanData.fonts.filter((f) => !allRegistered.has(f.name)).length;
+  }, [scanData?.fonts, presetSets]);
 
   // 追加スキャンダイアログ
   const [showScanDialog, setShowScanDialog] = useState(false);
+  const [showFontBook, setShowFontBook] = useState(false);
   const [pendingFolders, setPendingFolders] = useState<PendingFolder[]>([]);
 
   // スキャン完了ダイアログ
@@ -208,6 +221,11 @@ export function ScanPsdEditView() {
           </p>
           <p className="text-[10px] text-text-muted truncate">{fileName}</p>
         </div>
+        {unregisteredCount > 0 && (
+          <span className="text-[10px] text-error font-semibold bg-error/10 px-2.5 py-1 rounded-full border border-error/20 animate-pulse">
+            ⚠ 未登録フォント {unregisteredCount}件
+          </span>
+        )}
         {pendingTitleLabel && (
           <span className="text-[10px] text-warning font-semibold bg-warning/10 px-2.5 py-1 rounded-full border border-warning/20">
             仮保存中
@@ -278,7 +296,7 @@ export function ScanPsdEditView() {
                 <WorkInfoTab />
               </div>
             </div>
-            {/* Column 2: Fonts + Guides */}
+            {/* Column 2: Fonts + Font Book + Guides */}
             <div className="space-y-5">
               <div>
                 <SectionHeader icon="font" color="purple">
@@ -286,6 +304,20 @@ export function ScanPsdEditView() {
                 </SectionHeader>
                 <div className="bg-white rounded-2xl border border-border/60 shadow-card p-4">
                   <FontTypesTab />
+                </div>
+              </div>
+              <div>
+                <SectionHeader icon="font" color="sky">
+                  フォント帳
+                </SectionHeader>
+                <div className="bg-white rounded-2xl border border-border/60 shadow-card p-4 flex flex-col items-center gap-2">
+                  <p className="text-[11px] text-text-muted text-center">フォントの検索・管理を行います</p>
+                  <button
+                    onClick={() => setShowFontBook(true)}
+                    className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    フォント帳を開く
+                  </button>
                 </div>
               </div>
               <div>
@@ -319,6 +351,21 @@ export function ScanPsdEditView() {
           </div>
         </div>
       </div>
+
+      {/* フォント帳モーダル */}
+      {showFontBook && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowFontBook(false)}>
+          <div className="bg-bg-primary rounded-xl shadow-2xl w-[90vw] h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-bg-secondary">
+              <h3 className="text-sm font-medium">フォント帳</h3>
+              <button onClick={() => setShowFontBook(false)} className="text-text-muted hover:text-text-primary text-lg">✕</button>
+            </div>
+            <div className="flex-1 overflow-auto">
+              <FontBookView />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 追加スキャンダイアログ */}
       {showScanDialog && (

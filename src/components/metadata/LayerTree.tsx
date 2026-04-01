@@ -7,6 +7,8 @@ interface LayerTreeProps {
   parentVisible?: boolean;
   selectedLayerId?: string | null;
   onSelectLayer?: (layerId: string | null, bounds: LayerBounds | null) => void;
+  /** ゼブラストライプ用カウンター（内部用） */
+  _rowCounter?: { value: number };
 }
 
 export function LayerTree({
@@ -15,11 +17,14 @@ export function LayerTree({
   parentVisible = true,
   selectedLayerId,
   onSelectLayer,
+  _rowCounter,
 }: LayerTreeProps) {
   // ag-psdはbottom-to-top順で返すため、reverseしてPhotoshop表示順（上がforeground）に変換
   const reversed = useMemo(() => [...layers].reverse(), [layers]);
+  // ルート呼び出し時にカウンター初期化
+  const counter = _rowCounter || { value: 0 };
   return (
-    <div className="text-xs space-y-0.5">
+    <div className={depth === 0 ? "text-xs" : "text-xs"}>
       {reversed.map((layer) => (
         <LayerItem
           key={layer.id}
@@ -28,6 +33,7 @@ export function LayerTree({
           parentVisible={parentVisible}
           selectedLayerId={selectedLayerId}
           onSelectLayer={onSelectLayer}
+          _rowCounter={counter}
         />
       ))}
     </div>
@@ -40,6 +46,7 @@ interface LayerItemProps {
   parentVisible: boolean;
   selectedLayerId?: string | null;
   onSelectLayer?: (layerId: string | null, bounds: LayerBounds | null) => void;
+  _rowCounter?: { value: number };
 }
 
 function LayerItem({
@@ -48,7 +55,10 @@ function LayerItem({
   parentVisible,
   selectedLayerId,
   onSelectLayer,
+  _rowCounter,
 }: LayerItemProps) {
+  const rowIndex = _rowCounter ? _rowCounter.value++ : 0;
+  const isEvenRow = rowIndex % 2 === 0;
   const [isExpanded, setIsExpanded] = useState(depth < 2);
   const hasChildren = layer.children && layer.children.length > 0;
   const effectiveVisible = layer.visible && parentVisible;
@@ -124,11 +134,14 @@ function LayerItem({
     <div>
       <div
         className={`
-          flex items-center gap-1.5 py-1 px-1.5 rounded-lg transition-all duration-150
+          flex items-center gap-1.5 py-1 px-1.5 transition-all duration-150 border-b border-border/20
           ${onSelectLayer && layer.bounds ? "cursor-pointer hover:bg-white/8" : "cursor-default hover:bg-white/5"}
           ${selectedLayerId === layer.id ? "bg-white/8 border-l-2 border-[rgba(194,90,90,0.5)]" : ""}
         `}
-        style={{ paddingLeft: `${depth * 14 + 4}px` }}
+        style={{
+          paddingLeft: `${depth * 14 + 4}px`,
+          backgroundColor: isEvenRow ? "#ffffff" : "#f0f8f0",
+        }}
         onClick={
           onSelectLayer && layer.bounds
             ? (e) => {
@@ -196,15 +209,40 @@ function LayerItem({
         {/* Layer Type Icon */}
         <div className="flex-shrink-0">{getLayerIcon()}</div>
 
-        {/* Layer Name */}
-        <span
-          className={`truncate flex-1 ${
-            effectiveVisible ? "text-text-primary" : "text-text-muted/50"
-          }`}
-          title={`${layer.name} (${getTypeLabel()})`}
-        >
-          {layer.name}
-        </span>
+        {/* Layer Name + Text Info */}
+        <div className="flex-1 min-w-0">
+          <span
+            className={`truncate block ${
+              effectiveVisible ? "text-text-primary" : "text-text-muted/50"
+            }`}
+            title={`${layer.name} (${getTypeLabel()})`}
+          >
+            {layer.name}
+          </span>
+          {/* テキストレイヤー: フォント/サイズ/シャープ/カーニング情報 */}
+          {layer.type === "text" && layer.textInfo && (
+            <div className="flex flex-wrap items-center gap-1 mt-0.5 text-[9px]">
+              {layer.textInfo.fonts.length > 0 && (
+                <span className="text-accent/70 truncate max-w-[120px]" title={layer.textInfo.fonts.join(", ")}>
+                  {layer.textInfo.fonts[0]}
+                </span>
+              )}
+              {layer.textInfo.fontSizes.length > 0 && (
+                <span className="text-text-muted">{layer.textInfo.fontSizes.join("/")}pt</span>
+              )}
+              {/* シャープ以外のみエラー表示（isAllSharp未計算時はantiAlias値から判定） */}
+              {(() => {
+                const aa = layer.textInfo!.antiAlias;
+                const sharp = layer.textInfo!.isAllSharp ?? (!aa || aa.toLowerCase().includes("sharp") || aa.toLowerCase() === "ansh");
+                return !sharp ? <span className="px-1 py-px rounded bg-error/10 text-error">{aa || "非シャープ"}</span> : null;
+              })()}
+              {/* メトリクスカーニングのみエラー表示 */}
+              {layer.textInfo.hasMetricsKerning && (
+                <span className="px-1 py-px rounded bg-error/10 text-error">メトリクス</span>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Mask Badges */}
         <div className={`flex items-center gap-1 ${effectiveVisible ? "" : "opacity-40"}`}>
@@ -290,6 +328,7 @@ function LayerItem({
             parentVisible={effectiveVisible}
             selectedLayerId={selectedLayerId}
             onSelectLayer={onSelectLayer}
+            _rowCounter={_rowCounter}
           />
         </div>
       )}

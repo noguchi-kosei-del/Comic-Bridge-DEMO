@@ -89,6 +89,12 @@ export interface TextInfo {
   strokeSize?: number;
   antiAlias?: string; // "Shrp" | "Crsp" | "Strg" | "Smth" | "Anno"
   tracking?: number[]; // トラッキング値（0以外のみ）
+  /** true=全てシャープ(Shrp), false=シャープ以外が含まれる */
+  isAllSharp?: boolean;
+  /** カーニング: "metrics"=メトリクス(autoKerning), "manual"=手動, "optical"=オプティカル */
+  kerningTypes?: string[];
+  /** メトリクスカーニングが含まれるか */
+  hasMetricsKerning?: boolean;
 }
 
 export interface LayerBounds {

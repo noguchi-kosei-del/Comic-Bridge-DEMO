@@ -295,12 +295,33 @@ function extractLayerTree(children: Psd["children"], parentPath = "", dpi = 72):
         }
       }
 
+      // カーニングタイプを収集
+      const kerningTypes = new Set<string>();
+      if (child.text.style?.autoKerning !== undefined) {
+        kerningTypes.add(child.text.style.autoKerning ? "metrics" : "manual");
+      }
+      if (child.text.styleRuns) {
+        for (const run of child.text.styleRuns) {
+          if (run.style?.autoKerning !== undefined) {
+            kerningTypes.add(run.style.autoKerning ? "metrics" : "manual");
+          }
+        }
+      }
+
+      // シャープ判定: 値を小文字化して"sharp"を含むかで判定（全バリエーション対応）
+      const aaLower = (antiAlias || "").toLowerCase();
+      const isAllSharp = !antiAlias || aaLower.includes("sharp") || aaLower === "ansh";
+      const hasMetricsKerning = kerningTypes.has("metrics");
+
       node.textInfo = {
         text: child.text.text || "",
         fonts: [...fonts],
         fontSizes: [...fontSizes].sort((a, b) => b - a),
         ...(antiAlias ? { antiAlias } : {}),
         ...(trackingValues.size > 0 ? { tracking: [...trackingValues] } : {}),
+        isAllSharp,
+        ...(kerningTypes.size > 0 ? { kerningTypes: [...kerningTypes] } : {}),
+        hasMetricsKerning,
       };
     }
 

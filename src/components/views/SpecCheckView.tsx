@@ -125,19 +125,22 @@ export function SpecCheckView() {
     }
   }, []);
 
-  // Load explorer on folder change
+  const contentLocked = usePsdStore((s) => s.contentLocked);
+
+  // Load explorer on folder change (skip when locked)
   useEffect(() => {
-    if (currentFolderPath) loadExplorerContents(currentFolderPath);
-  }, [currentFolderPath, loadExplorerContents]);
+    if (currentFolderPath && !contentLocked) loadExplorerContents(currentFolderPath);
+  }, [currentFolderPath, loadExplorerContents, contentLocked]);
 
   const setCurrentFolderPath = usePsdStore((state) => state.setCurrentFolderPath);
 
   // Enter subfolder (single click)
   const handleEnterFolder = useCallback(async (folderName: string) => {
     if (!currentFolderPath) return;
+    if (usePsdStore.getState().contentLocked) return; // ロック中はスキップ
     const newPath = `${currentFolderPath}\\${folderName}`;
     setCurrentFolderPath(newPath);
-    usePsdStore.getState().setSingleFolderDrop(null); // アドレス移動でクリア
+    usePsdStore.getState().setSingleFolderDrop(null);
     await loadExplorerContents(newPath);
     try { await loadFolder(newPath); } catch { /* ignore */ }
   }, [currentFolderPath, loadFolder, loadExplorerContents, setCurrentFolderPath]);
@@ -147,11 +150,45 @@ export function SpecCheckView() {
     if (!currentFolderPath) return;
     const fullPath = `${currentFolderPath}\\${fileName}`;
     const ext = fileName.substring(fileName.lastIndexOf(".")).toLowerCase();
-    // Text files: load content and show in center
+    // Text files: load content and show in preview
     if (ext === ".txt") {
       try {
         const content = await invoke<string>("read_text_file", { filePath: fullPath });
         setSelectedTextFile({ name: fileName, path: fullPath, content });
+      } catch { /* ignore */ }
+      return;
+    }
+    // JSON files: load into viewer store (作品情報 or 校正JSON)
+    if (ext === ".json") {
+      try {
+        const content = await invoke<string>("read_text_file", { filePath: fullPath });
+        const data = JSON.parse(content);
+        const vs = useUnifiedViewerStore.getState();
+        // 校正JSONかプリセットJSONかを自動判定
+        if (data.checks || (Array.isArray(data) && data[0]?.category)) {
+          // 校正JSON
+          const allItems: any[] = [];
+          const parse = (src: any, kind: string) => {
+            const arr = Array.isArray(src) ? src : Array.isArray(src?.items) ? src.items : null;
+            if (!arr) return;
+            for (const item of arr) allItems.push({ picked: false, category: item.category || "", page: item.page || "", excerpt: item.excerpt || "", content: item.content || item.text || "", checkKind: item.checkKind || kind });
+          };
+          if (data.checks) { parse(data.checks.simple, "correctness"); parse(data.checks.variation, "proposal"); }
+          else if (Array.isArray(data)) { parse(data, "correctness"); }
+          vs.setCheckData({ title: data.work || "", fileName, filePath: fullPath, allItems, correctnessItems: allItems.filter((i) => i.checkKind === "correctness"), proposalItems: allItems.filter((i) => i.checkKind === "proposal") });
+        } else {
+          // 作品情報JSON（フォントプリセット）
+          const presets: any[] = [];
+          const presetsObj = data?.presetData?.presets ?? data?.presets ?? data?.presetSets ?? data;
+          if (typeof presetsObj === "object" && presetsObj !== null) {
+            if (Array.isArray(presetsObj)) {
+              for (const p of presetsObj) if (p?.font || p?.postScriptName) presets.push({ font: p.font || p.postScriptName, name: p.name || p.displayName || p.font || "", subName: p.subName || p.category || "" });
+            } else {
+              for (const [, arr] of Object.entries(presetsObj)) { if (!Array.isArray(arr)) continue; for (const p of arr as any[]) if (p?.font || p?.postScriptName) presets.push({ font: p.font || p.postScriptName, name: p.name || p.displayName || "", subName: p.subName || "" }); }
+            }
+          }
+          if (presets.length > 0) { vs.setFontPresets(presets); vs.setPresetJsonPath(fullPath); }
+        }
       } catch { /* ignore */ }
       return;
     }
@@ -522,6 +559,21 @@ export function SpecCheckView() {
 
           {/* Bar 2: Spec selection + Size dropdown */}
           <div className="flex-shrink-0 px-2 py-1 bg-bg-tertiary/30 border-b border-border/30 flex items-center gap-2">
+            <button
+              onClick={() => usePsdStore.getState().setContentLocked(!contentLocked)}
+              className={`w-5 h-5 flex items-center justify-center rounded transition-colors flex-shrink-0 ${
+                contentLocked ? "text-warning bg-warning/10" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
+              }`}
+              title={contentLocked ? "ロック中（クリックで解除）" : "コンテンツロック"}
+            >
+              <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                {contentLocked ? (
+                  <><rect x="3.5" y="7" width="9" height="7" rx="1" /><path d="M5.5 7V5a2.5 2.5 0 015 0v2" /></>
+                ) : (
+                  <><rect x="3.5" y="7" width="9" height="7" rx="1" /><path d="M5.5 7V5a2.5 2.5 0 015 0" /></>
+                )}
+              </svg>
+            </button>
             <span className="text-[10px] text-text-muted flex-shrink-0">仕様:</span>
             {specifications.map((spec) => (
               <button
