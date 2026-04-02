@@ -33,11 +33,9 @@
   Delete "$LOCALAPPDATA\Microsoft\Windows\Explorer\thumbcache_wide.db"
   Delete "$LOCALAPPDATA\Microsoft\Windows\Explorer\thumbcache_wide_alternate.db"
 
-  ; --- Step 2: ショートカット作成はTauriデフォルトに任せる（上書き問題回避） ---
-  ; hooks.nshでの手動CreateShortCutは廃止。
-  ; 旧バージョンのショートカット（COMIC-Bridge.lnk等）が残っている場合のクリーンアップ
-  Delete "$DESKTOP\COMIC-Bridge.lnk"
-  Delete "$SMPROGRAMS\COMIC-Bridge\COMIC-Bridge.lnk"
+  ; --- Step 2: ショートカットは一切触らない（通常版との共存のため） ---
+  ; Tauriデフォルトのショートカット作成に完全委任。
+  ; 他アプリのショートカットを削除・上書きしない。
 
   ; --- Step 3: Notify Windows shell that icons have changed ---
   System::Call 'Shell32::SHChangeNotify(i 0x08000000, i 0x1000, i 0, i 0)'
