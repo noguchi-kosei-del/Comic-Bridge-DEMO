@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { useViewStore } from "../../store/viewStore";
@@ -6,15 +6,17 @@ import { useViewStore } from "../../store/viewStore";
 /**
  * ProGen統合ビュー
  *
- * データ連携: localStorage に書き込み → ProGen側が localStorage から読み込み
- * 同一オリジン (https://tauri.localhost) なので共有可能
+ * iframe は state-preserving（一度読み込んだら維持）
+ * データ連携: localStorage に書き込み → ProGen側が500msポーリングで検知
  */
 
-function writeToLocalStorage() {
+function writeCommand(mode: string) {
   const scan = useScanPsdStore.getState();
   const viewer = useUnifiedViewerStore.getState();
 
-  const data = {
+  const cmd = {
+    mode,
+    ts: Date.now(),
     textContent: viewer.textContent || "",
     textFileName: (() => {
       const p = viewer.textFilePath;
@@ -29,40 +31,25 @@ function writeToLocalStorage() {
       const parts = jp.replace(/\//g, "\\").split("\\");
       return parts.length >= 2 ? parts[parts.length - 2] : "";
     })(),
-    workInfo: {
-      genre: scan.workInfo.genre || "",
-      label: scan.workInfo.label || "",
-      title: scan.workInfo.title || "",
-      author: scan.workInfo.author || "",
-      volume: scan.workInfo.volume || 0,
-    },
   };
 
-  try {
-    localStorage.setItem("comic_bridge_progen_handoff", JSON.stringify(data));
-  } catch (e) {
-    console.warn("[ProgenView] localStorage write failed:", e);
-  }
+  localStorage.setItem("cb_progen_cmd", JSON.stringify(cmd));
 }
 
 export function ProgenView() {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const progenMode = useViewStore((s) => s.progenMode);
-  const [iframeSrc, setIframeSrc] = useState("/progen/index.html");
 
+  // モード指定が来たらlocalStorageにコマンド書き込み
   useEffect(() => {
     if (!progenMode) return;
     useViewStore.getState().setProgenMode(null);
-
-    writeToLocalStorage();
-    setIframeSrc(`/progen/index.html?mode=${progenMode}&t=${Date.now()}`);
+    writeCommand(progenMode);
   }, [progenMode]);
 
   return (
     <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
       <iframe
-        ref={iframeRef}
-        src={iframeSrc}
+        src="/progen/index.html"
         className="w-full h-full border-0"
         title="ProGen"
       />

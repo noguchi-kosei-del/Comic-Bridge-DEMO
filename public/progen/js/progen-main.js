@@ -53,78 +53,80 @@ window.initCalibrationFolderBrowser();
 const proofreadingTxtDropZone = document.getElementById('proofreadingTxtDropZone');
 if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, window.addProofreadingTxt);
 
-// ═══ COMIC-Bridge統合: URLパラメータ + localStorage でデータ連携 ═══
-// React側が localStorage に書き込み → こちらが読み込む（同一オリジン）
+// ═══ COMIC-Bridge統合: localStorageポーリングでコマンド受信 ═══
+// React側が localStorage.setItem('cb_progen_cmd', JSON.stringify({mode, ts, ...})) で書き込み
+// こちらが500msポーリングで検知し、モード遷移+テキスト注入+レーベル設定を行う
+// iframeはstate-preserving（リロードなし）
 (function () {
-    var params = new URLSearchParams(window.location.search);
-    var mode = params.get('mode');
-    if (!mode) return;
+    var lastTs = 0;
 
-    console.log('[ProGen] Auto-navigate to mode:', mode);
+    function processCommand(cmd) {
+        if (!cmd || !cmd.mode) return;
+        console.log('[ProGen] Command received:', cmd.mode, { text: !!cmd.textContent, json: !!cmd.jsonPath, label: cmd.labelName });
 
-    var landing = document.getElementById('landingScreen');
-    var main = document.getElementById('mainWrapper');
-    var proofreading = document.getElementById('proofreadingPage');
-    if (landing) landing.style.display = 'none';
-    if (main) main.style.display = 'none';
-    if (proofreading) proofreading.style.display = 'none';
+        var mode = cmd.mode;
+        var landing = document.getElementById('landingScreen');
+        var main = document.getElementById('mainWrapper');
+        var proofreading = document.getElementById('proofreadingPage');
 
-    // localStorage から同期的に読み込み（非同期不要）
-    var data = null;
-    try {
-        var raw = localStorage.getItem('comic_bridge_progen_handoff');
-        if (raw) data = JSON.parse(raw);
-    } catch (e) { console.warn('[ProGen] localStorage read failed:', e); }
+        // 全画面非表示
+        if (landing) landing.style.display = 'none';
+        if (main) main.style.display = 'none';
+        if (proofreading) proofreading.style.display = 'none';
 
-    console.log('[ProGen] Handoff data:', data ? 'loaded' : 'none',
-        data ? { text: !!data.textContent, json: !!data.jsonPath, label: data.labelName } : '');
+        // テキスト注入
+        if (cmd.textContent && window.state) {
+            var fileObj = { name: cmd.textFileName || 'text.txt', content: cmd.textContent, size: cmd.textContent.length };
+            window.state.manuscriptTxtFiles = [fileObj];
+            window.state.txtGuideDismissed = true;
+            window.state.proofreadingFiles = [fileObj];
+            window.state.proofreadingContent = cmd.textContent;
+        }
 
-    // テキスト注入関数（processLoadedJson後に再呼び出しするため関数化）
-    function injectText() {
-        if (!data || !data.textContent || !window.state) return;
-        var fileObj = { name: data.textFileName || 'text.txt', content: data.textContent, size: data.textContent.length };
-        window.state.manuscriptTxtFiles = [fileObj];
-        window.state.txtGuideDismissed = true;
-        window.state.proofreadingFiles = [fileObj];
-        window.state.proofreadingContent = data.textContent;
-    }
-    injectText(); // 初回注入
-
-    // レーベル自動認識
-    function applyLabel() {
-        if (!data || !data.labelName) return;
-        try {
-            var displayGroup = document.getElementById('labelDisplayGroup');
-            var displayText = document.getElementById('labelDisplayText');
-            var selectorGroup = document.getElementById('labelSelectorGroup');
-            if (displayGroup && displayText) {
-                if (selectorGroup) selectorGroup.style.display = 'none';
-                displayGroup.style.display = 'flex';
-                displayText.textContent = data.labelName;
-            }
-            var proofSelectorText = document.getElementById('proofreadingLabelSelectorText');
-            if (proofSelectorText) {
-                proofSelectorText.textContent = data.labelName;
-                proofSelectorText.classList.remove('unselected');
-            }
-            var proofSelector = document.getElementById('proofreadingLabelSelect');
-            if (proofSelector) {
-                var opts = proofSelector.querySelectorAll('option');
-                for (var i = 0; i < opts.length; i++) {
-                    if (opts[i].value === data.labelName || opts[i].textContent === data.labelName) {
-                        proofSelector.value = opts[i].value;
-                        if (window.loadLabelRulesForProofreading) window.loadLabelRulesForProofreading(opts[i].value);
-                        break;
+        // レーベル設定
+        if (cmd.labelName) {
+            try {
+                var displayGroup = document.getElementById('labelDisplayGroup');
+                var displayText = document.getElementById('labelDisplayText');
+                var selectorGroup = document.getElementById('labelSelectorGroup');
+                if (displayGroup && displayText) {
+                    if (selectorGroup) selectorGroup.style.display = 'none';
+                    displayGroup.style.display = 'flex';
+                    displayText.textContent = cmd.labelName;
+                }
+                var proofSelectorText = document.getElementById('proofreadingLabelSelectorText');
+                if (proofSelectorText) {
+                    proofSelectorText.textContent = cmd.labelName;
+                    proofSelectorText.classList.remove('unselected');
+                }
+                var proofSelector = document.getElementById('proofreadingLabelSelect');
+                if (proofSelector) {
+                    var opts = proofSelector.querySelectorAll('option');
+                    for (var i = 0; i < opts.length; i++) {
+                        if (opts[i].value === cmd.labelName || opts[i].textContent === cmd.labelName) {
+                            proofSelector.value = opts[i].value;
+                            if (window.loadLabelRulesForProofreading) window.loadLabelRulesForProofreading(opts[i].value);
+                            break;
+                        }
                     }
                 }
-            }
-        } catch (e) { /* ignore */ }
-    }
+            } catch (e) { /* ignore */ }
+        }
 
-    // モード遷移
-    function navigateToMode() {
-        try {
+        // モード遷移
+        function showMode() {
+            // テキスト再注入（processLoadedJsonが上書きした分を修復）
+            if (cmd.textContent && window.state) {
+                var fo = { name: cmd.textFileName || 'text.txt', content: cmd.textContent, size: cmd.textContent.length };
+                window.state.manuscriptTxtFiles = [fo];
+                window.state.proofreadingFiles = [fo];
+                window.state.proofreadingContent = cmd.textContent;
+            }
+
+            // 画面を確実に設定
+            if (landing) landing.style.display = 'none';
             if (mode === 'proofreading') {
+                if (main) main.style.display = 'none';
                 if (proofreading) proofreading.style.display = 'flex';
                 if (window.state) {
                     window.state.currentProofreadingMode = 'simple';
@@ -142,13 +144,14 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
                     try {
                         if (window.state && window.state.proofreadingFiles && window.state.proofreadingFiles.length > 0
                             && window.detectNonJoyoLinesWithPageInfo && window.showNonJoyoResultPopup) {
-                            var detected = window.detectNonJoyoLinesWithPageInfo(window.state.proofreadingFiles);
-                            window.state.proofreadingDetectedNonJoyoWords = detected;
-                            window.showNonJoyoResultPopup(detected, true);
+                            var d = window.detectNonJoyoLinesWithPageInfo(window.state.proofreadingFiles);
+                            window.state.proofreadingDetectedNonJoyoWords = d;
+                            window.showNonJoyoResultPopup(d, true);
                         }
                     } catch (e) { /* ignore */ }
-                }, 300);
+                }, 200);
             } else {
+                if (proofreading) proofreading.style.display = 'none';
                 if (main) main.style.display = 'flex';
                 if (window.state) window.state.currentViewMode = 'edit';
                 if (mode === 'formatting' && window.selectDataType) window.selectDataType('txt_only');
@@ -161,81 +164,48 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
             var geminiBtn = document.getElementById('extractionGeminiBtn');
             if (geminiBtn) geminiBtn.removeAttribute('disabled');
             if (window.enableDataTypeToggle) window.enableDataTypeToggle();
-        } catch (e) { console.warn('[ProGen] Navigate error:', e); }
-    }
+        }
 
-    // 全処理を最終的に実行する共通関数
-    function finalize() {
-        // processLoadedJsonのhideLandingScreen()が内部で200ms+350msのsetTimeoutを持つ
-        // その全てが完了した後（700ms後）に最終的な画面設定+テキスト注入を行う
-
-        // 即座にテキスト注入+レーベル設定（一旦設定）
-        injectText();
-        applyLabel();
-        navigateToMode();
-
-        // processLoadedJsonの全タイマー完了後（700ms）に最終上書き
-        setTimeout(function () {
-            // 画面を確実に正しい状態にする
-            if (landing) landing.style.display = 'none';
-            if (mode === 'proofreading') {
-                if (main) main.style.display = 'none';
-                if (proofreading) proofreading.style.display = 'flex';
-            } else {
-                if (main) main.style.display = 'flex';
-                if (proofreading) proofreading.style.display = 'none';
-            }
-
-            // テキスト最終注入
-            injectText();
-
-            // レーベル最終設定
-            applyLabel();
-
-            // UI全更新
-            if (mode === 'proofreading') {
-                if (window.renderProofreadingFileList) window.renderProofreadingFileList();
-                if (window.updateProofreadingPrompt) window.updateProofreadingPrompt();
-                if (window.updateProofreadingCheckItems) window.updateProofreadingCheckItems();
-                // 常用外漢字検出
-                try {
-                    if (window.state && window.state.proofreadingFiles && window.state.proofreadingFiles.length > 0
-                        && window.detectNonJoyoLinesWithPageInfo && window.showNonJoyoResultPopup) {
-                        var detected = window.detectNonJoyoLinesWithPageInfo(window.state.proofreadingFiles);
-                        window.state.proofreadingDetectedNonJoyoWords = detected;
-                        window.showNonJoyoResultPopup(detected, true);
-                    }
-                } catch (e) { /* ignore */ }
-            } else {
-                if (window.updateTxtUploadStatus) window.updateTxtUploadStatus();
-                if (window.renderTable) window.renderTable();
-                if (window.renderSymbolTable) window.renderSymbolTable();
-                if (window.generateXML) window.generateXML();
-            }
-
-            // Geminiボタン有効化
-            var geminiBtn = document.getElementById('extractionGeminiBtn');
-            if (geminiBtn) geminiBtn.removeAttribute('disabled');
-            if (window.enableDataTypeToggle) window.enableDataTypeToggle();
-        }, 700);
-    }
-
-    // JSON読み込み → finalize
-    var jsonPath = data ? data.jsonPath : '';
-    if (jsonPath && window.electronAPI && window.electronAPI.readJsonFile) {
-        window.electronAPI.readJsonFile(jsonPath).then(function (result) {
-            try {
+        // JSON読み込み → showMode
+        if (cmd.jsonPath && window.electronAPI && window.electronAPI.readJsonFile) {
+            window.electronAPI.readJsonFile(cmd.jsonPath).then(function (result) {
                 if (result && result.success !== false && window.processLoadedJson) {
-                    var fn = jsonPath.split('\\').pop() || jsonPath.split('/').pop() || '';
+                    var fn = cmd.jsonPath.split('\\').pop() || cmd.jsonPath.split('/').pop() || '';
                     window.processLoadedJson(result, fn).then(function () {
-                        finalize();
-                    }).catch(function () { finalize(); });
-                } else {
-                    finalize();
-                }
-            } catch (e) { finalize(); }
-        }).catch(function () { finalize(); });
-    } else {
-        finalize();
+                        showMode();
+                    }).catch(function () { showMode(); });
+                } else { showMode(); }
+            }).catch(function () { showMode(); });
+        } else {
+            showMode();
+        }
     }
+
+    // 500msポーリング
+    setInterval(function () {
+        try {
+            var raw = localStorage.getItem('cb_progen_cmd');
+            if (!raw) return;
+            var cmd = JSON.parse(raw);
+            if (!cmd || !cmd.ts || cmd.ts <= lastTs) return;
+            lastTs = cmd.ts;
+            // コマンド消費
+            localStorage.removeItem('cb_progen_cmd');
+            processCommand(cmd);
+        } catch (e) { /* ignore */ }
+    }, 500);
+
+    // 初回チェック（起動直後にコマンドがある場合）
+    try {
+        var raw = localStorage.getItem('cb_progen_cmd');
+        if (raw) {
+            var cmd = JSON.parse(raw);
+            if (cmd && cmd.ts) {
+                lastTs = cmd.ts;
+                localStorage.removeItem('cb_progen_cmd');
+                // モジュール初期化が完了するまで少し待つ
+                setTimeout(function () { processCommand(cmd); }, 100);
+            }
+        }
+    } catch (e) { /* ignore */ }
 })();
