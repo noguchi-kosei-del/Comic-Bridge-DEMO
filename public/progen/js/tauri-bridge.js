@@ -4,6 +4,13 @@
 // iframe内でも動作するように window.__TAURI__ のフォールバックを実装
 
 (function () {
+    // COMIC-Bridge統合: URLにmodeパラメータがある場合、ランディング画面を即座に非表示
+    var _urlMode = new URLSearchParams(window.location.search).get('mode');
+    if (_urlMode) {
+        var _style = document.getElementById('comicBridgeModeStyle');
+        if (_style) _style.textContent = '#landingScreen{display:none!important}';
+    }
+
     // iframe内の場合はparent/topの__TAURI__にフォールバック
     function findTauri() {
         if (window.__TAURI__) return window.__TAURI__;
