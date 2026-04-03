@@ -53,7 +53,9 @@ window.initCalibrationFolderBrowser();
 const proofreadingTxtDropZone = document.getElementById('proofreadingTxtDropZone');
 if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, window.addProofreadingTxt);
 
-// ═══ COMIC-Bridge統合: URLパラメータからモード自動遷移 ═══
+// ═══ COMIC-Bridge統合: URLパラメータ + 一時ファイルでデータ連携 ═══
+// React側がTauri invokeで %TEMP%/comic_bridge_progen_handoff.json にデータを書き出し
+// こちらもTauri invokeで読み込む（window.parent参照は一切使わない）
 (function () {
     var params = new URLSearchParams(window.location.search);
     var mode = params.get('mode');
@@ -68,29 +70,70 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
     if (main) main.style.display = 'none';
     if (proofreading) proofreading.style.display = 'none';
 
-    // ブリッジ取得（失敗してもモード遷移は行う）
-    var bridge = null;
-    try { bridge = (window._getBridge && window._getBridge()) || null; } catch (e) {}
-    if (!bridge) {
-        try { bridge = (window.parent !== window && window.parent.__COMIC_BRIDGE__) || null; } catch (e) {}
+    // Tauri invoke経由で一時ファイルを読み込む
+    function readHandoff() {
+        if (!window.electronAPI) return Promise.resolve(null);
+        // progen_get_txt_folder_path はTXTフォルダパスだが、temp取得は別の方法
+        // electronAPI経由でinvokeが使える: TAURI.core.invoke
+        var TAURI = window.__TAURI__;
+        if (!TAURI || !TAURI.core || !TAURI.core.invoke) return Promise.resolve(null);
+
+        return TAURI.core.invoke('get_temp_dir').then(function (tempDir) {
+            var filePath = tempDir + '\\comic_bridge_progen_handoff.json';
+            return TAURI.core.invoke('read_text_file', { filePath: filePath });
+        }).then(function (content) {
+            return JSON.parse(content);
+        }).catch(function () {
+            return null;
+        });
     }
 
-    // テキスト同期（エラーでも続行）
-    try {
-        if (bridge && bridge.getTextContent) {
-            var content = bridge.getTextContent();
-            var fileName = (bridge.getTextFileName && bridge.getTextFileName()) || 'text.txt';
-            if (content && window.state) {
-                var fileObj = { name: fileName, content: content, size: content.length };
-                window.state.manuscriptTxtFiles = [fileObj];
-                window.state.txtGuideDismissed = true;
-                window.state.proofreadingFiles = [fileObj];
-                window.state.proofreadingContent = content;
+    // テキスト注入
+    function applyHandoff(data) {
+        if (!data || !window.state) return;
+
+        // テキスト
+        if (data.textContent) {
+            var fileObj = { name: data.textFileName || 'text.txt', content: data.textContent, size: data.textContent.length };
+            window.state.manuscriptTxtFiles = [fileObj];
+            window.state.txtGuideDismissed = true;
+            window.state.proofreadingFiles = [fileObj];
+            window.state.proofreadingContent = data.textContent;
+        }
+
+        // レーベル自動認識
+        if (data.labelName) {
+            // メイン画面
+            var displayGroup = document.getElementById('labelDisplayGroup');
+            var displayText = document.getElementById('labelDisplayText');
+            var selectorGroup = document.getElementById('labelSelectorGroup');
+            if (displayGroup && displayText) {
+                if (selectorGroup) selectorGroup.style.display = 'none';
+                displayGroup.style.display = 'flex';
+                displayText.textContent = data.labelName;
+            }
+            // 校正ページ
+            var proofSelectorText = document.getElementById('proofreadingLabelSelectorText');
+            if (proofSelectorText) {
+                proofSelectorText.textContent = data.labelName;
+                proofSelectorText.classList.remove('unselected');
+            }
+            // マスタールール読み込み
+            var proofSelector = document.getElementById('proofreadingLabelSelect');
+            if (proofSelector) {
+                var opts = proofSelector.querySelectorAll('option');
+                for (var i = 0; i < opts.length; i++) {
+                    if (opts[i].value === data.labelName || opts[i].textContent === data.labelName) {
+                        proofSelector.value = opts[i].value;
+                        if (window.loadLabelRulesForProofreading) window.loadLabelRulesForProofreading(opts[i].value);
+                        break;
+                    }
+                }
             }
         }
-    } catch (e) { console.warn('[ProGen] Text sync failed:', e); }
+    }
 
-    // モード遷移（必ず実行される）
+    // モード遷移
     function navigateToMode() {
         try {
             if (mode === 'proofreading') {
@@ -106,6 +149,18 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
                 if (window.updateProofreadingOptionsLabel) window.updateProofreadingOptionsLabel();
                 if (window.renderProofreadingFileList) window.renderProofreadingFileList();
                 if (window.updateProofreadingPrompt) window.updateProofreadingPrompt();
+
+                // 常用外漢字検出
+                setTimeout(function () {
+                    try {
+                        if (window.state && window.state.proofreadingFiles && window.state.proofreadingFiles.length > 0
+                            && window.detectNonJoyoLinesWithPageInfo && window.showNonJoyoResultPopup) {
+                            var detected = window.detectNonJoyoLinesWithPageInfo(window.state.proofreadingFiles);
+                            window.state.proofreadingDetectedNonJoyoWords = detected;
+                            window.showNonJoyoResultPopup(detected, true);
+                        }
+                    } catch (e) { /* ignore */ }
+                }, 300);
             } else {
                 if (main) main.style.display = 'flex';
                 if (window.state) window.state.currentViewMode = 'edit';
@@ -116,40 +171,36 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
                 if (window.renderSymbolTable) window.renderSymbolTable();
                 if (window.generateXML) window.generateXML();
             }
-            // Geminiボタン強制有効化
             var geminiBtn = document.getElementById('extractionGeminiBtn');
             if (geminiBtn) geminiBtn.removeAttribute('disabled');
-            // データタイプトグル有効化
             if (window.enableDataTypeToggle) window.enableDataTypeToggle();
         } catch (e) { console.warn('[ProGen] Navigate error:', e); }
     }
 
-    // JSON読み込み → モード遷移（全てtry/catchで保護）
-    var jsonPath = '';
-    try { jsonPath = bridge && bridge.getJsonPath ? bridge.getJsonPath() : ''; } catch (e) {}
+    // メイン処理: ハンドオフ読み込み → JSON読み込み → モード遷移
+    readHandoff().then(function (data) {
+        if (data) applyHandoff(data);
 
-    if (jsonPath && window.electronAPI && window.electronAPI.readJsonFile) {
-        window.electronAPI.readJsonFile(jsonPath).then(function (result) {
-            try {
-                if (result && result.success !== false && window.processLoadedJson) {
-                    var fn = jsonPath.split('\\').pop() || jsonPath.split('/').pop() || '';
-                    window.processLoadedJson(result, fn).then(function () {
-                        if (landing) landing.style.display = 'none';
-                        if (mode === 'proofreading' && main) main.style.display = 'none';
+        var jsonPath = data ? data.jsonPath : '';
+        if (jsonPath && window.electronAPI && window.electronAPI.readJsonFile) {
+            window.electronAPI.readJsonFile(jsonPath).then(function (result) {
+                try {
+                    if (result && result.success !== false && window.processLoadedJson) {
+                        var fn = jsonPath.split('\\').pop() || jsonPath.split('/').pop() || '';
+                        window.processLoadedJson(result, fn).then(function () {
+                            if (landing) landing.style.display = 'none';
+                            if (mode === 'proofreading' && main) main.style.display = 'none';
+                            navigateToMode();
+                        }).catch(function () { navigateToMode(); });
+                    } else {
                         navigateToMode();
-                        try { if (window.autoSelectLabel) window.autoSelectLabel(); } catch(e){}
-                    }).catch(function () { navigateToMode(); });
-                } else {
-                    navigateToMode();
-                }
-            } catch (e) { navigateToMode(); }
-        }).catch(function () { navigateToMode(); });
-    } else {
+                    }
+                } catch (e) { navigateToMode(); }
+            }).catch(function () { navigateToMode(); });
+        } else {
+            navigateToMode();
+        }
+    }).catch(function () {
         navigateToMode();
-    }
-
-    // レーベル自動認識（遅延実行）
-    setTimeout(function () {
-        try { if (window.autoSelectLabel) window.autoSelectLabel(); } catch(e){}
-    }, 500);
+    });
 })();

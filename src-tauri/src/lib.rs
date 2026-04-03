@@ -42,6 +42,7 @@ pub fn run() {
             commands::write_text_file,
             commands::write_binary_file,
             commands::delete_file,
+            commands::get_temp_dir,
             commands::duplicate_files,
             commands::path_exists,
             commands::run_photoshop_replace,

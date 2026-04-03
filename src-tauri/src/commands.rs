@@ -2877,6 +2877,12 @@ pub async fn delete_file(file_path: String) -> Result<(), String> {
 }
 
 /// Duplicate files in the same directory (file.psd → file_copy.psd, file_copy2.psd, ...)
+/// Get the system temp directory path
+#[tauri::command]
+pub async fn get_temp_dir() -> String {
+    std::env::temp_dir().to_string_lossy().to_string()
+}
+
 #[tauri::command]
 pub async fn duplicate_files(file_paths: Vec<String>) -> Result<Vec<String>, String> {
     let mut results = Vec::new();
