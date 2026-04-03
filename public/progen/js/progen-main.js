@@ -53,9 +53,8 @@ window.initCalibrationFolderBrowser();
 const proofreadingTxtDropZone = document.getElementById('proofreadingTxtDropZone');
 if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, window.addProofreadingTxt);
 
-// ═══ COMIC-Bridge統合: URLパラメータ + 一時ファイルでデータ連携 ═══
-// React側がTauri invokeで %TEMP%/comic_bridge_progen_handoff.json にデータを書き出し
-// こちらもTauri invokeで読み込む（window.parent参照は一切使わない）
+// ═══ COMIC-Bridge統合: URLパラメータ + localStorage でデータ連携 ═══
+// React側が localStorage に書き込み → こちらが読み込む（同一オリジン）
 (function () {
     var params = new URLSearchParams(window.location.search);
     var mode = params.get('mode');
@@ -70,40 +69,29 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
     if (main) main.style.display = 'none';
     if (proofreading) proofreading.style.display = 'none';
 
-    // Tauri invoke経由で一時ファイルを読み込む
-    function readHandoff() {
-        if (!window.electronAPI) return Promise.resolve(null);
-        // progen_get_txt_folder_path はTXTフォルダパスだが、temp取得は別の方法
-        // electronAPI経由でinvokeが使える: TAURI.core.invoke
-        var TAURI = window.__TAURI__;
-        if (!TAURI || !TAURI.core || !TAURI.core.invoke) return Promise.resolve(null);
+    // localStorage から同期的に読み込み（非同期不要）
+    var data = null;
+    try {
+        var raw = localStorage.getItem('comic_bridge_progen_handoff');
+        if (raw) data = JSON.parse(raw);
+    } catch (e) { console.warn('[ProGen] localStorage read failed:', e); }
 
-        return TAURI.core.invoke('get_temp_dir').then(function (tempDir) {
-            var filePath = tempDir + '\\comic_bridge_progen_handoff.json';
-            return TAURI.core.invoke('read_text_file', { filePath: filePath });
-        }).then(function (content) {
-            return JSON.parse(content);
-        }).catch(function () {
-            return null;
-        });
-    }
+    console.log('[ProGen] Handoff data:', data ? 'loaded' : 'none',
+        data ? { text: !!data.textContent, json: !!data.jsonPath, label: data.labelName } : '');
 
     // テキスト注入
-    function applyHandoff(data) {
-        if (!data || !window.state) return;
+    if (data && data.textContent && window.state) {
+        var fileObj = { name: data.textFileName || 'text.txt', content: data.textContent, size: data.textContent.length };
+        window.state.manuscriptTxtFiles = [fileObj];
+        window.state.txtGuideDismissed = true;
+        window.state.proofreadingFiles = [fileObj];
+        window.state.proofreadingContent = data.textContent;
+    }
 
-        // テキスト
-        if (data.textContent) {
-            var fileObj = { name: data.textFileName || 'text.txt', content: data.textContent, size: data.textContent.length };
-            window.state.manuscriptTxtFiles = [fileObj];
-            window.state.txtGuideDismissed = true;
-            window.state.proofreadingFiles = [fileObj];
-            window.state.proofreadingContent = data.textContent;
-        }
-
-        // レーベル自動認識
-        if (data.labelName) {
-            // メイン画面
+    // レーベル自動認識
+    function applyLabel() {
+        if (!data || !data.labelName) return;
+        try {
             var displayGroup = document.getElementById('labelDisplayGroup');
             var displayText = document.getElementById('labelDisplayText');
             var selectorGroup = document.getElementById('labelSelectorGroup');
@@ -112,13 +100,11 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
                 displayGroup.style.display = 'flex';
                 displayText.textContent = data.labelName;
             }
-            // 校正ページ
             var proofSelectorText = document.getElementById('proofreadingLabelSelectorText');
             if (proofSelectorText) {
                 proofSelectorText.textContent = data.labelName;
                 proofSelectorText.classList.remove('unselected');
             }
-            // マスタールール読み込み
             var proofSelector = document.getElementById('proofreadingLabelSelect');
             if (proofSelector) {
                 var opts = proofSelector.querySelectorAll('option');
@@ -130,7 +116,7 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
                     }
                 }
             }
-        }
+        } catch (e) { /* ignore */ }
     }
 
     // モード遷移
@@ -149,7 +135,6 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
                 if (window.updateProofreadingOptionsLabel) window.updateProofreadingOptionsLabel();
                 if (window.renderProofreadingFileList) window.renderProofreadingFileList();
                 if (window.updateProofreadingPrompt) window.updateProofreadingPrompt();
-
                 // 常用外漢字検出
                 setTimeout(function () {
                     try {
@@ -177,30 +162,25 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
         } catch (e) { console.warn('[ProGen] Navigate error:', e); }
     }
 
-    // メイン処理: ハンドオフ読み込み → JSON読み込み → モード遷移
-    readHandoff().then(function (data) {
-        if (data) applyHandoff(data);
-
-        var jsonPath = data ? data.jsonPath : '';
-        if (jsonPath && window.electronAPI && window.electronAPI.readJsonFile) {
-            window.electronAPI.readJsonFile(jsonPath).then(function (result) {
-                try {
-                    if (result && result.success !== false && window.processLoadedJson) {
-                        var fn = jsonPath.split('\\').pop() || jsonPath.split('/').pop() || '';
-                        window.processLoadedJson(result, fn).then(function () {
-                            if (landing) landing.style.display = 'none';
-                            if (mode === 'proofreading' && main) main.style.display = 'none';
-                            navigateToMode();
-                        }).catch(function () { navigateToMode(); });
-                    } else {
+    // JSON読み込み → レーベル適用 → モード遷移
+    var jsonPath = data ? data.jsonPath : '';
+    if (jsonPath && window.electronAPI && window.electronAPI.readJsonFile) {
+        window.electronAPI.readJsonFile(jsonPath).then(function (result) {
+            try {
+                if (result && result.success !== false && window.processLoadedJson) {
+                    var fn = jsonPath.split('\\').pop() || jsonPath.split('/').pop() || '';
+                    window.processLoadedJson(result, fn).then(function () {
+                        if (landing) landing.style.display = 'none';
+                        if (mode === 'proofreading' && main) main.style.display = 'none';
+                        applyLabel();
                         navigateToMode();
-                    }
-                } catch (e) { navigateToMode(); }
-            }).catch(function () { navigateToMode(); });
-        } else {
-            navigateToMode();
-        }
-    }).catch(function () {
-        navigateToMode();
-    });
+                    }).catch(function () { applyLabel(); navigateToMode(); });
+                } else {
+                    applyLabel(); navigateToMode();
+                }
+            } catch (e) { applyLabel(); navigateToMode(); }
+        }).catch(function () { applyLabel(); navigateToMode(); });
+    } else {
+        applyLabel(); navigateToMode();
+    }
 })();

@@ -1,5 +1,4 @@
 import { useRef, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { useViewStore } from "../../store/viewStore";
@@ -7,11 +6,11 @@ import { useViewStore } from "../../store/viewStore";
 /**
  * ProGen統合ビュー
  *
- * データ連携: Tauri invoke で一時JSONファイルに書き出し → ProGen側がTauri invokeで読み込み
- * window.parent参照は本番ビルドで動かないため一切使用しない
+ * データ連携: localStorage に書き込み → ProGen側が localStorage から読み込み
+ * 同一オリジン (https://tauri.localhost) なので共有可能
  */
 
-async function writeHandoff() {
+function writeToLocalStorage() {
   const scan = useScanPsdStore.getState();
   const viewer = useUnifiedViewerStore.getState();
 
@@ -40,11 +39,9 @@ async function writeHandoff() {
   };
 
   try {
-    const tempDir = await invoke<string>("get_temp_dir");
-    const filePath = `${tempDir}\\comic_bridge_progen_handoff.json`;
-    await invoke("write_text_file", { filePath, content: JSON.stringify(data) });
+    localStorage.setItem("comic_bridge_progen_handoff", JSON.stringify(data));
   } catch (e) {
-    console.warn("[ProgenView] writeHandoff failed:", e);
+    console.warn("[ProgenView] localStorage write failed:", e);
   }
 }
 
@@ -57,10 +54,8 @@ export function ProgenView() {
     if (!progenMode) return;
     useViewStore.getState().setProgenMode(null);
 
-    (async () => {
-      await writeHandoff();
-      setIframeSrc(`/progen/index.html?mode=${progenMode}&t=${Date.now()}`);
-    })();
+    writeToLocalStorage();
+    setIframeSrc(`/progen/index.html?mode=${progenMode}&t=${Date.now()}`);
   }, [progenMode]);
 
   return (
