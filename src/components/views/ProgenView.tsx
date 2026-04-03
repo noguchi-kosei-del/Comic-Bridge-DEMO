@@ -21,6 +21,7 @@ function buildCommand(mode: string) {
       return p.split("\\").pop() || p.split("/").pop() || "text.txt";
     })(),
     jsonPath: scan.currentJsonFilePath || viewer.presetJsonPath || "",
+    newCreation: !(scan.currentJsonFilePath || (viewer.fontPresets.length > 0 && viewer.presetJsonPath)),
     labelName: (() => {
       if (scan.workInfo.label) return scan.workInfo.label;
       const jp = scan.currentJsonFilePath || viewer.presetJsonPath || "";

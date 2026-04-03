@@ -192,7 +192,23 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
     // --- メイン処理 ---
     function processCommand(cmd) {
         if (!cmd || !cmd.mode || !s) return;
-        console.log('[ProGen] Command:', cmd.mode, { text: !!cmd.textContent, json: !!cmd.jsonPath, label: cmd.labelName });
+        console.log('[ProGen] Command:', cmd.mode, {
+            text: !!cmd.textContent, json: !!cmd.jsonPath,
+            label: cmd.labelName, newCreation: !!cmd.newCreation
+        });
+
+        // 新規作成 → レーベル選択モーダルを起動（ProGen既存フロー）
+        if (cmd.newCreation) {
+            // テキストがあれば先に注入
+            injectText(cmd);
+            // handleLandingNewCreation がレーベル選択→startNewCreation→モード画面の流れ
+            if (window.handleLandingNewCreation) {
+                window.handleLandingNewCreation(cmd.mode);
+            } else {
+                showMode(cmd.mode);
+            }
+            return;
+        }
 
         // 1) テキスト注入
         injectText(cmd);
@@ -209,7 +225,7 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
                         applyJsonRules(result);
                     }
                 } catch (e) { console.warn('[ProGen] JSON apply error:', e); }
-                // テキスト再注入（applyJsonRulesが何かを上書きした場合の保険）
+                // テキスト再注入（保険）
                 injectText(cmd);
                 // 4) 画面表示
                 showMode(cmd.mode);
