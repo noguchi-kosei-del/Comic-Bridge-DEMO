@@ -45,7 +45,6 @@ export function SpecCheckView() {
 
   const specifications = useSpecStore((state) => state.specifications);
   const activeSpecId = useSpecStore((state) => state.activeSpecId);
-  const setActiveSpec = useSpecStore((state) => state.setActiveSpec);
   const selectSpecAndCheck = useSpecStore((state) => state.selectSpecAndCheck);
   const checkResults = useSpecStore((state) => state.checkResults);
   const conversionSettings = useSpecStore((state) => state.conversionSettings);
@@ -567,19 +566,30 @@ export function SpecCheckView() {
               </svg>
             </button>
             <span className="text-[10px] text-text-muted flex-shrink-0">仕様:</span>
-            {specifications.map((spec) => (
+            {specifications.length > 0 && (
               <button
-                key={spec.id}
-                className={`px-2 py-0.5 text-[10px] font-medium rounded transition-all ${
-                  activeSpecId === spec.id
+                className={`px-3 py-0.5 text-[10px] font-medium rounded transition-all ${
+                  activeSpecId
                     ? "text-white bg-gradient-to-r from-accent to-accent-secondary shadow-sm"
                     : "text-text-secondary bg-bg-tertiary hover:text-text-primary border border-border/50"
                 }`}
-                onClick={() => spec.id === activeSpecId ? setActiveSpec(null) : selectSpecAndCheck(spec.id)}
+                onClick={() => {
+                  if (!activeSpecId) {
+                    // 未選択 → 最初の仕様を選択
+                    selectSpecAndCheck(specifications[0].id);
+                  } else {
+                    // 次の仕様に切り替え（ループ）
+                    const currentIdx = specifications.findIndex((s) => s.id === activeSpecId);
+                    const nextIdx = (currentIdx + 1) % specifications.length;
+                    selectSpecAndCheck(specifications[nextIdx].id);
+                  }
+                }}
               >
-                {spec.name}
+                {activeSpecId
+                  ? specifications.find((s) => s.id === activeSpecId)?.name || "—"
+                  : "クリックで選択"}
               </button>
-            ))}
+            )}
             {hasChecked && (
               <>
                 <div className="w-px h-3 bg-border/40 mx-0.5" />
@@ -839,6 +849,8 @@ export function SpecCheckView() {
                 files={filteredFiles}
                 selectedFileIds={selectedFileIds}
                 checkResults={checkResults}
+                outlierFileIds={outlierFileIds}
+                hasTomboMix={hasTomboMix}
                 folders={folderContents?.folders || []}
                 allFiles={fileTypeFilter !== "all" ? [] : (folderContents?.allFiles || [])}
                 onEnterFolder={handleEnterFolder}
@@ -1128,13 +1140,13 @@ export function SpecCheckView() {
                 ロック中
               </div>
             )}
-            {/* Preview content — double click to expand */}
+            {/* Preview image — 全モードで表示 */}
             {previewFile ? (
-              <div className="flex-1 min-h-0 cursor-pointer" onDoubleClick={() => setExpandedFile(previewFile)} title="ダブルクリックで拡大">
+              <div className="flex-1 min-h-0 cursor-pointer overflow-hidden" onDoubleClick={() => setExpandedFile(previewFile)} title="ダブルクリックで拡大">
                 <FilePreviewImage file={previewFile} />
               </div>
             ) : previewText ? (
-              <div className="flex-1 overflow-auto p-3 bg-white">
+              <div className="flex-1 min-h-0 overflow-auto p-3 bg-white">
                 <pre className="text-xs font-mono text-black whitespace-pre-wrap leading-relaxed">
                   {previewText.content}
                 </pre>
@@ -1144,12 +1156,12 @@ export function SpecCheckView() {
                 ファイルを選択
               </div>
             )}
-            {/* File Properties Panel */}
-            {previewFile && (
+            {/* File Properties Panel — プレビュータブ時のみ */}
+            {rightPanelMode === "preview" && previewFile && (
               <FilePropertiesPanel file={previewFile} checkResult={checkResults.get(previewFile.id)} />
             )}
-            {/* Text file info */}
-            {!previewFile && previewText && (
+            {/* Text file info — プレビュータブ時のみ */}
+            {rightPanelMode === "preview" && !previewFile && previewText && (
               <div className="flex-shrink-0 px-3 py-2 border-t border-border/30 text-[10px] text-text-muted space-y-0.5">
                 <div className="flex justify-between">
                   <span>ファイル</span>
@@ -1167,7 +1179,7 @@ export function SpecCheckView() {
             )}
             {/* === 作成モード === */}
             {rightPanelMode === "create" && (
-              <div className="flex-1 overflow-auto p-3 space-y-2">
+              <div className="flex-shrink-0 overflow-auto max-h-[45%] p-3 space-y-2 border-t border-border/30">
                 <button
                   onClick={() => {
                     const vs = useViewStore.getState();
@@ -1309,7 +1321,7 @@ export function SpecCheckView() {
             )}
             {/* === アクションモード === */}
             {rightPanelMode === "action" && (
-              <div className="flex-1 overflow-auto p-3 space-y-2">
+              <div className="flex-shrink-0 overflow-auto max-h-[45%] p-3 space-y-2 border-t border-border/30">
                 {([
                   { id: "replace" as AppView, icon: "🔄", label: "差替え", desc: "テキスト/画像レイヤー差替え" },
                   { id: "compose" as AppView, icon: "🔗", label: "合成", desc: "2つのPSDを統合" },
@@ -1421,9 +1433,7 @@ function FilePropertiesPanel({ file, checkResult }: { file: PsdFile; checkResult
     return ext.substring(1).toUpperCase() + " file";
   })();
 
-  // Compute inch/cm dimensions from pixels + dpi
-  const inchW = m && m.dpi > 0 ? (m.width / m.dpi).toFixed(1) : null;
-  const inchH = m && m.dpi > 0 ? (m.height / m.dpi).toFixed(1) : null;
+  // Compute cm dimensions from pixels + dpi
   const cmW = m && m.dpi > 0 ? ((m.width / m.dpi) * 2.54).toFixed(1) : null;
   const cmH = m && m.dpi > 0 ? ((m.height / m.dpi) * 2.54).toFixed(1) : null;
 
@@ -1467,12 +1477,6 @@ function FilePropertiesPanel({ file, checkResult }: { file: PsdFile; checkResult
         <div className="px-2 pb-2 space-y-[1px]">
           <Row label="ファイル名" value={file.fileName} className="font-medium break-all" />
           <Row label="ドキュメントの種類" value={docType} />
-          {file.createdTime != null && (
-            <Row label="作成日" value={formatDate(file.createdTime)} className="font-mono" />
-          )}
-          {file.createdTime != null && (
-            <Row label="ファイルの作成日" value={formatDate(file.createdTime)} className="font-mono" />
-          )}
           <Row label="ファイルの修正日" value={formatDate(file.modifiedTime)} className="font-mono" />
           <Row label="ファイルサイズ" value={formatSize(file.fileSize)} className="font-mono" />
 
@@ -1480,13 +1484,9 @@ function FilePropertiesPanel({ file, checkResult }: { file: PsdFile; checkResult
             <>
               <div className="border-t border-border/20 my-1" />
               <Row label="寸法" value={`${m.width} x ${m.height}`} className="font-mono" />
-              {inchW && inchH && (
-                <Row label="寸法 (インチ)" value={`${inchW}" x ${inchH}"`} className="font-mono" />
-              )}
               {cmW && cmH && (
-                <Row label="寸法 (cm)" value={`${cmW} cm x ${cmH} cm`} className="font-mono" />
+                <Row label="寸法 (cm)" value={`${cmW} cm x ${cmH} cm${ps ? `  (${ps})` : ""}`} className="font-mono" />
               )}
-              {ps && <Row label="用紙サイズ" value={ps} className="text-accent-secondary font-medium" />}
               <Row label="解像度" value={`${m.dpi} ppi`} className="font-mono" />
               <Row label="ビット数" value={String(m.bitsPerChannel)} className="font-mono" />
               <Row label="カラーモード" value={colorModeJa[m.colorMode] || m.colorMode} />
@@ -1547,6 +1547,8 @@ function PsdFileListView({
   files,
   selectedFileIds,
   checkResults,
+  outlierFileIds,
+  hasTomboMix,
   folders,
   allFiles = [],
   onEnterFolder,
@@ -1557,6 +1559,8 @@ function PsdFileListView({
   files: PsdFile[];
   selectedFileIds: string[];
   checkResults: Map<string, SpecCheckResult>;
+  outlierFileIds: Set<string>;
+  hasTomboMix: boolean;
   folders: string[];
   allFiles?: string[];
   onEnterFolder: (name: string) => void;
@@ -1586,86 +1590,108 @@ function PsdFileListView({
           ))}
         </div>
       )}
-      {/* PSD file list with metadata + text */}
+      {/* PSD file list — 列順: 結果, ファイル名, 拡張子, カラー, サイズ, DPI, Bit, テキスト, ガイド */}
       <table className="w-full text-[11px]">
         <thead className="sticky top-0 bg-bg-secondary z-10">
           <tr className="text-text-muted border-b border-border">
-            <th className="text-left px-3 py-1.5 font-medium">ファイル名</th>
+            <th className="text-center px-1.5 py-1.5 font-medium w-8"></th>
+            <th className="text-left px-2 py-1.5 font-medium">ファイル名</th>
+            <th className="text-center px-1 py-1.5 font-medium w-10">種類</th>
+            <th className="text-center px-2 py-1.5 font-medium w-12">カラー</th>
             <th className="text-right px-2 py-1.5 font-medium w-20">サイズ</th>
-            <th className="text-right px-2 py-1.5 font-medium w-12">DPI</th>
-            <th className="text-center px-2 py-1.5 font-medium w-14">カラー</th>
-            <th className="text-center px-2 py-1.5 font-medium w-8">Bit</th>
-            <th className="text-center px-2 py-1.5 font-medium w-8">結果</th>
-            <th className="text-left px-2 py-1.5 font-medium">テキスト</th>
+            <th className="text-right px-2 py-1.5 font-medium w-10">DPI</th>
+            <th className="text-center px-1 py-1.5 font-medium w-8">Bit</th>
+            <th className="text-center px-1 py-1.5 font-medium w-10">テキスト</th>
+            <th className="text-center px-1 py-1.5 font-medium w-10">ガイド</th>
           </tr>
         </thead>
         <tbody>
           {files.map((file) => {
             const result = checkResults.get(file.id);
             const isActive = selectedFileIds.includes(file.id);
-            // Collect text from text layers
-            const textSnippets: string[] = [];
+            const hasNG = result && !result.passed;
+            const isCaution = !hasNG && (outlierFileIds.has(file.id) || (hasTomboMix && file.metadata && !file.metadata.hasTombo));
+            // テキストレイヤーの有無
+            let hasText = false;
             if (file.metadata?.layerTree) {
-              const walk = (nodes: any[]) => {
-                for (const n of [...nodes].reverse()) {
-                  if (n.type === "text" && n.visible && n.textInfo?.text) {
-                    textSnippets.push(n.textInfo.text.replace(/\n/g, " ").trim());
-                  }
-                  if (n.children) walk(n.children);
+              const walk = (nodes: any[]): boolean => {
+                for (const n of nodes) {
+                  if (n.type === "text" && n.visible && n.textInfo?.text?.trim()) return true;
+                  if (n.children && walk(n.children)) return true;
                 }
+                return false;
               };
-              walk(file.metadata.layerTree);
+              hasText = walk(file.metadata.layerTree);
             }
-            const textPreview = textSnippets.join(" / ");
+            const ext = file.fileName.substring(file.fileName.lastIndexOf(".")).toLowerCase();
+            const isPsd = ext === ".psd" || ext === ".psb";
+            const isPdf = ext === ".pdf";
+            // カラーモード日本語表記
+            const colorJa: Record<string, string> = { RGB: "RGB", CMYK: "CMYK", Grayscale: "白黒", Bitmap: "BMP", Lab: "Lab", Indexed: "Idx", Multichannel: "MCh", Duotone: "Duo" };
             return (
               <tr
                 key={file.id}
                 className={`cursor-pointer transition-colors ${
-                  isActive ? "bg-accent/8" : "hover:bg-bg-tertiary/60"
+                  hasNG ? "bg-error/20" : isCaution ? "bg-yellow-100" : isActive ? "bg-accent/8" : "hover:bg-bg-tertiary/60"
                 }`}
                 onClick={(e) => onSelectFile(file.id, e.ctrlKey || e.metaKey)}
                 onDoubleClick={() => onOpenFile(file.filePath)}
               >
-                <td className="px-3 py-1.5 text-text-primary font-medium">
-                  <div className="truncate max-w-[180px]">
-                    {(() => {
-                      const ext = file.fileName.substring(file.fileName.lastIndexOf(".")).toLowerCase();
-                      const isPsd = ext === ".psd" || ext === ".psb";
-                      const isPdf = ext === ".pdf";
-                      return (
-                        <span className={`mr-1 text-[9px] ${isPsd ? "text-accent-secondary/60" : isPdf ? "text-error/60" : "text-text-muted/40"}`}>
-                          {isPsd ? "PSD" : ext.substring(1).toUpperCase()}
-                        </span>
-                      );
-                    })()}
-                    {file.fileName}
-                  </div>
+                {/* 結果 */}
+                <td className="text-center px-1.5 py-1.5">
+                  {result ? (
+                    result.passed ? (
+                      <span className="text-success font-bold text-[10px]">OK</span>
+                    ) : (
+                      <span className="text-error font-bold text-[10px]">NG</span>
+                    )
+                  ) : (
+                    <span className="text-text-muted/30">—</span>
+                  )}
                 </td>
+                {/* ファイル名（拡張子非表示） */}
+                <td className="px-2 py-1.5 text-text-primary font-medium">
+                  <div className="truncate max-w-[200px]">{file.fileName.replace(/\.[^.]+$/, "")}</div>
+                </td>
+                {/* 拡張子アイコン */}
+                <td className="text-center px-1 py-1.5">
+                  <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${
+                    isPsd ? "bg-accent-secondary/15 text-accent-secondary" : isPdf ? "bg-error/15 text-error" : "bg-text-muted/10 text-text-muted"
+                  }`}>
+                    {isPsd ? "PSD" : ext.substring(1).toUpperCase()}
+                  </span>
+                </td>
+                {/* カラー */}
+                <td className="text-center px-2 py-1.5 text-text-muted text-[10px]">
+                  {file.metadata ? (colorJa[file.metadata.colorMode] || file.metadata.colorMode) : "—"}
+                </td>
+                {/* サイズ */}
                 <td className="text-right px-2 py-1.5 text-text-muted tabular-nums whitespace-nowrap">
                   {file.metadata ? `${file.metadata.width}×${file.metadata.height}` : "—"}
                 </td>
+                {/* DPI */}
                 <td className="text-right px-2 py-1.5 text-text-muted tabular-nums">
                   {file.metadata?.dpi || "—"}
                 </td>
-                <td className="text-center px-2 py-1.5 text-text-muted">
-                  {file.metadata?.colorMode || "—"}
-                </td>
-                <td className="text-center px-2 py-1.5 text-text-muted">
+                {/* Bit */}
+                <td className="text-center px-1 py-1.5 text-text-muted">
                   {file.metadata?.bitsPerChannel || "—"}
                 </td>
-                <td className="text-center px-2 py-1.5">
-                  {result ? (
-                    result.passed ? (
-                      <span className="text-success font-medium">OK</span>
-                    ) : (
-                      <span className="text-error font-medium">NG</span>
-                    )
+                {/* テキスト */}
+                <td className="text-center px-1 py-1.5">
+                  {hasText ? (
+                    <span className="text-accent-tertiary text-[9px]">あり</span>
                   ) : (
-                    <span className="text-text-muted/40">—</span>
+                    <span className="text-text-muted/30 text-[9px]">なし</span>
                   )}
                 </td>
-                <td className="px-2 py-1.5 text-text-muted/70 truncate max-w-[300px]" title={textPreview}>
-                  {textPreview || <span className="opacity-30">—</span>}
+                {/* ガイド */}
+                <td className="text-center px-1 py-1.5">
+                  {file.metadata?.hasGuides ? (
+                    <span className="text-guide-v text-[9px]">あり</span>
+                  ) : (
+                    <span className="text-text-muted/30 text-[9px]">なし</span>
+                  )}
                 </td>
               </tr>
             );

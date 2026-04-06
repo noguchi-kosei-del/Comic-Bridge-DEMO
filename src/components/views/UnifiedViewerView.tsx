@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { UnifiedViewer } from "../unified-viewer/UnifiedViewer";
+import { useViewStore } from "../../store/viewStore";
 import KenbanApp from "../kenban/KenbanApp";
 import "../../kenban-utils/kenban.css";
 import "../../kenban-utils/kenbanApp.css";
@@ -14,20 +15,23 @@ const SUB_TABS: { id: ViewerSubMode; label: string }[] = [
 
 export function UnifiedViewerView() {
   const [activeSubMode, setActiveSubMode] = useState<ViewerSubMode>("viewer");
+  const isFullscreen = useViewStore((s) => s.isViewerFullscreen);
+  const kenbanPathA = useViewStore((s) => s.kenbanPathA);
+  const kenbanPathB = useViewStore((s) => s.kenbanPathB);
 
-  // State-preserving mount (once mounted, never unmount)
-  const [diffMounted, setDiffMounted] = useState(false);
-  const [parallelMounted, setParallelMounted] = useState(false);
+  const kenbanViewMode = useViewStore((s) => s.kenbanViewMode);
 
+  // 検A+検B両方セットされたら自動で差分/分割モードに切り替え
   useEffect(() => {
-    if (activeSubMode === "diff") setDiffMounted(true);
-    if (activeSubMode === "parallel") setParallelMounted(true);
-  }, [activeSubMode]);
+    if (kenbanPathA && kenbanPathB && activeSubMode === "viewer") {
+      setActiveSubMode(kenbanViewMode === "parallel" ? "parallel" : "diff");
+    }
+  }, [kenbanPathA, kenbanPathB, kenbanViewMode]);
 
   return (
     <div className="flex-1 h-full overflow-hidden flex flex-col">
-      {/* Sub-mode selector bar */}
-      <div className="flex-shrink-0 h-9 bg-bg-secondary border-b border-border flex items-center px-3 gap-1">
+      {/* Sub-mode selector bar — 全画面時は非表示 */}
+      {!isFullscreen && <div className="flex-shrink-0 h-9 bg-bg-secondary border-b border-border flex items-center px-3 gap-1">
         {SUB_TABS.map((tab) => (
           <button
             key={tab.id}
@@ -45,43 +49,28 @@ export function UnifiedViewerView() {
             <span>{tab.label}</span>
           </button>
         ))}
-      </div>
+      </div>}
 
-      {/* Content area */}
+      {/* Content area — タブ切替で毎回マウント（検A/B propsを確実に反映） */}
       <div className="flex-1 overflow-hidden relative">
-        {/* Unified Viewer (3-column) */}
-        <div style={{ display: activeSubMode === "viewer" ? "contents" : "none" }}>
+        {activeSubMode === "viewer" && (
           <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
             <UnifiedViewer />
           </div>
-        </div>
+        )}
 
-        {/* KENBAN Diff Mode */}
-        {diffMounted && (
-          <div
-            className="kenban-scope"
-            style={{ display: activeSubMode === "diff" ? "contents" : "none" }}
-          >
-            <div
-              className="flex h-full w-full overflow-hidden"
-              style={{ position: "absolute", inset: 0 }}
-            >
-              <KenbanApp defaultAppMode="diff-check" />
+        {activeSubMode === "diff" && (
+          <div className="kenban-scope">
+            <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
+              <KenbanApp defaultAppMode="diff-check" externalPathA={kenbanPathA} externalPathB={kenbanPathB} />
             </div>
           </div>
         )}
 
-        {/* KENBAN Parallel Viewer */}
-        {parallelMounted && (
-          <div
-            className="kenban-scope"
-            style={{ display: activeSubMode === "parallel" ? "contents" : "none" }}
-          >
-            <div
-              className="flex h-full w-full overflow-hidden"
-              style={{ position: "absolute", inset: 0 }}
-            >
-              <KenbanApp defaultAppMode="parallel-view" />
+        {activeSubMode === "parallel" && (
+          <div className="kenban-scope">
+            <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
+              <KenbanApp defaultAppMode="parallel-view" externalPathA={kenbanPathA} externalPathB={kenbanPathB} />
             </div>
           </div>
         )}

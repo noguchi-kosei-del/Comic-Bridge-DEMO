@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+// @ts-nocheck
+import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useViewStore } from "../../store/viewStore";
 import { usePsdStore } from "../../store/psdStore";
@@ -259,8 +260,9 @@ export function TopNav() {
   const passedCount = Array.from(checkResults.values()).filter((r) => r.passed).length;
   const failedCount = Array.from(checkResults.values()).filter((r) => !r.passed).length;
 
-  // Open text file (with COMIC-POT parsing)
-  const handleOpenText = useCallback(async () => {
+  // Open text file (with COMIC-POT parsing) — GlobalAddressBarに移動済み
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleOpenText = useCallback(async () => {
     const path = await dialogOpen({ filters: [{ name: "テキスト", extensions: ["txt"] }], multiple: false });
     if (!path) return;
     try {
@@ -335,96 +337,56 @@ export function TopNav() {
 
   return (
     <nav
-      className="h-9 flex-shrink-0 bg-bg-secondary border-b border-border flex items-center px-3 gap-2 relative z-20 shadow-soft"
+      className="h-14 flex-shrink-0 bg-bg-secondary border-b border-border flex items-center px-3 gap-2 relative z-20 shadow-soft"
       data-tauri-drag-region
     >
-      {/* Logo — click to go home (specCheck), reset if already there */}
+      {/* Logo */}
       <button
-        className="flex items-center gap-2 mr-2 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+        className="flex items-center gap-2 mr-1 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
         onClick={() => {
           usePsdStore.getState().clearFiles();
           usePsdStore.getState().setCurrentFolderPath(null);
           usePsdStore.getState().setContentLocked(false);
           setActiveView("specCheck");
         }}
-        title="ホーム"
+        title="リセット"
       >
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-accent-secondary flex items-center justify-center shadow-sm">
-          <svg
-            className="w-4 h-4 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-            />
+        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-accent-secondary flex items-center justify-center shadow-sm">
+          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
         </div>
-        <span className="font-display font-bold text-sm text-text-primary hidden xl:block">
-          COMIC-Bridge
-        </span>
       </button>
 
-      <div className="w-px h-5 bg-border flex-shrink-0" />
+      <div className="w-px h-8 bg-border flex-shrink-0" />
 
       {/* Workflow */}
       <WorkflowBar />
 
-      <div className="w-px h-5 bg-border flex-shrink-0" />
+      <div className="flex-1" />
 
-      {/* Data load buttons — loaded items show × to clear */}
-      <div className="flex items-center gap-0.5 flex-shrink-0">
-        {/* テキスト */}
-        <DataLoadButton
-          loaded={viewerStore.textContent.length > 0}
-          label="テキスト"
-          loadTitle="テキストファイルを読み込む"
-          clearTitle="テキストをクリア"
-          colorClass="text-accent-tertiary hover:bg-accent-tertiary/15"
-          borderClass="border-accent-tertiary/50"
-          onLoad={handleOpenText}
-          onClear={() => {
-            const vs = useUnifiedViewerStore.getState();
-            vs.setTextContent(""); vs.setTextFilePath(null);
-            vs.setTextHeader([]); vs.setTextPages([]); vs.setIsDirty(false);
-          }}
-        />
-        {/* 作品情報 */}
-        <DataLoadButton
-          loaded={viewerStore.fontPresets.length > 0}
-          label="作品情報"
-          loadTitle="作品情報JSONを読み込む"
-          clearTitle="作品情報をクリア"
-          colorClass="text-accent-secondary hover:bg-accent-secondary/15"
-          borderClass="border-accent-secondary/50"
-          onLoad={() => setJsonBrowserMode("preset")}
-          onClear={() => {
-            const vs = useUnifiedViewerStore.getState();
-            vs.setFontPresets([]); vs.setPresetJsonPath(null);
-          }}
-        />
-        {/* 校正JSON */}
-        <DataLoadButton
-          loaded={!!viewerStore.checkData}
-          label="校正JSON"
-          loadTitle="校正データJSONを読み込む"
-          clearTitle="校正JSONをクリア"
-          colorClass="text-warning hover:bg-warning/15"
-          borderClass="border-warning/50"
-          onLoad={() => setJsonBrowserMode("check")}
-          onClear={() => {
-            useUnifiedViewerStore.getState().setCheckData(null);
-          }}
-        />
+      {/* ホーム + ビューアー + ツール（中央配置） */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          className="px-3 py-1 text-[11px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
+          onClick={() => setActiveView("specCheck")}
+          title="ホーム（リセットなし）"
+        >
+          ホーム
+        </button>
+        <button
+          className="px-3 py-1 text-[11px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
+          onClick={() => setActiveView("unifiedViewer")}
+          title="ビューアー"
+        >
+          ビューアー
+        </button>
+        <TopNavToolMenu />
       </div>
 
       <div className="flex-1" />
 
-      {/* Right: Status */}
+      {/* Right: Status + ツールボタン */}
       {files.length > 0 && (
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-xs text-text-muted">{files.length} ファイル</span>
@@ -672,6 +634,178 @@ function DataLoadButton({ loaded, label, loadTitle, clearTitle, colorClass, bord
         </button>
       ) : (
         <span className={`w-2 h-2 rounded-full flex-shrink-0 mr-1 border ${borderClass}`} />
+      )}
+    </div>
+  );
+}
+
+// ─── 差分/分割スイッチ + 検A / 検B ボタン ───
+
+// 差分モードでの非対応組み合わせチェック
+const DIFF_INCOMPATIBLE: Record<string, string[]> = {
+  // A側の拡張子 → B側で非対応の拡張子
+  pdf: ["psd"],
+  psd: ["pdf"],
+};
+
+function getMainExt(path: string): string {
+  const name = path.replace(/\\/g, "/").split("/").pop() || "";
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.substring(dot + 1).toLowerCase() : "";
+}
+
+function KenbanLoadButtons() {
+  const kenbanPathA = useViewStore((s) => s.kenbanPathA);
+  const kenbanPathB = useViewStore((s) => s.kenbanPathB);
+  const kenbanViewMode = useViewStore((s) => s.kenbanViewMode);
+
+  const handleLoad = async (side: "A" | "B") => {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const { invoke } = await import("@tauri-apps/api/core");
+    const path = await open({ directory: true, multiple: false });
+    if (!path) return;
+
+    // 差分モードの場合: A側のファイル形式チェック→B側の互換性確認
+    if (kenbanViewMode === "diff" && side === "B" && useViewStore.getState().kenbanPathA) {
+      try {
+        const allExts = ["psd", "tif", "tiff", "jpg", "jpeg", "png", "bmp", "pdf"];
+        const pathA = useViewStore.getState().kenbanPathA!;
+        const filesA = await invoke<string[]>("kenban_list_files_in_folder", { path: pathA, extensions: allExts });
+        const filesB = await invoke<string[]>("kenban_list_files_in_folder", { path: path as string, extensions: allExts });
+        if (filesA.length > 0 && filesB.length > 0) {
+          const extA = getMainExt(filesA[0]);
+          const extB = getMainExt(filesB[0]);
+          const blocked = DIFF_INCOMPATIBLE[extA];
+          if (blocked && blocked.includes(extB)) {
+            alert(`差分モードでは ${extA.toUpperCase()} と ${extB.toUpperCase()} の組み合わせは非対応です。\n同じ形式のフォルダを選択するか、分割ビューアーを使用してください。`);
+            return;
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (side === "A") {
+      useViewStore.getState().setKenbanPathA(path as string);
+    } else {
+      useViewStore.getState().setKenbanPathB(path as string);
+    }
+    const vs = useViewStore.getState();
+    if (vs.kenbanPathA && vs.kenbanPathB) {
+      vs.setActiveView("unifiedViewer");
+    }
+  };
+
+  const handleClear = (side: "A" | "B") => {
+    if (side === "A") useViewStore.getState().setKenbanPathA(null);
+    else useViewStore.getState().setKenbanPathB(null);
+  };
+
+  const toggleMode = () => {
+    const next = kenbanViewMode === "diff" ? "parallel" : "diff";
+    useViewStore.getState().setKenbanViewMode(next);
+  };
+
+  return (
+    <>
+      {/* 差分/分割スイッチ */}
+      <button
+        onClick={toggleMode}
+        className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-colors ${
+          kenbanViewMode === "diff"
+            ? "bg-accent/15 text-accent"
+            : "bg-accent-secondary/15 text-accent-secondary"
+        }`}
+        title={kenbanViewMode === "diff" ? "差分モード（クリックで分割に切替）" : "分割モード（クリックで差分に切替）"}
+      >
+        {kenbanViewMode === "diff" ? "差分" : "分割"}
+      </button>
+      <DataLoadButton
+        loaded={!!kenbanPathA}
+        label="検A"
+        loadTitle="検版A（変更前）フォルダを選択"
+        clearTitle="検Aをクリア"
+        colorClass="text-blue-500 hover:bg-blue-500/15"
+        borderClass="border-blue-500/50"
+        onLoad={() => handleLoad("A")}
+        onClear={() => handleClear("A")}
+      />
+      <DataLoadButton
+        loaded={!!kenbanPathB}
+        label="検B"
+        loadTitle="検版B（変更後）フォルダを選択"
+        clearTitle="検Bをクリア"
+        colorClass="text-orange-500 hover:bg-orange-500/15"
+        borderClass="border-orange-500/50"
+        onLoad={() => handleLoad("B")}
+        onClear={() => handleClear("B")}
+      />
+    </>
+  );
+}
+
+// ─── ツールメニュー（ドットメニュー） ───
+const TOOL_MENU_TABS: { id: any; label: string }[] = [
+  { id: "layers", label: "レイヤー制御" },
+  { id: "replace", label: "差替え" },
+  { id: "compose", label: "合成" },
+  { id: "tiff", label: "TIFF化" },
+  { id: "scanPsd", label: "スキャナー" },
+  { id: "split", label: "見開き分割" },
+  { id: "rename", label: "リネーム" },
+  { id: "unifiedViewer", label: "ビューアー" },
+];
+
+const TOOL_PROGEN_MODES = [
+  { id: "extraction" as const, label: "抽出プロンプト" },
+  { id: "formatting" as const, label: "整形プロンプト" },
+  { id: "proofreading" as const, label: "校正プロンプト" },
+];
+
+function TopNavToolMenu() {
+  const [show, setShow] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const setActiveView = useViewStore((s) => s.setActiveView);
+  const scanJsonPath = useScanPsdStore((s) => s.currentJsonFilePath);
+  const viewerPresets = useUnifiedViewerStore((s) => s.fontPresets);
+  const viewerPresetPath = useUnifiedViewerStore((s) => s.presetJsonPath);
+  const hasWorkJson = !!(scanJsonPath || (viewerPresets.length > 0 && viewerPresetPath));
+
+  useEffect(() => {
+    if (!show) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setShow(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [show]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setShow(!show)}
+        className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${show ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"}`}
+        title="ツール"
+      >
+        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="3" cy="3" r="1.3" /><circle cx="8" cy="3" r="1.3" /><circle cx="13" cy="3" r="1.3" />
+          <circle cx="3" cy="8" r="1.3" /><circle cx="8" cy="8" r="1.3" /><circle cx="13" cy="8" r="1.3" />
+          <circle cx="3" cy="13" r="1.3" /><circle cx="8" cy="13" r="1.3" /><circle cx="13" cy="13" r="1.3" />
+        </svg>
+      </button>
+      {show && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[140px]">
+          {TOOL_MENU_TABS.map((tab) => (
+            <button key={tab.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors" onClick={() => { setActiveView(tab.id); setShow(false); }}>
+              {tab.label}
+            </button>
+          ))}
+          <div className="border-t border-border/40 my-1" />
+          <div className="px-3 py-0.5 text-[9px] text-text-muted/50 font-medium">ProGen</div>
+          {TOOL_PROGEN_MODES.map((mode) => (
+            <button key={mode.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors" onClick={() => { useViewStore.getState().setProgenMode(mode.id); setActiveView("progen"); setShow(false); }}>
+              {mode.label}
+              {!hasWorkJson && <span className="text-[9px] text-text-muted/50 ml-1">新規</span>}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

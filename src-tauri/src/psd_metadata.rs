@@ -822,17 +822,16 @@ fn build_layer_tree(raw_layers: &[RawLayer], dpi: u32) -> Vec<LayerNode> {
                 };
 
                 let text_info = raw.tysh_data.as_ref().map(|td| {
-                    // EngineData stores font sizes in document pixels;
-                    // convert to points: pt = px * 72 / dpi
+                    // fontSize は変形前の値。transform[3](Yスケール)とDPIを適用して
+                    // Photoshop表示のポイント値に変換:
+                    //   pt = fontSize * transform[3] * 72 / DPI
                     let dpi_f = dpi as f64;
-                    let font_sizes: Vec<f64> = if dpi > 72 {
-                        td.font_sizes.iter().map(|&s| {
-                            let pt = s * 72.0 / dpi_f;
-                            (pt * 10.0).round() / 10.0
-                        }).collect()
-                    } else {
-                        td.font_sizes.clone()
-                    };
+                    let y_scale = td.transform.map(|t| t[3]).unwrap_or(1.0);
+                    let y_scale = if y_scale > 0.0 { y_scale } else { 1.0 };
+                    let font_sizes: Vec<f64> = td.font_sizes.iter().map(|&s| {
+                        let pt = s * y_scale * 72.0 / dpi_f;
+                        (pt * 10.0).round() / 10.0
+                    }).collect();
                     TextInfo {
                         text: td.text.clone(),
                         fonts: td.fonts.clone(),

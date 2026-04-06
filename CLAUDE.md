@@ -375,17 +375,18 @@
 
 ### 21. ProGen（統合タブ）
 - **3モード**: 抽出プロンプト / 整形プロンプト / 校正プロンプト — ドットメニューから直接モード選択可能
-- **COMIC-Bridgeデータ連携**: `window.__COMIC_BRIDGE__` ブリッジオブジェクト経由でReact storeのデータをiframeから直接pull
-  - テキスト: `unifiedViewerStore.textContent` → ProGen `state.manuscriptTxtFiles` / `state.proofreadingFiles` に自動同期
-  - 作品情報JSON: `scanPsdStore.currentJsonFilePath` / `unifiedViewerStore.presetJsonPath` → ProGen JSON読み込み + レーベル自動認識
-  - 校正JSON: `unifiedViewerStore.checkData.filePath` → レーベルフォルダ名推定
+- **COMIC-Bridgeデータ連携**: localStorage `cb_progen_cmd` でデータ渡し（window.parent参照は本番ビルドで動作しないため不使用）
+  - テキスト: localStorage経由 → `state.manuscriptTxtFiles` / `state.proofreadingFiles` に注入
+  - 作品情報JSON: localStorage経由のjsonPath → `electronAPI.readJsonFile` → `applyJsonRules` でstateに直接設定（processLoadedJson不使用）
+  - レーベル: localStorage経由のlabelName → セレクタUI直接設定 + マスタールール読み込み
 - **テキスト読み込みUI排除**: ProGen独自のファイル入力/D&Dゾーン/ガイドオーバーレイを全て削除。メイン画面TopNavの「テキスト」ボタンで読み込んだテキストを自動同期
 - **常用外漢字検出**: 校正モード遷移時 / テキスト変更時に `detectNonJoyoLinesWithPageInfo` → `showNonJoyoResultPopup` を自動実行
 - **レーベル自動認識**: JSON読み込み時に `processLoadedJson` → `autoSelectLabel` で校正ページ含む全セレクタに自動設定
-- **ランディング画面なし**: ドットメニューからモード選択→直接そのモード画面に遷移（`forceNavigateToMode`）。JSON未読み込み時は「新規作成」フロー（レーベル選択モーダル→JSON作成→モード遷移）
+- **ランディング画面なし**: ドットメニューからモード選択→localStorage書き込み→iframe内500msポーリングで検知→`startNewCreation(mode)`で画面初期化→700ms後の`applyOverrides`でテキスト/レーベル/JSONルールを上書き注入。JSON未読み込み時は「新規作成」フロー（`handleLandingNewCreation` → レーベル選択モーダル）
+- **本番ビルド対応**: CSP削除（iframeのonclickハンドラがnonce置換でブロックされるため）。`window.state` をES moduleからwindowに公開
 - **iframe内で動作**（バニラJS、Reactとは独立）
 - 全コマンドは `progen_` プレフィックス付き
-- **ProgenView**: `publishBridge()` で `window.__COMIC_BRIDGE__` を毎render更新。`callIframe()` でiframe側コールバックを安全に呼び出し
+- **ProgenView**: localStorage `cb_progen_cmd` にコマンド書き込み → iframe内ポーリングで受信。条件レンダリング（ProGenタブ表示時のみマウント）
 
 ### 22. 右クリックコンテキストメニュー
 - **FileContextMenu.tsx**: SpecCheckViewの中央コンテンツエリアで右クリック → フローティングメニュー表示
@@ -431,16 +432,18 @@
   - **校正JSONタブ**: 正誤/提案/全て切替、カテゴリフィルタ、ページ連動
   - **ページ連動**: `navigateToTextPage`関数で単ページ化モード対応。logicalPageを走査してテキストページ番号に対応するページを特定
   - **psdStore同期**: メイン画面のファイルを`doSync`でビューアーストアに自動反映。タブ切替時にキャッシュクリア+`loadImageRef`で画像再読み込み。PDF情報（`isPdf`/`pdfPath`/`pdfPage`）も正しくマッピング（0-indexed→1-indexed変換）
-- **差分モード**: KenbanApp（defaultAppMode="diff-check"）
-- **分割ビューアー**: KenbanApp（defaultAppMode="parallel-view"）
-- 状態保持型マウント: diff/parallelは一度マウント後display切替で非表示化
+- **差分モード**: KenbanApp（defaultAppMode="diff-check", externalPathA/B props）
+- **分割ビューアー**: KenbanApp（defaultAppMode="parallel-view", externalPathA/B props）
+- 条件レンダリング: タブ切替で毎回マウント/アンマウント（検A/B propsを確実に反映）
+- **検A/検B連携**: TopNavの検A/Bで選択したフォルダパスをexternalPathA/B propsで渡し、KenbanApp内でuseEffectで自動読み込み（filesA/B + parallelFilesA/B 両方にセット）。PDF/PSD/TIFF自動判定
 - **隔離中**: 検版（KenbanView）とレイヤー分離確認（LayerSeparationPanel）はドットメニュー/ビューモードから除外、コンポーネントのマウント無効化（統合完了後に削除予定）
 
 ## UI構成
 
 ### レイアウト
-- **TopNav**: ロゴ（CB Logo = ホームボタン、クリックで全リセット）+ データ読込ボタン（テキスト/作品情報/校正JSON、各×ボタンでクリア可能）+ ステータス + バージョン。旧12タブはドットメニューに統合
-- **GlobalAddressBar**: TopNav直下に常時表示。戻る/進む/上の階層/パス入力/×ボタン（読み込みクリア）/フォルダ参照/再読み込みボタン。全タブで共通表示
+- **TopNav** (h-14): CBロゴ（全リセット）| ホーム（リセットなし）+ ビューアー + ドットメニュー（中央配置）| WF | flex-1 | ファイル数+OK/NG | バージョン。全画面時は非表示
+- **GlobalAddressBar**: 戻る/進む/上/アドレス/×クリア/フォルダ参照/再読み込み | テキスト/作品情報/校正JSON（各×クリア可能）| 差分/分割切替 | 検A/検B。全画面時は非表示
+- **ドットメニュー**: TopNavのホーム/ビューアーの右に9点アイコン。全タブ + ProGen3モード
 - **ViewRouter + viewStore**: タブベースのビュー切替管理。AppView型:
   ```typescript
   export type AppView =
@@ -448,9 +451,8 @@
     | "rename" | "tiff" | "scanPsd" | "typesetting"
     | "kenban" | "progen" | "unifiedViewer";
   ```
-  progen / unifiedViewer は状態保持型マウント（display切替、アンマウントしない）。kenbanは隔離中（マウント無効化）
-- **AppLayout**: TopNav + GlobalAddressBar + ViewRouter構成。グローバルD&Dリスナー（useGlobalDragDrop）
-- **ドットメニュー**: GlobalAddressBar右端に9点アイコン。クリックで全タブ（レイヤー制御〜ビューアー、検版・写植除く）+ ProGen3モードのドロップダウン表示。外部クリックで自動閉じ
+  progen は条件レンダリング（モード切替でリロード）、unifiedViewer は状態保持型マウント（display切替）。kenban/typesettingは隔離中（マウント無効化）
+- **AppLayout**: TopNav + GlobalAddressBar + ViewRouter構成。グローバルD&Dリスナー（useGlobalDragDrop）。全画面時はTopNav/GlobalAddressBar非表示
 - **D&Dオーバーレイ**: ファイルをドラッグ中にホーム画面を暗くし「ドラッグして読み込み」を表示（Tauri `onDragDropEvent` enter/leave監視）
 - **DropZone（空状態）**: ファイル未読み込み時、中央エリアをクリックするとフォルダ選択ダイアログを表示。D&Dも対応
 - **右クリックコンテキストメニュー**: FileContextMenu — ファイル操作/編集/読み込みの階層メニュー
@@ -462,10 +464,14 @@
   - 中央エリア上部: ビューモード切替バー + 仕様バー（仕様選択/統計/サイズ/ソート/PSD/PDFフィルタ/ドットメニュー）
   - viewMode切替: サムネイル（PreviewGrid）、リスト（PsdFileListView）、レイヤー構造（SpecLayerGrid）
   - SpecLayerGrid: 写植仕様（テキストレイヤーフォント/サイズ情報）+ レイヤーツリーを統合表示。「写植仕様のみ」チェック。上部に全ファイル合計サマリー（使用フォント出現数/サイズ統計/AA判定）
-  - LayerTree: ゼブラストライプ背景（白/#f0f8f0交互）、階層区切り線。テキストレイヤーにフォント名/サイズ/シャープ以外エラー表示
+  - LayerTree: ゼブラストライプ背景（白/#f0f8f0交互、useEffect+DOM操作でStrictMode対応）、階層区切り線。テキストレイヤーにフォント名/サイズ/シャープ以外エラー表示
+  - フォントサイズ: ag-psdのfontSizeにtransform[3](Yスケール)×72/DPIを掛けてPhotoshop表示ポイント値に変換。Rust側も同様
   - シャープ判定: `includes("sharp")` or `"ansh"`で小文字マッチ（ag-psd/Rust両対応）。シャープは非表示、シャープ以外のみ赤エラー
   - メトリクスカーニング: PSDバイナリからの正確な検出は不可（/AutoKerning trueがメトリクス/0を区別できない）。Rust側は無効化済み
-  - 右プレビューパネル: ロック機能付き。ダブルクリックで中央拡大表示（←→キーページ切替、Esc/背景クリックで閉じる、ガイド線オーバーレイ表示）。テキスト読込ボタン
+  - リスト表示: 列順＝結果/ファイル名(拡張子非表示)/種類バッジ/カラー(白黒表記)/サイズ/DPI/Bit/テキスト(あり/なし)/ガイド(あり/なし)。NG行は赤背景、Caution行は黄色背景
+  - 仕様選択: 単一ボタンクリックで仕様を順に切り替え（ループ）
+  - 右プレビューパネル: ロック機能付き。ダブルクリックで中央拡大表示。作成/アクションモードでは画像を上部に表示しボタンを下部に配置
+  - ファイルプロパティ: プレビュータブ時のみ表示。寸法(cm)+用紙サイズ併記、作成日/インチ表示なし
   - 中央コンテンツロック: 仕様バーにロックボタン。ロック中はアドレス変更でファイルリスト更新しない。D&D時は自動ロック
   - メイン画面でtxt/jsonクリック: txtは右プレビューに表示、jsonは校正JSON/作品情報として自動判定して読み込み
   - MetadataPanel: 各セクション折りたたみ可能。テキストのみ表示チェック
@@ -480,7 +486,7 @@
 - **TiffView**: TIFF化（3カラム: TiffSettingsPanel | TiffFileList | Center(プレビュー/一覧/ビューアータブ切替)）。TiffFileListヘッダーとTiffBatchQueueヘッダーにサブフォルダチェックを配置
 - **ScanPsdView**: Scan PSD（2カラム: ScanPsdPanel(5タブ) | ScanPsdContent(モード選択/スキャン/サマリー)）。JSON編集時に未登録フォントアラート表示。フォント帳を独立セクションとして追加（モーダル表示）
 - **KenbanView**: KENBAN検版（隔離中 — ViewRouterでマウント無効化、ドットメニューから除外。統合完了後に削除予定）
-- **ProgenView**: ProGen（iframe `/progen/index.html`、状態保持型マウント、`__COMIC_BRIDGE__`ブリッジでデータ連携）
+- **ProgenView**: ProGen iframe。条件レンダリング（表示時のみマウント）。localStorage `cb_progen_cmd` でデータ連携（テキスト/JSON/レーベル）。500msポーリングでコマンド受信。`startNewCreation` + 700ms遅延 `applyOverrides` でモード遷移+データ上書き
 - **UnifiedViewerView**: 統合ビューアー + 差分モード + 分割ビューアーの3タブ。統合ビューアーは3カラム（全タブ共通パネル）。unifiedViewerStore独立管理。psdStoreとdoSync+loadImageRefで自動同期。PDF表示はpdf.jsで描画（isPdf/pdfPath/pdfPageを正しくマッピング）
 
 ### レイヤーツリー (LayerPreviewPanel)

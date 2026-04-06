@@ -7,6 +7,7 @@ import { ErrorBoundary } from "../ErrorBoundary";
 
 import { ConversionToast } from "../spec-checker/ConversionToast";
 import { usePsdStore } from "../../store/psdStore";
+import { useViewStore } from "../../store/viewStore";
 import { useGuideStore } from "../../store/guideStore";
 import { useGlobalDragDrop } from "../../hooks/useGlobalDragDrop";
 import { useOpenFolderShortcut } from "../../hooks/useOpenFolder";
@@ -14,6 +15,7 @@ import { useFileWatcher } from "../../hooks/useFileWatcher";
 import { useHandoff } from "../../hooks/useHandoff";
 
 export function AppLayout() {
+  const isViewerFullscreen = useViewStore((s) => s.isViewerFullscreen);
   const isEditorOpen = useGuideStore((state) => state.isEditorOpen);
   const clearSelection = usePsdStore((state) => state.clearSelection);
   const selectAll = usePsdStore((state) => state.selectAll);
@@ -65,11 +67,11 @@ export function AppLayout() {
       {/* 背景のトーンパターン */}
       <div className="fixed inset-0 bg-tone pointer-events-none" />
 
-      {/* Top Navigation */}
-      <TopNav />
+      {/* Top Navigation — 全画面時は非表示 */}
+      {!isViewerFullscreen && <TopNav />}
 
-      {/* Global Address Bar */}
-      <GlobalAddressBar />
+      {/* Global Address Bar — 全画面時は非表示 */}
+      {!isViewerFullscreen && <GlobalAddressBar />}
 
       {/* View Content */}
       <ErrorBoundary>

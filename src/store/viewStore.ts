@@ -20,20 +20,39 @@ interface ViewState {
   activeView: AppView;
   isDetailPanelOpen: boolean;
   progenMode: ProgenMode;
+  isViewerFullscreen: boolean;
+  /** 検版: 検Aフォルダパス */
+  kenbanPathA: string | null;
+  /** 検版: 検Bフォルダパス */
+  kenbanPathB: string | null;
+  /** 検版: 差分/分割切替 */
+  kenbanViewMode: "diff" | "parallel";
 
   setActiveView: (view: AppView) => void;
   setDetailPanelOpen: (open: boolean) => void;
   toggleDetailPanel: () => void;
   setProgenMode: (mode: ProgenMode) => void;
+  setViewerFullscreen: (fullscreen: boolean) => void;
+  setKenbanPathA: (path: string | null) => void;
+  setKenbanPathB: (path: string | null) => void;
+  setKenbanViewMode: (mode: "diff" | "parallel") => void;
 }
 
 export const useViewStore = create<ViewState>((set) => ({
   activeView: "specCheck",
   isDetailPanelOpen: false,
   progenMode: null,
+  isViewerFullscreen: false,
+  kenbanPathA: null,
+  kenbanPathB: null,
+  kenbanViewMode: "diff" as const,
 
   setActiveView: (activeView) => set({ activeView }),
   setDetailPanelOpen: (isDetailPanelOpen) => set({ isDetailPanelOpen }),
   toggleDetailPanel: () => set((state) => ({ isDetailPanelOpen: !state.isDetailPanelOpen })),
   setProgenMode: (progenMode) => set({ progenMode }),
+  setViewerFullscreen: (isViewerFullscreen) => set({ isViewerFullscreen }),
+  setKenbanPathA: (kenbanPathA) => set({ kenbanPathA }),
+  setKenbanPathB: (kenbanPathB) => set({ kenbanPathB }),
+  setKenbanViewMode: (kenbanViewMode) => set({ kenbanViewMode }),
 }));

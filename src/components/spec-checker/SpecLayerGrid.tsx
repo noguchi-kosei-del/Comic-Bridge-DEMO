@@ -153,8 +153,10 @@ function SpecLayerCard({
 }) {
   return (
     <div
-      className={`border rounded-xl cursor-pointer bg-bg-secondary/50 transition-all hover:bg-bg-secondary/80 ${
-        isActive ? "border-accent/50 ring-1 ring-accent/20" : "border-border hover:border-border-strong/50"
+      className={`border rounded-xl cursor-pointer transition-all ${
+        isActive
+          ? "border-accent ring-2 ring-accent/30 bg-accent/5 shadow-md"
+          : "border-border bg-bg-secondary/50 hover:bg-bg-secondary/80 hover:border-border-strong/50"
       }`}
       onClick={(e) => { if (!e.shiftKey && !e.ctrlKey && !e.metaKey) onSelect(); }}
     >

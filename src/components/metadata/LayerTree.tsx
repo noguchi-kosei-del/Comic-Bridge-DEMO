@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import type { LayerNode, LayerBounds } from "../../types";
 
 interface LayerTreeProps {
@@ -19,12 +19,21 @@ export function LayerTree({
   onSelectLayer,
   _rowCounter,
 }: LayerTreeProps) {
-  // ag-psdはbottom-to-top順で返すため、reverseしてPhotoshop表示順（上がforeground）に変換
   const reversed = useMemo(() => [...layers].reverse(), [layers]);
-  // ルート呼び出し時にカウンター初期化
   const counter = _rowCounter || { value: 0 };
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // ルート呼び出し時のみゼブラストライプをDOM操作で適用（StrictMode対応）
+  useEffect(() => {
+    if (depth !== 0 || !rootRef.current) return;
+    const rows = rootRef.current.querySelectorAll("[data-layer-row]");
+    rows.forEach((el, i) => {
+      (el as HTMLElement).style.backgroundColor = i % 2 === 0 ? "#ffffff" : "#f0f8f0";
+    });
+  });
+
   return (
-    <div className={depth === 0 ? "text-xs" : "text-xs"}>
+    <div ref={depth === 0 ? rootRef : undefined} className="text-xs">
       {reversed.map((layer) => (
         <LayerItem
           key={layer.id}
@@ -57,8 +66,7 @@ function LayerItem({
   onSelectLayer,
   _rowCounter,
 }: LayerItemProps) {
-  const rowIndex = _rowCounter ? _rowCounter.value++ : 0;
-  const isEvenRow = rowIndex % 2 === 0;
+  // ゼブラストライプはCSS nth-childで処理（StrictMode対応）
   const [isExpanded, setIsExpanded] = useState(depth < 2);
   const hasChildren = layer.children && layer.children.length > 0;
   const effectiveVisible = layer.visible && parentVisible;
@@ -138,9 +146,9 @@ function LayerItem({
           ${onSelectLayer && layer.bounds ? "cursor-pointer hover:bg-white/8" : "cursor-default hover:bg-white/5"}
           ${selectedLayerId === layer.id ? "bg-white/8 border-l-2 border-[rgba(194,90,90,0.5)]" : ""}
         `}
+        data-layer-row
         style={{
           paddingLeft: `${depth * 14 + 4}px`,
-          backgroundColor: isEvenRow ? "#ffffff" : "#f0f8f0",
         }}
         onClick={
           onSelectLayer && layer.bounds

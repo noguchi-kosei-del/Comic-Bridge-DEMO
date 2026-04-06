@@ -255,9 +255,12 @@ function extractLayerTree(children: Psd["children"], parentPath = "", dpi = 72):
       const fonts = new Set<string>();
       const fontSizes = new Set<number>();
 
-      // ag-psd の fontSize はドキュメント解像度に応じたピクセル相当値のため
-      // 72 / DPI でタイポグラフィポイントに正規化する
-      const ptScale = 72 / dpi;
+      // ag-psd の fontSize は変形前のサイズ。transform行列のスケールとDPIを適用して
+      // Photoshopが表示するポイント値に変換する:
+      //   pt = fontSize * transform[3](Yスケール) * 72 / DPI
+      const txf = child.text.transform;
+      const yScale = (txf && typeof txf[3] === "number" && txf[3] > 0) ? txf[3] : 1;
+      const ptScale = yScale * 72 / dpi;
 
       // デフォルトスタイル
       if (child.text.style?.font?.name) {

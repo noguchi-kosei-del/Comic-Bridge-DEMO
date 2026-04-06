@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useViewStore as kenbanViewStore } from "../../store/viewStore";
 import { createPortal } from "react-dom";
 import { CheckCircle, AlertTriangle, Loader2, RefreshCw, Download } from "lucide-react";
 import {
@@ -52,9 +53,11 @@ import type {
 // ============== 差分検出アプリ ==============
 interface MangaDiffDetectorProps {
   defaultAppMode?: AppMode;
+  externalPathA?: string | null;
+  externalPathB?: string | null;
 }
 
-export default function MangaDiffDetector({ defaultAppMode }: MangaDiffDetectorProps = {}) {
+export default function MangaDiffDetector({ defaultAppMode, externalPathA, externalPathB }: MangaDiffDetectorProps = {}) {
   const [photoshopPath, setPhotoshopPath] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState<CompareMode>("tiff-tiff");
   const [initialModeSelect, setInitialModeSelect] = useState(!defaultAppMode);
@@ -1494,6 +1497,10 @@ export default function MangaDiffDetector({ defaultAppMode }: MangaDiffDetectorP
     }
   };
 
+  // COMIC-Bridge統合: externalPathA/Bでファイル読み込み
+  // 差分モード(filesA/B) と 分割ビューアー(parallelFilesA/B) の両方にセット
+  // COMIC-Bridge統合: loadExternalSide + useEffect は expandPdfToParallelEntries の後方に配置
+
   // ペアリング
   useEffect(() => {
     console.log("[Pairing] filesA:", filesA.length, "filesB:", filesB.length, "mode:", pairingMode);
@@ -2464,6 +2471,51 @@ export default function MangaDiffDetector({ defaultAppMode }: MangaDiffDetectorP
       console.error("PDF expansion error:", err);
     }
   };
+
+  // COMIC-Bridge統合: externalPathA/Bでファイル読み込み
+  const loadExternalSide = async (path: string, side: "A" | "B") => {
+    try {
+      const allExts = ["psd", "tif", "tiff", "jpg", "jpeg", "png", "bmp", "pdf"];
+      const filePaths = await invoke<string[]>("kenban_list_files_in_folder", { path, extensions: allExts });
+      console.log(`[Kenban CB] ${side} files found:`, filePaths.length, "in", path);
+      if (!filePaths || filePaths.length === 0) return;
+
+      const imgPaths = filePaths.filter((p: string) => !/\.pdf$/i.test(p));
+      const pdfPaths = filePaths.filter((p: string) => /\.pdf$/i.test(p));
+      const hasPsd = imgPaths.some((p: string) => /\.psd$/i.test(p));
+
+      // PDFのみ
+      if (pdfPaths.length > 0 && imgPaths.length === 0) {
+        if (side === "A") setCompareMode("pdf-pdf");
+        const files = await readFilesFromPaths(pdfPaths.slice(0, 1));
+        if (side === "A") { setDiffFolderA(null); setFilesA(files); }
+        else { setDiffFolderB(null); setFilesB(files); }
+        await expandPdfToParallelEntries(pdfPaths[0], side);
+      }
+      // 画像ファイル
+      else if (imgPaths.length > 0) {
+        if (side === "A") setCompareMode(hasPsd ? "psd-psd" : "tiff-tiff");
+        const filtered = hasPsd ? imgPaths.filter((p: string) => /\.psd$/i.test(p)) : imgPaths;
+        // 分割ビューアー用
+        const entries: any[] = filtered.map((fp: string) => {
+          const nm = fp.split(/[/\\]/).pop() || "";
+          const ex = nm.split(".").pop()?.toLowerCase() || "";
+          return { path: fp, name: nm, type: ex === "psd" ? "psd" : (ex === "tif" || ex === "tiff") ? "tiff" : "image" };
+        });
+        if (side === "A") { setParallelFolderA(path); setParallelFilesA(entries); setParallelCurrentIndex(0); setParallelIndexA(0); }
+        else { setParallelFolderB(path); setParallelFilesB(entries); setParallelIndexB(0); }
+        // 差分モード用
+        const files = await readFilesFromPaths(filtered);
+        const sorted = files.sort((a: any, b: any) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        if (side === "A") { setDiffFolderA(path); setFilesA(sorted); }
+        else { setDiffFolderB(path); setFilesB(sorted); }
+      }
+      if (initialModeSelect) { setInitialModeSelect(false); setSidebarCollapsed(false); }
+    } catch (e) { console.warn(`[Kenban CB] ${side} error:`, e); }
+  };
+
+  useEffect(() => { if (externalPathA) loadExternalSide(externalPathA, "A"); }, [externalPathA]);
+  useEffect(() => { if (externalPathB) loadExternalSide(externalPathB, "B"); }, [externalPathB]);
 
   // 並列ビューモードでのドロップ処理
   const handleParallelDrop = async (e: React.DragEvent, side: "A" | "B") => {
@@ -3706,9 +3758,13 @@ export default function MangaDiffDetector({ defaultAppMode }: MangaDiffDetectorP
     const current = await window.isFullscreen();
     const goingFullscreen = !current;
 
+    // viewStoreに全画面状態を通知（TopNav/GlobalAddressBar非表示用）
+    const { useViewStore } = await import("../../store/viewStore");
+
     if (goingFullscreen) {
       // バー収縮 + 全画面化を同時に開始 → 一つの滑らかな動き
       setFullscreenTransitioning(true);
+      useViewStore.getState().setViewerFullscreen(true);
       window.setFullscreen(true); // awaitしない＝同時進行
       // CSS transition(300ms)とWindows側の遷移が並行で走る
       await new Promise((r) => setTimeout(r, 350));
@@ -3720,6 +3776,7 @@ export default function MangaDiffDetector({ defaultAppMode }: MangaDiffDetectorP
       // 全画面解除 + バー展開を同時に開始
       window.setFullscreen(false); // awaitしない
       setIsFullscreen(false);
+      useViewStore.getState().setViewerFullscreen(false);
       // CSS transitionでバーが展開される
     }
   }, []);
