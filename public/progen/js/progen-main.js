@@ -185,13 +185,28 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
                         applyJsonRules(result);
                     }
                 } catch (e) { console.warn('[ProGen] JSON apply error:', e); }
-                // 遅延で最終上書き
                 setTimeout(function () { applyOverrides(cmd); }, delay);
             }).catch(function () {
                 setTimeout(function () { applyOverrides(cmd); }, delay);
             });
         } else {
             setTimeout(function () { applyOverrides(cmd); }, delay);
+        }
+
+        // 常用外漢字検出（校正モードのみ、全UI描画完了後に実行）
+        if (cmd.mode === 'proofreading') {
+            setTimeout(function () {
+                try {
+                    // テキスト再注入（念のため）
+                    injectText(cmd);
+                    if (s.proofreadingFiles && s.proofreadingFiles.length > 0
+                        && window.detectNonJoyoLinesWithPageInfo && window.showNonJoyoResultPopup) {
+                        var d = window.detectNonJoyoLinesWithPageInfo(s.proofreadingFiles);
+                        s.proofreadingDetectedNonJoyoWords = d;
+                        window.showNonJoyoResultPopup(d, true);
+                    }
+                } catch (e) { /* ignore */ }
+            }, 1200);
         }
     }
 
@@ -223,18 +238,18 @@ if (proofreadingTxtDropZone) window.setupDropZone(proofreadingTxtDropZone, windo
         if (window.renderSymbolTable) window.renderSymbolTable();
         if (window.generateXML) window.generateXML();
 
-        // 校正モードの場合
+        // 校正モードの場合: 校正ページが確実に表示された後にUI更新
         if (cmd.mode === 'proofreading') {
+            // 校正ページを確実に表示
+            var pp = document.getElementById('proofreadingPage');
+            var mw = document.getElementById('mainWrapper');
+            if (pp) pp.style.display = 'flex';
+            if (mw) mw.style.display = 'none';
+
             if (window.renderProofreadingFileList) window.renderProofreadingFileList();
             if (window.updateProofreadingPrompt) window.updateProofreadingPrompt();
             if (window.updateProofreadingOptionsLabel) window.updateProofreadingOptionsLabel();
-            // 常用外漢字
-            if (s.proofreadingFiles && s.proofreadingFiles.length > 0
-                && window.detectNonJoyoLinesWithPageInfo && window.showNonJoyoResultPopup) {
-                var d = window.detectNonJoyoLinesWithPageInfo(s.proofreadingFiles);
-                s.proofreadingDetectedNonJoyoWords = d;
-                window.showNonJoyoResultPopup(d, true);
-            }
+            if (window.updateProofreadingCheckItems) window.updateProofreadingCheckItems();
         }
     }
 
