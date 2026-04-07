@@ -14,6 +14,7 @@ import { ScanPsdView } from "../views/ScanPsdView";
 // import { KenbanView } from "../views/KenbanView";
 import { ProgenView } from "../views/ProgenView";
 import { UnifiedViewerView } from "../views/UnifiedViewerView";
+import { FolderSetupView } from "../views/FolderSetupView";
 
 export function ViewRouter() {
   const activeView = useViewStore((s) => s.activeView);
@@ -40,6 +41,7 @@ export function ViewRouter() {
       {activeView === "rename" && <RenameView />}
       {activeView === "tiff" && <TiffView />}
       {activeView === "scanPsd" && <ScanPsdView />}
+      {activeView === "folderSetup" && <FolderSetupView />}
 
       {/* KENBAN: 隔離中 — 統合ビューアーに移行完了後に削除予定 */}
       {/* kenbanMounted && (

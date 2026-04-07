@@ -2876,6 +2876,37 @@ pub async fn delete_file(file_path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Copy a folder recursively to a destination
+#[tauri::command]
+pub async fn copy_folder(source: String, destination: String) -> Result<u32, String> {
+    let src = Path::new(&source);
+    let dst = Path::new(&destination);
+    if !src.exists() || !src.is_dir() {
+        return Err(format!("Source folder not found: {}", source));
+    }
+    fn copy_dir_recursive(src: &Path, dst: &Path, count: &mut u32) -> Result<(), String> {
+        if !dst.exists() {
+            fs::create_dir_all(dst).map_err(|e| format!("Failed to create dir: {}", e))?;
+        }
+        let entries = fs::read_dir(src).map_err(|e| format!("Failed to read dir: {}", e))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Entry error: {}", e))?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            if src_path.is_dir() {
+                copy_dir_recursive(&src_path, &dst_path, count)?;
+            } else {
+                fs::copy(&src_path, &dst_path).map_err(|e| format!("Failed to copy: {}", e))?;
+                *count += 1;
+            }
+        }
+        Ok(())
+    }
+    let mut count = 0u32;
+    copy_dir_recursive(src, dst, &mut count)?;
+    Ok(count)
+}
+
 /// Duplicate files in the same directory (file.psd → file_copy.psd, file_copy2.psd, ...)
 /// Get the system temp directory path
 #[tauri::command]

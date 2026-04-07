@@ -409,7 +409,25 @@
 - **進行UI**: プログレスバー + ステップ番号 + 現在のステップ名（クリックで次へ進む）
 - **完了**: 最終ステップクリックで✓完了→リセット。×ボタンで途中終了
 
-### 24. ファイルプロパティパネル
+### 24. フォルダセットアップツール
+- **FolderSetupView**: ツールメニューから起動。原稿フォルダを作業フォルダにコピー＋フォルダ構造を自動作成
+- **3ステップUI**: コピー元（貼付/参照）→ 新作/続話選択 → コピー先選択 → 実行
+- **ナンバリング自動検出**: フォルダ名から数字を抽出して番号フォルダを作成（手動修正可能）
+- **テンプレート設定2種類**:
+  - テンプレートフォルダアドレス（指定時はフォルダごとコピー）
+  - フォルダ構造（クリックでフォルダから自動取得、localStorageに保存）
+- **デフォルト構造**: 新作9フォルダ / 続話6フォルダ（アドレス未指定）
+- **copy_folder Rustコマンド**: 再帰的フォルダコピー
+
+### 25. 設定画面
+- **SettingsPanel**: TopNavのドットメニュー横に歯車アイコン
+- **文字サイズ**: 小(0.9倍)/中(デフォルト)/大(1.15倍)
+- **アクセントカラー**: 8色選択UI（今後対応予定）
+- **ダークモード**: ON/OFF（CSS filter invert方式）
+- **フォルダ階層デフォルト位置**: テキスト入力+参照ボタン
+- **永続化**: localStorageに保存
+
+### 26. ファイルプロパティパネル
 - **FilePropertiesPanel**: 右プレビューパネル下部に折りたたみ可能なプロパティ表示
 - **表示項目**: ファイル名 / ドキュメント種類 / 作成日 / 修正日 / ファイルサイズ / 寸法(px/inch/cm) / 用紙サイズ / 解像度 / ビット数 / カラーモード / αチャンネル / ガイド / トンボ / レイヤー数 / チェック結果
 
@@ -550,7 +568,8 @@ src/
 │   │   ├── GlobalAddressBar.tsx  # グローバルアドレスバー（全タブ共通）
 │   │   ├── TopNav.tsx            # 上部ナビゲーション（タブ切替）
 │   │   ├── ViewRouter.tsx        # ビュー切替ルーター
-│   │   └── WorkflowBar.tsx       # ワークフローナビゲーション（4ワークフロー、ステップ進行UI）
+│   │   ├── WorkflowBar.tsx       # ワークフローナビゲーション（4ワークフロー、ステップ進行UI）
+│   │   └── SettingsPanel.tsx     # 設定画面（文字サイズ/カラー/ダークモード/デフォルトフォルダ）
 │   ├── unified-viewer/   # 統合ビューアー
 │   │   ├── UnifiedViewer.tsx          # メインコンポーネント（3カラムレイアウト、画像ビューアー、renderTabContent）
 │   │   ├── utils.ts                   # ヘルパー関数・定数（COMIC-POTパーサー、ページ番号計算、ファイル判定）
@@ -579,6 +598,7 @@ src/
 │   │   ├── RenameView.tsx        # リネームビュー（fileEntries→psdStore自動同期）
 │   │   ├── TiffView.tsx          # TIFF化ビュー（3カラム: FileList|Center|Settings）
 │   │   ├── ScanPsdView.tsx      # Scan PSDビュー（ScanPsdPanel + ScanPsdContent）
+│   │   ├── FolderSetupView.tsx  # フォルダセットアップ（原稿コピー+構造作成）
 │   │   ├── KenbanView.tsx       # KENBANラッパー（kenban-scope）
 │   │   ├── ProgenView.tsx       # ProGenラッパー（iframe）
 │   │   └── UnifiedViewerView.tsx # 統合ビューアー（6サブタブ）
@@ -715,6 +735,7 @@ src/
 │   ├── guideStore.ts      # ガイド線状態（guides, history/future, selectedGuideIndex）
 │   ├── layerStore.ts      # レイヤー制御: actionMode(hide/show/custom/organize/layerMove), saveMode, selectedConditions, customConditions, organizeTargetName, layerMove条件, deleteHiddenText, customVisibilityOps/customMoveOps（カスタム操作Map）
 │   ├── viewStore.ts       # ビュー切替状態（activeView: AppView, progenMode: ProgenMode）
+│   ├── settingsStore.ts   # アプリ設定（文字サイズ/カラー/ダークモード/デフォルトフォルダ、localStorage永続化）
 │   ├── fontBookStore.ts   # フォント帳（entries, fontBookDir, isLoaded）
 │   ├── splitStore.ts      # 分割設定（settings, selectionHistory/Future）
 │   ├── replaceStore.ts    # 差替え設定（folders, batchFolders, settings, pairingJobs, manualPairs, excludedPairIndices）

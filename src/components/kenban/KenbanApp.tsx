@@ -2472,9 +2472,56 @@ export default function MangaDiffDetector({ defaultAppMode, externalPathA, exter
     }
   };
 
-  // COMIC-Bridge統合: externalPathA/Bでファイル読み込み
+  // COMIC-Bridge統合: externalPathA/Bでファイル読み込み（フォルダ or ファイル直接指定）
   const loadExternalSide = async (path: string, side: "A" | "B") => {
     try {
+      // ファイル直接指定の場合（拡張子あり）
+      const ext = path.substring(path.lastIndexOf(".") + 1).toLowerCase();
+      const isFile = ["pdf", "psd", "psb", "tif", "tiff", "jpg", "jpeg", "png", "bmp"].includes(ext);
+
+      if (isFile) {
+        console.log(`[Kenban CB] ${side} file direct:`, path, "ext:", ext);
+
+        if (ext === "pdf") {
+          // PDF直接指定
+          if (side === "A") setCompareMode("pdf-pdf");
+          // 差分モード用: PDFはダミーFileオブジェクトで登録
+          try {
+            const file = new File([], path.split(/[/\\]/).pop() || "file.pdf", { type: "application/pdf" });
+            (file as any).filePath = path;
+            if (side === "A") { setDiffFolderA(null); setFilesA([file]); }
+            else { setDiffFolderB(null); setFilesB([file]); }
+          } catch { /* ignore */ }
+          // 分割ビューアー用: PDFページ展開
+          try {
+            const pageCount = await invoke<number>("kenban_get_pdf_page_count", { path });
+            console.log(`[Kenban CB] ${side} PDF pages:`, pageCount);
+            const pdfName = path.split(/[/\\]/).pop() || "file.pdf";
+            const entries: any[] = [];
+            for (let page = 1; page <= pageCount; page++) {
+              entries.push({ path, name: `${pdfName} (P.${page})`, type: "pdf", pageCount, pdfPage: page });
+            }
+            if (side === "A") { setParallelFolderA(path); setParallelFilesA(entries); setParallelCurrentIndex(0); setParallelIndexA(0); }
+            else { setParallelFolderB(path); setParallelFilesB(entries); setParallelIndexB(0); }
+          } catch (e) { console.warn("[Kenban CB] PDF page count error:", e); }
+        } else {
+          // PSD/画像ファイル直接指定
+          if (side === "A") setCompareMode(ext === "psd" || ext === "psb" ? "psd-psd" : "tiff-tiff");
+          const files = await readFilesFromPaths([path]);
+          if (side === "A") { setDiffFolderA(null); setFilesA(files); }
+          else { setDiffFolderB(null); setFilesB(files); }
+          // 分割ビューアー用
+          const nm = path.split(/[/\\]/).pop() || "";
+          const type = ext === "psd" || ext === "psb" ? "psd" : (ext === "tif" || ext === "tiff") ? "tiff" : "image";
+          const entries = [{ path, name: nm, type }];
+          if (side === "A") { setParallelFolderA(null); setParallelFilesA(entries); setParallelCurrentIndex(0); setParallelIndexA(0); }
+          else { setParallelFolderB(null); setParallelFilesB(entries); setParallelIndexB(0); }
+        }
+        if (initialModeSelect) { setInitialModeSelect(false); setSidebarCollapsed(false); }
+        return;
+      }
+
+      // フォルダ指定の場合
       const allExts = ["psd", "tif", "tiff", "jpg", "jpeg", "png", "bmp", "pdf"];
       const filePaths = await invoke<string[]>("kenban_list_files_in_folder", { path, extensions: allExts });
       console.log(`[Kenban CB] ${side} files found:`, filePaths.length, "in", path);
@@ -2484,7 +2531,7 @@ export default function MangaDiffDetector({ defaultAppMode, externalPathA, exter
       const pdfPaths = filePaths.filter((p: string) => /\.pdf$/i.test(p));
       const hasPsd = imgPaths.some((p: string) => /\.psd$/i.test(p));
 
-      // PDFのみ
+      // フォルダ内にPDFのみ
       if (pdfPaths.length > 0 && imgPaths.length === 0) {
         if (side === "A") setCompareMode("pdf-pdf");
         const files = await readFilesFromPaths(pdfPaths.slice(0, 1));
@@ -2492,7 +2539,7 @@ export default function MangaDiffDetector({ defaultAppMode, externalPathA, exter
         else { setDiffFolderB(null); setFilesB(files); }
         await expandPdfToParallelEntries(pdfPaths[0], side);
       }
-      // 画像ファイル
+      // 画像ファイル（PDFも混在する場合はPDF優先でなく画像優先）
       else if (imgPaths.length > 0) {
         if (side === "A") setCompareMode(hasPsd ? "psd-psd" : "tiff-tiff");
         const filtered = hasPsd ? imgPaths.filter((p: string) => /\.psd$/i.test(p)) : imgPaths;

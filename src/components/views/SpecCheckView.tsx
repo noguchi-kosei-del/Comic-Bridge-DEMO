@@ -28,6 +28,7 @@ import { useTextExtract } from "../../hooks/useTextExtract";
 import { useHighResPreview } from "../../hooks/useHighResPreview";
 import { detectPaperSize } from "../../lib/paperSize";
 import { useViewStore, type AppView } from "../../store/viewStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 // useScanPsdStore は SpecScanJsonDialog 内で使用
 // JsonFileBrowser / PresetJsonData は JSON登録（SpecScanJsonDialog）に統合済み
@@ -86,10 +87,12 @@ export function SpecCheckView() {
     return () => { unlisten?.(); clearTimeout(timer); };
   }, []);
   const [expandedFile, setExpandedFile] = useState<typeof activeFile>(null);
+  const settingsDefaultFolder = useSettingsStore((s) => s.defaultFolderPath);
   const [desktopPath, setDesktopPath] = useState("C:\\Users");
   useEffect(() => {
+    if (settingsDefaultFolder) { setDesktopPath(settingsDefaultFolder); return; }
     import("@tauri-apps/api/path").then(({ desktopDir }) => desktopDir().then((p) => setDesktopPath(p))).catch(() => {});
-  }, []);
+  }, [settingsDefaultFolder]);
   // ドットメニューはGlobalAddressBarに移動済み
   const [sortKey, setSortKey] = useState<"name" | "modified" | "type">("name");
   const [sortAsc, setSortAsc] = useState(true);

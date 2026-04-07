@@ -227,24 +227,33 @@ function DataLoadButtons() {
     } catch { /* ignore */ }
   }, []);
 
-  const handleKenbanLoad = async (side: "A" | "B") => {
-    const path = await dialogOpen({ directory: true, multiple: false });
-    if (!path) return;
-    if (kenbanViewMode === "diff" && side === "B" && useViewStore.getState().kenbanPathA) {
-      try {
-        const allExts = ["psd", "tif", "tiff", "jpg", "jpeg", "png", "bmp", "pdf"];
-        const fA = await invoke<string[]>("kenban_list_files_in_folder", { path: useViewStore.getState().kenbanPathA, extensions: allExts });
-        const fB = await invoke<string[]>("kenban_list_files_in_folder", { path: path as string, extensions: allExts });
-        if (fA.length > 0 && fB.length > 0) {
-          const eA = fA[0].substring(fA[0].lastIndexOf(".") + 1).toLowerCase();
-          const eB = fB[0].substring(fB[0].lastIndexOf(".") + 1).toLowerCase();
-          const bad: Record<string, string[]> = { pdf: ["psd"], psd: ["pdf"] };
-          if (bad[eA]?.includes(eB)) { alert(`差分モードでは ${eA.toUpperCase()} と ${eB.toUpperCase()} の組み合わせは非対応です。`); return; }
-        }
-      } catch { /* ignore */ }
+  const [kenbanPickMode, setKenbanPickMode] = useState<{ side: "A" | "B" } | null>(null);
+
+  const handleKenbanLoad = (side: "A" | "B") => {
+    setKenbanPickMode({ side });
+  };
+
+  const handleKenbanPick = async (type: "folder" | "file") => {
+    if (!kenbanPickMode) return;
+    const side = kenbanPickMode.side;
+    setKenbanPickMode(null);
+
+    let selected: string | null = null;
+    if (type === "folder") {
+      const r = await dialogOpen({ directory: true, multiple: false, title: `${side}側: フォルダを選択` });
+      if (r) selected = r as string;
+    } else {
+      const r = await dialogOpen({
+        directory: false, multiple: false,
+        title: `${side}側: ファイルを選択`,
+        filters: [{ name: "対応ファイル", extensions: ["pdf", "psd", "tif", "tiff", "jpg", "jpeg", "png", "bmp"] }],
+      });
+      if (r) selected = r as string;
     }
-    if (side === "A") useViewStore.getState().setKenbanPathA(path as string);
-    else useViewStore.getState().setKenbanPathB(path as string);
+    if (!selected) return;
+
+    if (side === "A") useViewStore.getState().setKenbanPathA(selected);
+    else useViewStore.getState().setKenbanPathB(selected);
     const vs = useViewStore.getState();
     if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer");
   };
@@ -267,8 +276,26 @@ function DataLoadButtons() {
       <Btn loaded={checkLoaded} label="校正JSON" title="校正JSON" clearTitle="クリア" cCls="text-warning hover:bg-warning/15" bCls="border-warning/50" onLoad={() => useViewStore.getState().setJsonBrowserMode("check")} onClear={() => useUnifiedViewerStore.getState().setCheckData(null)} />
       <div className="w-px h-3 bg-border/30 mx-0.5" />
       <button onClick={() => useViewStore.getState().setKenbanViewMode(kenbanViewMode === "diff" ? "parallel" : "diff")} className={`px-1 py-0.5 text-[8px] font-bold rounded transition-colors ${kenbanViewMode === "diff" ? "bg-accent/15 text-accent" : "bg-accent-secondary/15 text-accent-secondary"}`} title="差分/分割切替">{kenbanViewMode === "diff" ? "差分" : "分割"}</button>
-      <Btn loaded={!!kenbanPathA} label="検A" title="検A選択" clearTitle="クリア" cCls="text-blue-500 hover:bg-blue-500/15" bCls="border-blue-500/50" onLoad={() => handleKenbanLoad("A")} onClear={() => useViewStore.getState().setKenbanPathA(null)} />
-      <Btn loaded={!!kenbanPathB} label="検B" title="検B選択" clearTitle="クリア" cCls="text-orange-500 hover:bg-orange-500/15" bCls="border-orange-500/50" onLoad={() => handleKenbanLoad("B")} onClear={() => useViewStore.getState().setKenbanPathB(null)} />
+      <div className="relative">
+        <Btn loaded={!!kenbanPathA} label="検A" title="検A選択" clearTitle="クリア" cCls="text-blue-500 hover:bg-blue-500/15" bCls="border-blue-500/50" onLoad={() => handleKenbanLoad("A")} onClear={() => useViewStore.getState().setKenbanPathA(null)} />
+        {kenbanPickMode?.side === "A" && (
+          <div className="absolute left-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[120px]">
+            <button className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" onClick={() => handleKenbanPick("folder")}>フォルダ選択</button>
+            <button className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" onClick={() => handleKenbanPick("file")}>ファイル選択</button>
+            <button className="w-full text-left px-3 py-1 text-[9px] text-text-muted hover:text-text-primary hover:bg-bg-tertiary" onClick={() => setKenbanPickMode(null)}>キャンセル</button>
+          </div>
+        )}
+      </div>
+      <div className="relative">
+        <Btn loaded={!!kenbanPathB} label="検B" title="検B選択" clearTitle="クリア" cCls="text-orange-500 hover:bg-orange-500/15" bCls="border-orange-500/50" onLoad={() => handleKenbanLoad("B")} onClear={() => useViewStore.getState().setKenbanPathB(null)} />
+        {kenbanPickMode?.side === "B" && (
+          <div className="absolute left-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[120px]">
+            <button className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" onClick={() => handleKenbanPick("folder")}>フォルダ選択</button>
+            <button className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" onClick={() => handleKenbanPick("file")}>ファイル選択</button>
+            <button className="w-full text-left px-3 py-1 text-[9px] text-text-muted hover:text-text-primary hover:bg-bg-tertiary" onClick={() => setKenbanPickMode(null)}>キャンセル</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

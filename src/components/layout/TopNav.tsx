@@ -14,6 +14,7 @@ import type { ProofreadingCheckItem } from "../../types/typesettingCheck";
 import { JsonFileBrowser } from "../scanPsd/JsonFileBrowser";
 import { CheckJsonBrowser } from "../unified-viewer/UnifiedViewer";
 import { WorkflowBar } from "./WorkflowBar";
+import { SettingsButton } from "./SettingsPanel";
 
 // @ts-ignore: View tabs moved to SpecCheckView dot menu
 const _unused = [
@@ -383,6 +384,7 @@ export function TopNav() {
           ビューアー
         </button>
         <TopNavToolMenu />
+        <SettingsButton />
       </div>
 
       <div className="flex-1" />
@@ -754,6 +756,7 @@ const TOOL_MENU_TABS: { id: any; label: string }[] = [
   { id: "split", label: "見開き分割" },
   { id: "rename", label: "リネーム" },
   { id: "unifiedViewer", label: "ビューアー" },
+  { id: "folderSetup", label: "フォルダセットアップ" },
 ];
 
 const TOOL_PROGEN_MODES = [
