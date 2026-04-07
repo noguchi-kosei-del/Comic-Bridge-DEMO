@@ -279,7 +279,7 @@ function DataLoadButtons() {
       <div className="relative">
         <Btn loaded={!!kenbanPathA} label="検A" title="検A選択" clearTitle="クリア" cCls="text-blue-500 hover:bg-blue-500/15" bCls="border-blue-500/50" onLoad={() => handleKenbanLoad("A")} onClear={() => useViewStore.getState().setKenbanPathA(null)} />
         {kenbanPickMode?.side === "A" && (
-          <div className="absolute left-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[120px]">
+          <div className="absolute right-0 bottom-full mb-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[120px]">
             <button className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" onClick={() => handleKenbanPick("folder")}>フォルダ選択</button>
             <button className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" onClick={() => handleKenbanPick("file")}>ファイル選択</button>
             <button className="w-full text-left px-3 py-1 text-[9px] text-text-muted hover:text-text-primary hover:bg-bg-tertiary" onClick={() => setKenbanPickMode(null)}>キャンセル</button>
@@ -289,7 +289,7 @@ function DataLoadButtons() {
       <div className="relative">
         <Btn loaded={!!kenbanPathB} label="検B" title="検B選択" clearTitle="クリア" cCls="text-orange-500 hover:bg-orange-500/15" bCls="border-orange-500/50" onLoad={() => handleKenbanLoad("B")} onClear={() => useViewStore.getState().setKenbanPathB(null)} />
         {kenbanPickMode?.side === "B" && (
-          <div className="absolute left-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[120px]">
+          <div className="absolute right-0 bottom-full mb-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[120px]">
             <button className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" onClick={() => handleKenbanPick("folder")}>フォルダ選択</button>
             <button className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary" onClick={() => handleKenbanPick("file")}>ファイル選択</button>
             <button className="w-full text-left px-3 py-1 text-[9px] text-text-muted hover:text-text-primary hover:bg-bg-tertiary" onClick={() => setKenbanPickMode(null)}>キャンセル</button>

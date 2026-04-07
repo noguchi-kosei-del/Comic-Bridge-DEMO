@@ -3415,14 +3415,17 @@ pub async fn run_photoshop_replace(
 /// ファイルをデフォルトアプリで開く
 #[tauri::command]
 pub async fn open_with_default_app(file_path: String) -> Result<(), String> {
-    let path = Path::new(&file_path);
-    if !path.exists() {
-        return Err(format!("File not found: {}", file_path));
+    // URLの場合はファイル存在チェックをスキップ
+    if !file_path.starts_with("http://") && !file_path.starts_with("https://") {
+        let path = Path::new(&file_path);
+        if !path.exists() {
+            return Err(format!("File not found: {}", file_path));
+        }
     }
     std::process::Command::new("cmd")
         .args(["/c", "start", "", &file_path])
         .spawn()
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+        .map_err(|e| format!("Failed to open: {}", e))?;
     Ok(())
 }
 
