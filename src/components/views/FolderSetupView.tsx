@@ -133,16 +133,7 @@ export function FolderSetupView() {
     setShowSettings(false);
   };
 
-  // D&Dハンドラ
-  const makeDropHandler = (type: "new" | "sequel") => ({
-    onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); },
-    onDrop: async (e: React.DragEvent) => {
-      e.preventDefault(); e.stopPropagation();
-      // TauriのドロップはdataTransferにパスが入らないので、ダイアログで代替
-      const path = await dialogOpen({ directory: true, multiple: false, title: "フォルダ構造を取得するフォルダを選択" });
-      if (path) handleDropStructure(type, path as string);
-    },
-  });
+
 
   return (
     <div className="h-full flex flex-col bg-bg-primary overflow-auto">
