@@ -62,7 +62,7 @@ export function RequestPrepView() {
   const [proofGenre, setProofGenre] = useState("");
   const [proofLabel, setProofLabel] = useState("");
   const [proofNotationFile, setProofNotationFile] = useState("");
-  const [proofNgFile, setProofNgFile] = useState(NG_WORD_FILE);
+  const [proofNgFile] = useState(NG_WORD_FILE);
   const [labelFiles, setLabelFiles] = useState<string[]>([]);
 
   const [zipName, setZipName] = useState("");
