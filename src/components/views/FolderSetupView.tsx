@@ -105,9 +105,9 @@ export function FolderSetupView() {
         // テンプレートフォルダからコピー
         await invoke<number>("copy_folder", { source: templatePath, destination: numberFolder });
       } else {
-        // 保存済み構造からフォルダ作成
+        // 保存済み構造からフォルダ作成（.keepファイルは作成しない）
         for (const folder of structure) {
-          await invoke("write_text_file", { filePath: `${numberFolder}\\${folder}\\.keep`, content: "" });
+          await invoke("create_directory", { path: `${numberFolder}\\${folder}` });
         }
       }
 

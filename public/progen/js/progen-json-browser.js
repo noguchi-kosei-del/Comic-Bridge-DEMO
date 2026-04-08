@@ -51,7 +51,7 @@ async function startNewCreation(mode) {
 
     // 表記ルールを初期化（レーベル選択後に読み込まれる）
     state.currentProofRules = [];
-    symbolRules = [...defaultSymbolRules];
+    state.symbolRules = [...defaultSymbolRules];
 
     // 保存先はまだ未設定（JSONに保存ボタンを押したときに選択）
     state.currentJsonPath = '';

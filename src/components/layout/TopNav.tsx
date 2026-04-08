@@ -757,6 +757,7 @@ const TOOL_MENU_TABS: { id: any; label: string }[] = [
   { id: "rename", label: "リネーム" },
   { id: "unifiedViewer", label: "ビューアー" },
   { id: "folderSetup", label: "フォルダセットアップ" },
+  { id: "requestPrep", label: "依頼準備" },
 ];
 
 const TOOL_PROGEN_MODES = [

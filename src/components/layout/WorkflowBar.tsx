@@ -1,10 +1,15 @@
 import { useState } from "react";
+import { useViewStore } from "../../store/viewStore";
 
 // ═══ ワークフロー定義 ═══
 
 interface WorkflowStep {
   label: string;
   desc?: string;
+  /** 自動ナビゲーション先（AppView） */
+  nav?: string;
+  /** ProGenモード */
+  progenMode?: string;
 }
 
 interface Workflow {
@@ -14,59 +19,67 @@ interface Workflow {
   steps: WorkflowStep[];
 }
 
+// 各ステップを「開始」「終了」の2つに展開（開始にnav/progenModeを引き継ぐ）
+function expandSteps(steps: WorkflowStep[]): WorkflowStep[] {
+  const result: WorkflowStep[] = [];
+  for (const s of steps) {
+    result.push({ label: `${s.label} 開始`, desc: s.desc, nav: s.nav, progenMode: s.progenMode });
+    result.push({ label: `${s.label} 終了` });
+  }
+  return result;
+}
+
 const WORKFLOWS: Workflow[] = [
   {
     id: "ingest",
     name: "写植入稿",
     icon: "📦",
-    steps: [
-      { label: "完成原稿 読み込み", desc: "問題を検出、原稿の仕様を確認して選択" },
-      { label: "仕様を一括で修正", desc: "カラーモード・ビット深度・解像度・ガイド一括反映" },
-      { label: "ProGen テキスト整形・抽出", desc: "統一表記ルール JSON読み込み or 新規登録" },
-      { label: "Geminiで開く", desc: "結果 貼り付け" },
-      { label: "校正プロンプト", desc: "結果 貼り付け → JSON登録" },
-      { label: "テキストエディタで修正" },
-      { label: "ZIP リリース", desc: "完成原稿とテキストをZIPでまとめてリリース" },
-    ],
+    steps: expandSteps([
+      { label: "完成原稿 読み込み", desc: "問題を検出、原稿の仕様を確認して選択", nav: "specCheck" },
+      { label: "仕様を一括で修正", desc: "カラーモード・ビット深度・解像度・ガイド一括反映", nav: "specCheck" },
+      { label: "ProGen テキスト整形・抽出", desc: "統一表記ルール JSON読み込み or 新規登録", nav: "progen", progenMode: "extraction" },
+      { label: "校正プロンプト", desc: "結果 貼り付け → JSON登録", nav: "progen", progenMode: "proofreading" },
+      { label: "テキストエディタで修正", nav: "unifiedViewer" },
+      { label: "ZIP リリース", desc: "依頼準備", nav: "requestPrep" },
+    ]),
   },
   {
     id: "proof",
     name: "初校確認",
     icon: "📝",
-    steps: [
-      { label: "初校データ 読み込み", desc: "問題を検出" },
-      { label: "ビューアーで確認・修正", desc: "フォント・サイズ・白消し・AA・カーニング・フォント帳" },
-      { label: "テキスト抽出→提案チェックプロンプト作成" },
-      { label: "Geminiで開く", desc: "結果 貼り付け → JSON登録" },
+    steps: expandSteps([
+      { label: "初校データ 読み込み", desc: "問題を検出", nav: "specCheck" },
+      { label: "ビューアーで確認・修正", desc: "フォント・サイズ・白消し・AA・カーニング・フォント帳", nav: "unifiedViewer" },
+      { label: "テキスト抽出→提案チェックプロンプト作成", nav: "progen", progenMode: "proofreading" },
       { label: "Tachimiで見開きPDF作成" },
-      { label: "ZIP リリース", desc: "NGワード・統一表記表・PDFをzipにして校正依頼" },
-    ],
+      { label: "ZIP リリース", desc: "依頼準備", nav: "requestPrep" },
+    ]),
   },
   {
     id: "review",
     name: "校正確認",
     icon: "✅",
-    steps: [
+    steps: expandSteps([
       { label: "校正確認" },
       { label: "赤字は修正 書きつぎ" },
       { label: "MojiQ 逆字追加" },
       { label: "編集確認" },
-    ],
+    ]),
   },
   {
     id: "tiff",
     name: "白消しTIFF",
     icon: "🖼️",
-    steps: [
-      { label: "白消し(棒消し)差し替え", desc: "原稿読み込み" },
-      { label: "差し替え → 差分検知ビュー" },
-      { label: "TIFF化へ進む" },
-      { label: "裁ち切り位置 設定・読み込み" },
-      { label: "詳細設定", desc: "ガウス値・カラーモード・リネーム" },
-      { label: "TIFF化 実行" },
-      { label: "差分検知ビュー" },
+    steps: expandSteps([
+      { label: "白消し(棒消し)差し替え", desc: "差替え or 合成", nav: "replace" },
+      { label: "差し替え → 差分検知ビュー", nav: "unifiedViewer" },
+      { label: "TIFF化へ進む", nav: "tiff" },
+      { label: "裁ち切り位置 設定・読み込み", nav: "tiff" },
+      { label: "詳細設定", desc: "ガウス値・カラーモード・リネーム", nav: "tiff" },
+      { label: "TIFF化 実行", nav: "tiff" },
+      { label: "差分検知ビュー", nav: "unifiedViewer" },
       { label: "TIFF格納" },
-    ],
+    ]),
   },
 ];
 
@@ -77,18 +90,33 @@ export function WorkflowBar() {
   const [activeWorkflow, setActiveWorkflow] = useState<Workflow | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
 
+  // ステップのナビゲーションを実行
+  const executeStepNav = (step: WorkflowStep) => {
+    if (!step.nav) return;
+    const vs = useViewStore.getState();
+    if (step.progenMode) {
+      vs.setProgenMode(step.progenMode as any);
+    }
+    vs.setActiveView(step.nav as any);
+  };
+
   const handleSelect = (wf: Workflow) => {
     setActiveWorkflow(wf);
     setCurrentStep(0);
     setShowPicker(false);
+    // 最初のステップのnavを実行
+    if (wf.steps[0]?.nav) executeStepNav(wf.steps[0]);
   };
 
   const handleAdvance = () => {
     if (!activeWorkflow) return;
     if (currentStep < activeWorkflow.steps.length - 1) {
-      setCurrentStep(currentStep + 1);
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
+      // 次のステップのnavを実行
+      const step = activeWorkflow.steps[nextStep];
+      if (step?.nav) executeStepNav(step);
     } else {
-      // 最終ステップ → 完了 → リセット
       setActiveWorkflow(null);
       setCurrentStep(0);
     }
@@ -162,10 +190,14 @@ export function WorkflowBar() {
         {currentStep + 1}/{activeWorkflow.steps.length}
       </span>
 
-      {/* 現在のステップ（クリックで次へ） */}
+      {/* 現在のステップ（クリックで次へ）— 開始=青系、終了=緑系 */}
       <button
         onClick={handleAdvance}
-        className="flex items-center gap-1 px-2 py-1 rounded-md bg-accent/10 hover:bg-accent/20 text-accent text-[10px] font-medium transition-colors cursor-pointer max-w-[280px]"
+        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-colors cursor-pointer max-w-[280px] ${
+          step.label.endsWith("終了")
+            ? "bg-success/10 hover:bg-success/20 text-success"
+            : "bg-accent/10 hover:bg-accent/20 text-accent"
+        }`}
         title={step.desc ? `${step.label} — ${step.desc}` : step.label}
       >
         <span className="truncate">{step.label}</span>

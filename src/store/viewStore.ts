@@ -13,7 +13,8 @@ export type AppView =
   | "kenban"
   | "progen"
   | "unifiedViewer"
-  | "folderSetup";
+  | "folderSetup"
+  | "requestPrep";
 
 export type ProgenMode = "extraction" | "formatting" | "proofreading" | null;
 

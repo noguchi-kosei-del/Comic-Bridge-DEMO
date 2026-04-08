@@ -484,6 +484,11 @@ export function FileContextMenu({
         },
       ],
     },
+    {
+      label: "圧縮",
+      icon: "📦",
+      onClick: () => navigateTo("requestPrep" as any),
+    },
     { separator: true, label: "sep3" },
     {
       label: "読み込み",

@@ -2876,6 +2876,84 @@ pub async fn delete_file(file_path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Create a directory (and all parent directories)
+#[tauri::command]
+pub async fn create_directory(path: String) -> Result<(), String> {
+    fs::create_dir_all(&path).map_err(|e| format!("Failed to create directory: {}", e))
+}
+
+/// Create a ZIP file from multiple source paths (files and folders)
+#[tauri::command]
+pub async fn create_zip(
+    output_dir: String,
+    zip_name: String,
+    source_paths: Vec<String>,
+) -> Result<String, String> {
+    use std::io::{Read, Write};
+
+    let zip_path = Path::new(&output_dir).join(format!("{}.zip", zip_name));
+    let file = fs::File::create(&zip_path)
+        .map_err(|e| format!("Failed to create ZIP: {}", e))?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    fn add_dir_to_zip(
+        zip: &mut zip::ZipWriter<fs::File>,
+        dir_path: &Path,
+        prefix: &str,
+        options: zip::write::SimpleFileOptions,
+    ) -> Result<(), String> {
+        let entries = fs::read_dir(dir_path)
+            .map_err(|e| format!("Failed to read dir: {}", e))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Entry error: {}", e))?;
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            let zip_name = if prefix.is_empty() { name.clone() } else { format!("{}/{}", prefix, name) };
+
+            if path.is_dir() {
+                add_dir_to_zip(zip, &path, &zip_name, options)?;
+            } else if path.is_file() {
+                let mut buf = Vec::new();
+                let mut f = fs::File::open(&path)
+                    .map_err(|e| format!("Failed to open: {}", e))?;
+                f.read_to_end(&mut buf)
+                    .map_err(|e| format!("Failed to read: {}", e))?;
+                zip.start_file(&zip_name, options)
+                    .map_err(|e| format!("ZIP start_file error: {}", e))?;
+                zip.write_all(&buf)
+                    .map_err(|e| format!("ZIP write error: {}", e))?;
+            }
+        }
+        Ok(())
+    }
+
+    for source in &source_paths {
+        let src = Path::new(source);
+        if !src.exists() { continue; }
+
+        if src.is_file() {
+            let name = src.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let mut buf = Vec::new();
+            let mut f = fs::File::open(src)
+                .map_err(|e| format!("Failed to open: {}", e))?;
+            f.read_to_end(&mut buf)
+                .map_err(|e| format!("Failed to read: {}", e))?;
+            zip.start_file(&name, options)
+                .map_err(|e| format!("ZIP start_file error: {}", e))?;
+            zip.write_all(&buf)
+                .map_err(|e| format!("ZIP write error: {}", e))?;
+        } else if src.is_dir() {
+            let dir_name = src.file_name().unwrap_or_default().to_string_lossy().to_string();
+            add_dir_to_zip(&mut zip, src, &dir_name, options)?;
+        }
+    }
+
+    zip.finish().map_err(|e| format!("ZIP finish error: {}", e))?;
+    Ok(zip_path.to_string_lossy().to_string())
+}
+
 /// Copy a folder recursively to a destination
 #[tauri::command]
 pub async fn copy_folder(source: String, destination: String) -> Result<u32, String> {
