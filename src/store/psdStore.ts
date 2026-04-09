@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import type { PsdFile, ViewMode, ThumbnailSize } from "../types";
 
+export type FileOpsUndoEntry =
+  | { type: "delete" | "duplicate" | "cut"; backupPath: string; originalPath: string }
+  | { type: "rename"; entries: { oldPath: string; newPath: string }[] };
+
 interface PsdStore {
   // File state
   files: PsdFile[];
@@ -22,6 +26,9 @@ interface PsdStore {
   fileTypeFilter: "all" | "psd" | "pdf" | "image" | "text";
   pdfDisplayMode: "page" | "file"; // page=ページごと展開, file=ファイル単位
   contentLocked: boolean; // 中央画面ロック（アドレス変更時にファイルリストを保持）
+  refreshCounter: number; // folderContents再取得用トリガー
+  /** ファイル操作Undoスタック */
+  fileOpsUndoStack: FileOpsUndoEntry[];
 
   // Actions
   setFiles: (files: PsdFile[]) => void;
@@ -53,6 +60,9 @@ interface PsdStore {
   setFileTypeFilter: (v: "all" | "psd" | "pdf" | "image" | "text") => void;
   setPdfDisplayMode: (mode: "page" | "file") => void;
   setContentLocked: (locked: boolean) => void;
+  triggerRefresh: () => void;
+  pushFileOpsUndo: (op: FileOpsUndoEntry) => void;
+  popFileOpsUndo: () => FileOpsUndoEntry | undefined;
 
   // Helpers
   getSelectedFiles: () => PsdFile[];
@@ -76,6 +86,8 @@ export const usePsdStore = create<PsdStore>((set, get) => ({
   fileTypeFilter: "all" as const,
   pdfDisplayMode: "page",
   contentLocked: false,
+  refreshCounter: 0,
+  fileOpsUndoStack: [],
 
   // File actions
   setFiles: (files) => set({ files, selectedFileIds: [], activeFileId: null }),
@@ -175,6 +187,15 @@ export const usePsdStore = create<PsdStore>((set, get) => ({
   setFileTypeFilter: (fileTypeFilter) => set({ fileTypeFilter, psdOnlyFilter: fileTypeFilter === "psd" }),
   setPdfDisplayMode: (pdfDisplayMode) => set({ pdfDisplayMode }),
   setContentLocked: (contentLocked) => set({ contentLocked }),
+  triggerRefresh: () => set((s) => ({ refreshCounter: s.refreshCounter + 1 })),
+  pushFileOpsUndo: (op) => set((s) => ({ fileOpsUndoStack: [...s.fileOpsUndoStack.slice(-9), op] })),
+  popFileOpsUndo: () => {
+    const stack = get().fileOpsUndoStack;
+    if (stack.length === 0) return undefined;
+    const op = stack[stack.length - 1];
+    set({ fileOpsUndoStack: stack.slice(0, -1) });
+    return op;
+  },
 
   // Helpers
   getSelectedFiles: () => {

@@ -297,7 +297,7 @@ export function JsonFileBrowser({ basePath, onSelect, onCancel, mode, defaultFil
                 {contents.folders.map((folder) => (
                   <button
                     key={folder}
-                    onClick={() => navigateToFolder(folder)}
+                    onDoubleClick={() => navigateToFolder(folder)}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left
                       hover:bg-bg-tertiary transition-colors group"
                   >

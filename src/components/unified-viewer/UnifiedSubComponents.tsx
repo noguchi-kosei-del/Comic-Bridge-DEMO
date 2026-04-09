@@ -306,14 +306,14 @@ export function CheckJsonBrowser({ onSelect, onCancel }: { onSelect: (path: stri
         {step === "label" && (labels.length === 0 ? (
           <p className="p-4 text-xs text-text-muted text-center">レーベルフォルダがありません</p>
         ) : labels.map((label) => (
-          <div key={label} className="px-3 py-2 text-xs cursor-pointer hover:bg-bg-tertiary transition-colors flex items-center gap-2" onClick={() => selectLabel(label)}>
+          <div key={label} className="px-3 py-2 text-xs cursor-pointer hover:bg-bg-tertiary transition-colors flex items-center gap-2" onDoubleClick={() => selectLabel(label)}>
             <span className="text-accent-secondary">📁</span><span className="text-text-primary">{label}</span>
           </div>
         )))}
         {step === "title" && (titles.length === 0 ? (
           <p className="p-4 text-xs text-text-muted text-center">タイトルフォルダがありません</p>
         ) : titles.map((title) => (
-          <div key={title} className="px-3 py-2 text-xs cursor-pointer hover:bg-bg-tertiary transition-colors flex items-center gap-2" onClick={() => selectTitle(title)}>
+          <div key={title} className="px-3 py-2 text-xs cursor-pointer hover:bg-bg-tertiary transition-colors flex items-center gap-2" onDoubleClick={() => selectTitle(title)}>
             <span className="text-accent-secondary">📁</span><span className="text-text-primary">{title}</span>
           </div>
         )))}

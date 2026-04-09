@@ -90,7 +90,7 @@ export function RequestPrepView() {
       const jp = scanJsonPath || presetJsonPath || "";
       if (jp) title = (jp.replace(/\\/g, "/").split("/").pop() || "").replace(/\.json$/i, "");
     }
-    const vol = detectedVolume || (scanWorkInfo.volume ? String(scanWorkInfo.volume) : "1");
+    const vol = detectedVolume || "1";
     if (genre || title) setZipName(`${yyyymmdd}_${genre || "ジャンル"}_${title || "タイトル"}_${vol}巻`);
     else setZipName(`${yyyymmdd}_依頼データ`);
   }, [scanWorkInfo, scanJsonPath, presetJsonPath, detectedVolume, items]);

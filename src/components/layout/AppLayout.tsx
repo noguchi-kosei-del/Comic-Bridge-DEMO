@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect } from "react";
 import { TopNav } from "./TopNav";
 import { GlobalAddressBar } from "./GlobalAddressBar";
 import { ViewRouter } from "./ViewRouter";
@@ -115,6 +115,49 @@ export function AppLayout() {
 
       {/* Photoshop変換完了トースト */}
       <ConversionToast />
+
+      {/* グローバルPromptダイアログ */}
+      <GlobalPromptDialog />
+    </div>
+  );
+}
+
+function GlobalPromptDialog() {
+  const promptDialog = useViewStore((s) => s.promptDialog);
+  const [value, setValue] = React.useState("");
+
+  React.useEffect(() => {
+    if (promptDialog) setValue(promptDialog.defaultValue);
+  }, [promptDialog]);
+
+  if (!promptDialog) return null;
+
+  const handleOk = () => {
+    promptDialog.resolve(value);
+    useViewStore.setState({ promptDialog: null });
+  };
+  const handleCancel = () => {
+    promptDialog.resolve(null);
+    useViewStore.setState({ promptDialog: null });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" onClick={handleCancel}>
+      <div className="bg-bg-secondary border border-border rounded-2xl p-5 shadow-xl w-[340px] space-y-3" onClick={(e) => e.stopPropagation()}>
+        <p className="text-xs text-text-primary font-medium">{promptDialog.message}</p>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleOk(); if (e.key === "Escape") handleCancel(); }}
+          autoFocus
+          className="w-full text-xs px-3 py-2 bg-bg-primary border border-border/50 rounded-lg text-text-primary outline-none focus:border-accent/50 font-mono"
+        />
+        <div className="flex gap-2">
+          <button onClick={handleCancel} className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors">キャンセル</button>
+          <button onClick={handleOk} className="flex-1 px-3 py-2 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 transition-colors">OK</button>
+        </div>
+      </div>
     </div>
   );
 }

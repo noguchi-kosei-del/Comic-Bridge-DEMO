@@ -58,7 +58,7 @@ export function PreviewGrid({ fileFilter, fileSorter, onDoubleClickFile }: { fil
   return (
     <div className="h-full overflow-auto p-4 select-none" data-preview-grid>
       <div
-        className="grid gap-3"
+        className="grid gap-9"
         style={{
           gridTemplateColumns: `repeat(auto-fill, minmax(${size}px, ${Math.round(size * 1.3)}px))`,
         }}

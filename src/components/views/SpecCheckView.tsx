@@ -27,7 +27,7 @@ import { TextExtractButton } from "../common/TextExtractButton";
 import { useTextExtract } from "../../hooks/useTextExtract";
 import { useHighResPreview } from "../../hooks/useHighResPreview";
 import { detectPaperSize } from "../../lib/paperSize";
-import { useViewStore, type AppView } from "../../store/viewStore";
+import { useViewStore, showPromptDialog, type AppView } from "../../store/viewStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 // useScanPsdStore は SpecScanJsonDialog 内で使用
@@ -62,7 +62,7 @@ export function SpecCheckView() {
   const setViewMode = usePsdStore((s) => s.setSpecViewMode);
   const [tachimiError, setTachimiError] = useState<string | null>(null);
   const [showPreviewPanel, setShowPreviewPanel] = useState(true);
-  const [rightPanelMode, setRightPanelMode] = useState<"preview" | "create" | "action">("preview");
+  const [rightPanelMode, setRightPanelMode] = useState<"preview" | "action">("preview");
   const [showScanJsonInPanel, setShowScanJsonInPanel] = useState(false);
   const [showTextExtractInPanel, setShowTextExtractInPanel] = useState(false);
   const textExtract = useTextExtract();
@@ -104,6 +104,8 @@ export function SpecCheckView() {
 
   // Selected text file
   const [selectedTextFile, setSelectedTextFile] = useState<{ name: string; path: string; content: string } | null>(null);
+  // Selected non-PSD item (folder or txt/json) for highlight
+  const [selectedNonPsdItem, setSelectedNonPsdItem] = useState<string | null>(null);
 
   // Address bar & explorer
   const currentFolderPath = usePsdStore((state) => state.currentFolderPath);
@@ -120,7 +122,7 @@ export function SpecCheckView() {
   const { isPhotoshopInstalled, isConverting } = usePhotoshopConverter();
   const { isProcessing, prepareFiles } = usePreparePsd();
   const { openFileInPhotoshop } = useOpenInPhotoshop();
-  const { openFolderForFile, revealFiles } = useOpenFolder();
+  const { revealFiles } = useOpenFolder();
   const { outlierFileIds } = useCanvasSizeCheck();
   usePageNumberCheck();
 
@@ -139,11 +141,16 @@ export function SpecCheckView() {
   }, []);
 
   const contentLocked = usePsdStore((s) => s.contentLocked);
+  const refreshCounter = usePsdStore((s) => s.refreshCounter);
 
-  // Load explorer on folder change (skip when locked)
+  // Load explorer on folder change, or when refresh is triggered
   useEffect(() => {
-    if (currentFolderPath && !contentLocked) loadExplorerContents(currentFolderPath);
-  }, [currentFolderPath, loadExplorerContents, contentLocked]);
+    if (currentFolderPath) {
+      loadExplorerContents(currentFolderPath);
+    } else {
+      setFolderContents(null);
+    }
+  }, [currentFolderPath, loadExplorerContents, refreshCounter]);
 
   const setCurrentFolderPath = usePsdStore((state) => state.setCurrentFolderPath);
 
@@ -373,6 +380,39 @@ export function SpecCheckView() {
     });
   }, [sortedFiles, fileTypeFilter]);
 
+  // Ctrl+Z: ファイル操作Undo
+  useEffect(() => {
+    const handler = async (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "z" && !e.shiftKey) {
+        // テキスト入力中はスキップ
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        const op = usePsdStore.getState().popFileOpsUndo();
+        if (!op) return;
+        e.preventDefault();
+        try {
+          if (op.type === "delete" || op.type === "cut") {
+            await invoke("restore_from_backup", { backupPath: op.backupPath, originalPath: op.originalPath });
+          } else if (op.type === "duplicate") {
+            await invoke("delete_file", { filePath: op.originalPath });
+          } else if (op.type === "rename") {
+            // リネームを逆順で元に戻す（一括で1操作）
+            const reverseEntries = op.entries.map((e) => ({
+              sourcePath: e.newPath,
+              newName: e.oldPath.substring(e.oldPath.lastIndexOf("\\") + 1),
+            }));
+            await invoke("batch_rename_files", { entries: reverseEntries, outputDirectory: null, mode: "overwrite" });
+          }
+          const folder = usePsdStore.getState().currentFolderPath;
+          if (folder) await loadFolder(folder);
+          usePsdStore.getState().triggerRefresh();
+        } catch { /* ignore */ }
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [loadFolder]);
+
   // Expanded preview: focus overlay for keyboard, navigate with arrow keys / Esc
   useEffect(() => {
     if (expandedFile) {
@@ -409,24 +449,41 @@ export function SpecCheckView() {
           <div className="w-[320px] flex-shrink-0 border-r border-border overflow-hidden flex flex-col bg-bg-secondary">
             {activeFile ? (
               <>
-                {/* Header */}
+                {/* フォルダ階層ツリー */}
+                <FolderBreadcrumbTree currentPath={currentFolderPath || desktopPath} onNavigate={(path) => {
+                  if (usePsdStore.getState().contentLocked) return;
+                  usePsdStore.getState().setCurrentFolderPath(path);
+                  loadFolder(path).catch(() => {});
+                }} />
+
+                {/* ファイル名ヘッダー（ダブルクリックでリネーム） */}
                 <div className="px-3 py-2 border-b border-border flex items-center gap-2 flex-shrink-0">
-                  <div className="w-5 h-5 rounded-md bg-accent-secondary/20 flex items-center justify-center flex-shrink-0">
-                    <svg
-                      className="w-3 h-3 text-accent-secondary"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                  </div>
-                  <span className="text-xs font-medium text-text-primary truncate flex-1">
+                  <span
+                    className="text-xs font-medium text-text-primary truncate flex-1 cursor-text hover:bg-bg-tertiary/50 rounded px-1 -mx-1 transition-colors"
+                    title="ダブルクリックでリネーム"
+                    onDoubleClick={async () => {
+                      if (!activeFile.filePath) return;
+                      const newName = await showPromptDialog("新しいファイル名", activeFile.fileName);
+                      if (!newName || newName === activeFile.fileName) return;
+                      const dir = activeFile.filePath.substring(0, activeFile.filePath.lastIndexOf("\\"));
+                      try {
+                        await invoke("invalidate_file_cache", { filePath: activeFile.filePath }).catch(() => {});
+                        await invoke("clear_psd_cache").catch(() => {});
+                        await invoke("batch_rename_files", {
+                          entries: [{ sourcePath: activeFile.filePath, newName: newName }],
+                          outputDirectory: null,
+                          mode: "overwrite",
+                        });
+                        usePsdStore.getState().pushFileOpsUndo({
+                          type: "rename",
+                          entries: [{ oldPath: activeFile.filePath, newPath: `${dir}\\${newName}` }],
+                        });
+                      } catch { /* ignore */ }
+                      const folder = usePsdStore.getState().currentFolderPath;
+                      if (folder) await loadFolder(folder);
+                      usePsdStore.getState().triggerRefresh();
+                    }}
+                  >
                     {activeFile.fileName}
                   </span>
                   {activeFile.filePath && (
@@ -439,27 +496,13 @@ export function SpecCheckView() {
                             .filter((p): p is string => !!p);
                           revealFiles(paths);
                         } else {
-                          openFolderForFile(activeFile.filePath);
+                          invoke("open_folder_in_explorer", { folderPath: currentFolderPath || activeFile.filePath.substring(0, activeFile.filePath.lastIndexOf("\\")) }).catch(() => {});
                         }
                       }}
-                      title={
-                        selectedFileIds.length > 1
-                          ? `${selectedFileIds.length}件をエクスプローラーで選択 (F)`
-                          : "フォルダを開く (F)"
-                      }
+                      title="フォルダを開く (F)"
                     >
-                      <svg
-                        className="w-3.5 h-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                        />
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                       </svg>
                     </button>
                   )}
@@ -473,13 +516,6 @@ export function SpecCheckView() {
                     </button>
                   )}
                 </div>
-
-                {/* ファイル階層ツリー（常時表示、未選択時はデスクトップ） */}
-                <FolderBreadcrumbTree currentPath={currentFolderPath || desktopPath} onNavigate={(path) => {
-                  usePsdStore.getState().setContentLocked(false);
-                  usePsdStore.getState().setCurrentFolderPath(path);
-                  loadFolder(path).catch(() => {});
-                }} />
 
                 {/* Content */}
                 <div className="flex-1 overflow-auto">
@@ -496,17 +532,17 @@ export function SpecCheckView() {
                       </>
                     );
                   })()}
-                  <div className="p-3 border-b border-border">
+                  <CollapsibleSidebarSection title="ガイド線" icon={<svg className="w-3.5 h-3.5 text-guide-v" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M3 20h18M4 3v18M20 3v18" /></svg>}>
                     <GuideSectionPanel file={activeFile} />
-                  </div>
+                  </CollapsibleSidebarSection>
                   <MetadataPanel file={activeFile} />
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center">
+              <div className="flex-1 overflow-auto">
                 {/* フォルダ階層ツリー（ファイル未選択時） */}
                 <FolderBreadcrumbTree currentPath={currentFolderPath || desktopPath} onNavigate={(path) => {
-                  usePsdStore.getState().setContentLocked(false);
+                  if (usePsdStore.getState().contentLocked) return;
                   usePsdStore.getState().setCurrentFolderPath(path);
                   loadFolder(path).catch(() => {});
                 }} />
@@ -518,26 +554,9 @@ export function SpecCheckView() {
         {/* ═══ CENTER COLUMN ═══ */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-          {/* Bar 1: View mode + Dot menu (right) */}
+          {/* Bar 1: View controls */}
           <div className="flex-shrink-0 px-2 py-1 bg-bg-secondary border-b border-border/40 flex items-center gap-2">
             <div className="flex bg-bg-elevated rounded-md p-0.5 border border-white/5 flex-shrink-0">
-              {([
-                { id: "thumbnails" as const, label: "プレビュー" },
-                { id: "layers" as const, label: "レイヤー構造" },
-                // layerCheck（レイヤー分離確認）は隔離中 — 統合完了後に削除予定
-              ]).map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setViewMode(m.id)}
-                  className={`px-2 py-0.5 text-[10px] rounded transition-all ${
-                    viewMode === m.id || (m.id === "thumbnails" && viewMode === "list")
-                      ? "bg-bg-tertiary text-text-primary font-medium shadow-sm"
-                      : "text-text-muted hover:text-text-secondary"
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
             </div>
             <div className="flex-1" />
             {/* ドットメニューはGlobalAddressBarに移動済み */}
@@ -714,6 +733,7 @@ export function SpecCheckView() {
                 if (nextIdx !== currentIdx) usePsdStore.getState().selectFile(list[nextIdx].id);
               }
             }}
+            onClick={() => { if (selectedNonPsdItem) setSelectedNonPsdItem(null); }}
             onContextMenu={(e) => {
               e.preventDefault();
               setContextMenu({ x: e.clientX, y: e.clientY });
@@ -782,20 +802,37 @@ export function SpecCheckView() {
               {/* Folders always shown */}
               {folderContents && folderContents.folders.length > 0 && (
                 <div className={`flex flex-wrap gap-2 px-4 pt-3 pb-1 ${!hasFiles ? "gap-3" : ""}`}>
-                  {folderContents.folders.map((folder) => (
+                  {folderContents.folders.map((folder) => {
+                    const isFolderSelected = selectedNonPsdItem === `folder:${folder}`;
+                    return (
                     <div
                       key={`d-${folder}`}
-                      className={`flex items-center gap-1.5 rounded-lg bg-bg-tertiary/50 hover:bg-bg-tertiary cursor-pointer transition-colors ${
+                      className={`flex items-center gap-1.5 rounded-lg cursor-pointer transition-colors ${
                         hasFiles ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm"
-                      }`}
-                      onClick={() => handleEnterFolder(folder)}
+                      } ${isFolderSelected ? "bg-sky-100 ring-1 ring-sky-400/50" : "bg-bg-tertiary/50 hover:bg-bg-tertiary"}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedNonPsdItem(`folder:${folder}`);
+                        setSelectedTextFile(null);
+                        usePsdStore.getState().clearSelection();
+                      }}
+                      onDoubleClick={() => handleEnterFolder(folder)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedNonPsdItem(`folder:${folder}`);
+                        setSelectedTextFile(null);
+                        usePsdStore.getState().clearSelection();
+                        setContextMenu({ x: e.clientX, y: e.clientY });
+                      }}
                     >
                       <svg className={`text-warning/70 flex-shrink-0 ${hasFiles ? "w-3.5 h-3.5" : "w-5 h-5"}`} viewBox="0 0 24 24" fill="currentColor">
                         <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
                       </svg>
                       <span className="text-text-primary truncate">{folder}</span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               {/* Non-PSD files (txt, json, etc.) — 全て or テキストフィルタ時に表示 */}
@@ -814,11 +851,26 @@ export function SpecCheckView() {
                   {nonPsdFiles.map((file) => {
                     const color = getFileIconColor(file);
                     const ext = getFileExt(file);
+                    const isSelected = selectedNonPsdItem === `file:${file}`;
                     return (
                       <div
                         key={`f-${file}`}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-bg-tertiary/30 hover:bg-bg-tertiary cursor-pointer transition-colors text-sm"
-                        onDoubleClick={() => handleOpenFile(file)}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer transition-colors text-sm ${
+                          isSelected ? "bg-sky-100 ring-1 ring-sky-400/50" : "bg-bg-tertiary/30 hover:bg-bg-tertiary"
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedNonPsdItem(`file:${file}`);
+                          usePsdStore.getState().clearSelection();
+                          handleOpenFile(file);
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          if (!selectedTextFile || selectedTextFile.name !== file) handleOpenFile(file);
+                          setSelectedNonPsdItem(`file:${file}`);
+                          usePsdStore.getState().clearSelection();
+                          setContextMenu({ x: e.clientX, y: e.clientY });
+                        }}
                         title={file}
                       >
                         <div className="w-5 h-5 rounded-sm flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0" style={{ backgroundColor: color }}>
@@ -877,7 +929,7 @@ export function SpecCheckView() {
                 folders={folderContents?.folders || []}
                 allFiles={fileTypeFilter !== "all" ? [] : (folderContents?.allFiles || [])}
                 onEnterFolder={handleEnterFolder}
-                onSelectFile={(id) => { usePsdStore.getState().selectFile(id); setSelectedTextFile(null); }}
+                onSelectFile={(id) => { usePsdStore.getState().selectFile(id); setSelectedTextFile(null); setSelectedNonPsdItem(null); }}
                 onOpenFile={(id) => {
                   const f = files.find((ff) => ff.filePath === id || ff.id === id);
                   if (f) setExpandedFile(f);
@@ -1066,7 +1118,6 @@ export function SpecCheckView() {
             <div className="flex-shrink-0 flex border-b border-border/50 text-[10px]">
               {([
                 { id: "preview" as const, label: "プレビュー" },
-                { id: "create" as const, label: "作成" },
                 { id: "action" as const, label: "アクション" },
               ]).map((m) => (
                 <button
@@ -1163,21 +1214,23 @@ export function SpecCheckView() {
                 ロック中
               </div>
             )}
-            {/* Preview image — 全モードで表示 */}
-            {previewFile ? (
-              <div className="flex-1 min-h-0 cursor-pointer overflow-hidden" onDoubleClick={() => setExpandedFile(previewFile)} title="ダブルクリックで拡大">
-                <FilePreviewImage file={previewFile} />
-              </div>
-            ) : previewText ? (
-              <div className="flex-1 min-h-0 overflow-auto p-3 bg-white">
-                <pre className="text-xs font-mono text-black whitespace-pre-wrap leading-relaxed">
-                  {previewText.content}
-                </pre>
-              </div>
-            ) : (
-              <div className="flex-1 flex items-center justify-center bg-[#1a1a1e] text-text-muted/30 text-xs">
-                ファイルを選択
-              </div>
+            {/* Preview image — プレビューモード時のみ表示 */}
+            {rightPanelMode === "preview" && (
+              previewFile ? (
+                <div className="flex-1 min-h-0 cursor-pointer overflow-hidden" onDoubleClick={() => setExpandedFile(previewFile)} title="ダブルクリックで拡大">
+                  <FilePreviewImage file={previewFile} />
+                </div>
+              ) : previewText ? (
+                <div className="flex-1 min-h-0 overflow-auto p-3 bg-white">
+                  <pre className="text-xs font-mono text-black whitespace-pre-wrap leading-relaxed">
+                    {previewText.content}
+                  </pre>
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center bg-[#1a1a1e] text-text-muted/30 text-xs">
+                  ファイルを選択
+                </div>
+              )
             )}
             {/* File Properties Panel — プレビュータブ時のみ */}
             {rightPanelMode === "preview" && previewFile && (
@@ -1200,35 +1253,7 @@ export function SpecCheckView() {
                 </div>
               </div>
             )}
-            {/* === 作成モード === */}
-            {rightPanelMode === "create" && (
-              <div className="flex-shrink-0 overflow-auto max-h-[45%] p-3 space-y-2 border-t border-border/30">
-                <button
-                  onClick={() => {
-                    const vs = useViewStore.getState();
-                    vs.setActiveView("scanPsd");
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-lg bg-bg-tertiary hover:bg-accent/10 hover:text-accent transition-colors"
-                >
-                  <span className="text-lg">📊</span>
-                  <div className="text-left"><div className="font-medium">スキャナーモード</div><div className="text-[9px] text-text-muted">PSDスキャン・プリセット管理</div></div>
-                </button>
-                <button
-                  onClick={() => setShowTextExtractInPanel(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-lg bg-bg-tertiary hover:bg-accent/10 hover:text-accent transition-colors"
-                >
-                  <span className="text-lg">📝</span>
-                  <div className="text-left"><div className="font-medium">テキスト抽出</div><div className="text-[9px] text-text-muted">PSDテキストレイヤーを抽出</div></div>
-                </button>
-                <button
-                  onClick={() => setShowScanJsonInPanel(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-lg bg-bg-tertiary hover:bg-accent/10 hover:text-accent transition-colors"
-                >
-                  <span className="text-lg">📋</span>
-                  <div className="text-left"><div className="font-medium">JSON登録</div><div className="text-[9px] text-text-muted">PSDスキャン→フォント/サイズをJSONに登録</div></div>
-                </button>
-              </div>
-            )}
+            {/* === 作成モード — アクション統合時に非表示 === */}
             {/* JSON登録（SpecScanJsonDialog）— 右パネル内表示 */}
             {showScanJsonInPanel && (
               <div className="absolute inset-0 z-40 bg-white flex flex-col overflow-hidden">
@@ -1342,24 +1367,48 @@ export function SpecCheckView() {
                 </div>
               </div>
             )}
-            {/* === アクションモード === */}
+            {/* === アクションモード（作成+アクション統合） === */}
             {rightPanelMode === "action" && (
-              <div className="flex-shrink-0 overflow-auto max-h-[45%] p-3 space-y-2 border-t border-border/30">
-                {([
-                  { id: "replace" as AppView, icon: "🔄", label: "差替え", desc: "テキスト/画像レイヤー差替え" },
-                  { id: "compose" as AppView, icon: "🔗", label: "合成", desc: "2つのPSDを統合" },
-                  { id: "tiff" as AppView, icon: "🖼️", label: "TIFF化", desc: "PSD→TIFF一括変換" },
-                  { id: "rename" as AppView, icon: "✏️", label: "リネーム", desc: "ファイル/レイヤーリネーム" },
-                ]).map((action) => (
-                  <button
-                    key={action.id}
-                    onClick={() => useViewStore.getState().setActiveView(action.id)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-lg bg-bg-tertiary hover:bg-accent/10 hover:text-accent transition-colors"
-                  >
-                    <span className="text-lg">{action.icon}</span>
-                    <div className="text-left"><div className="font-medium">{action.label}</div><div className="text-[9px] text-text-muted">{action.desc}</div></div>
-                  </button>
-                ))}
+              <div className="flex-1 overflow-auto p-3 space-y-3">
+                {/* 作成 */}
+                <div>
+                  <div className="text-[9px] text-text-muted font-medium mb-1.5 px-1">作成</div>
+                  <div className="space-y-1.5">
+                    <button onClick={() => useViewStore.getState().setActiveView("scanPsd")}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-lg bg-bg-tertiary hover:bg-accent/10 hover:text-accent transition-colors">
+                      <span className="text-lg">📊</span>
+                      <div className="text-left"><div className="font-medium">スキャナー</div><div className="text-[9px] text-text-muted">PSDスキャン・プリセット管理</div></div>
+                    </button>
+                    <button onClick={() => setShowTextExtractInPanel(true)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-lg bg-bg-tertiary hover:bg-accent/10 hover:text-accent transition-colors">
+                      <span className="text-lg">📝</span>
+                      <div className="text-left"><div className="font-medium">テキスト抽出</div><div className="text-[9px] text-text-muted">PSDテキストレイヤーを抽出</div></div>
+                    </button>
+                    <button onClick={() => setShowScanJsonInPanel(true)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-lg bg-bg-tertiary hover:bg-accent/10 hover:text-accent transition-colors">
+                      <span className="text-lg">📋</span>
+                      <div className="text-left"><div className="font-medium">JSON登録</div><div className="text-[9px] text-text-muted">フォント/サイズをJSONに登録</div></div>
+                    </button>
+                  </div>
+                </div>
+                {/* アクション */}
+                <div>
+                  <div className="text-[9px] text-text-muted font-medium mb-1.5 px-1">アクション</div>
+                  <div className="space-y-1.5">
+                    {([
+                      { id: "replace" as AppView, icon: "🔄", label: "差替え", desc: "テキスト/画像レイヤー差替え" },
+                      { id: "compose" as AppView, icon: "🔗", label: "合成", desc: "2つのPSDを統合" },
+                      { id: "tiff" as AppView, icon: "🖼️", label: "TIFF化", desc: "PSD→TIFF一括変換" },
+                      { id: "rename" as AppView, icon: "✏️", label: "リネーム", desc: "ファイル/レイヤーリネーム" },
+                    ]).map((action) => (
+                      <button key={action.id} onClick={() => useViewStore.getState().setActiveView(action.id)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] rounded-lg bg-bg-tertiary hover:bg-accent/10 hover:text-accent transition-colors">
+                        <span className="text-lg">{action.icon}</span>
+                        <div className="text-left"><div className="font-medium">{action.label}</div><div className="text-[9px] text-text-muted">{action.desc}</div></div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1392,6 +1441,9 @@ export function SpecCheckView() {
           allFiles={files}
           onClose={() => setContextMenu(null)}
           onLaunchTachimi={handleLaunchTachimi}
+          previewText={previewLocked ? lockedTextFile : selectedTextFile}
+          selectedNonPsdItem={selectedNonPsdItem}
+          currentFolderPath={currentFolderPath}
         />
       )}
     </div>
@@ -1600,7 +1652,7 @@ function PsdFileListView({
             <div
               key={`d-${folder}`}
               className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-bg-tertiary transition-colors"
-              onClick={() => onEnterFolder(folder)}
+              onDoubleClick={() => onEnterFolder(folder)}
             >
               <svg className="w-4 h-4 text-warning/70 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
@@ -1742,8 +1794,7 @@ function PsdFileListView({
                 <div
                   key={`ext-${file}`}
                   className="flex items-center gap-2 px-3 py-1.5 text-[11px] cursor-pointer hover:bg-bg-tertiary transition-colors"
-                  onClick={isTxt ? () => onOpenExternalFile?.(file) : undefined}
-                  onDoubleClick={!isTxt ? () => onOpenExternalFile?.(file) : undefined}
+                  onClick={() => onOpenExternalFile?.(file)}
                   title={file}
                 >
                   <div className="w-4 h-4 rounded-sm flex items-center justify-center text-white text-[7px] font-bold flex-shrink-0" style={{ backgroundColor: color }}>
@@ -1826,6 +1877,23 @@ function PdfModeButton() {
   );
 }
 
+/** 左サイドバー折りたたみセクション */
+function CollapsibleSidebarSection({ title, icon, children, defaultOpen = true }: { title: string; icon?: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-border">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-1.5 px-3 py-2 text-[10px] text-text-muted hover:text-text-primary">
+        {icon}
+        <span className="text-xs font-medium flex-1">{title}</span>
+        <svg className={`w-3 h-3 transition-transform flex-shrink-0 ${open ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+      {open && <div className="px-3 pb-3">{children}</div>}
+    </div>
+  );
+}
+
 /** ファイル階層ツリー（折りたたみ可能） */
 function FolderBreadcrumbTree({ currentPath, onNavigate }: { currentPath: string; onNavigate: (path: string) => void }) {
   const [open, setOpen] = useState(true);
@@ -1837,10 +1905,10 @@ function FolderBreadcrumbTree({ currentPath, onNavigate }: { currentPath: string
         onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-1.5 px-4 py-2 text-[10px] text-text-muted hover:text-text-primary"
       >
-        <svg className={`w-3 h-3 transition-transform ${open ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <span className="flex-1 text-left">フォルダ階層</span>
+        <svg className={`w-3 h-3 transition-transform flex-shrink-0 ${open ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
-        フォルダ階層
       </button>
       {open && (
         <div className="px-4 pb-3">
@@ -1850,7 +1918,7 @@ function FolderBreadcrumbTree({ currentPath, onNavigate }: { currentPath: string
             return (
               <div key={i} style={{ paddingLeft: `${i * 12}px` }}>
                 <button
-                  onClick={() => !isLast && onNavigate(fullPath)}
+                  onDoubleClick={() => !isLast && onNavigate(fullPath)}
                   className={`flex items-center gap-1 text-[10px] py-0.5 rounded transition-colors ${
                     isLast ? "text-accent font-medium" : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
                   }`}

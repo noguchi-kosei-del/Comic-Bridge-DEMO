@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useViewStore } from "../../store/viewStore";
+import { useViewStore, validateAndSetABPath } from "../../store/viewStore";
 import { usePsdStore } from "../../store/psdStore";
 import { useSpecStore } from "../../store/specStore";
 import { useAppUpdater } from "../../hooks/useAppUpdater";
@@ -15,239 +15,7 @@ import { JsonFileBrowser } from "../scanPsd/JsonFileBrowser";
 import { CheckJsonBrowser } from "../unified-viewer/UnifiedViewer";
 import { WorkflowBar } from "./WorkflowBar";
 import { SettingsButton } from "./SettingsPanel";
-
-// @ts-ignore: View tabs moved to SpecCheckView dot menu
-const _unused = [
-  {
-    id: "specCheck",
-    label: "完成原稿チェック",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "layers",
-    label: "レイヤー制御",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "typesetting",
-    label: "写植関連",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "replace",
-    label: "差替え",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4-4m-4 4l4 4"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "compose",
-    label: "合成",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zm-5 9l3 3m0 0l3-3m-3 3V10"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "tiff",
-    label: "TIFF化",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "scanPsd",
-    label: "スキャナー",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "split",
-    label: "見開き分割",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <circle cx="6" cy="6" r="3" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8.12 8.12L12 12" />
-        <circle cx="18" cy="6" r="3" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.88 8.12L12 12" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 12l-5 8M12 12l5 8" />
-      </svg>
-    ),
-  },
-  {
-    id: "rename",
-    label: "リネーム",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "kenban",
-    label: "検版",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "progen",
-    label: "ProGen",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "unifiedViewer",
-    label: "ビューアー",
-    icon: (
-      <svg
-        className="w-4 h-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-        />
-      </svg>
-    ),
-  },
-];
+import { useSettingsStore, ALL_NAV_BUTTONS } from "../../store/settingsStore";
 
 export function TopNav() {
   const setActiveView = useViewStore((s) => s.setActiveView);
@@ -258,47 +26,10 @@ export function TopNav() {
   const jsonFolderPath = useScanPsdStore((s) => s.jsonFolderPath);
   const jsonBrowserMode = useViewStore((s) => s.jsonBrowserMode);
   const setJsonBrowserMode = useViewStore((s) => s.setJsonBrowserMode);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const passedCount = Array.from(checkResults.values()).filter((r) => r.passed).length;
   const failedCount = Array.from(checkResults.values()).filter((r) => !r.passed).length;
-
-  // Open text file (with COMIC-POT parsing) — GlobalAddressBarに移動済み
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _handleOpenText = useCallback(async () => {
-    const path = await dialogOpen({ filters: [{ name: "テキスト", extensions: ["txt"] }], multiple: false });
-    if (!path) return;
-    try {
-      const bytes = await readFile(path as string);
-      const content = new TextDecoder("utf-8").decode(bytes);
-      viewerStore.setTextContent(content);
-      viewerStore.setTextFilePath(path as string);
-      viewerStore.setIsDirty(false);
-      // Parse COMIC-POT format
-      const lines = content.split(/\r?\n/);
-      const header: string[] = [];
-      const pages: { pageNumber: number; blocks: { id: string; originalIndex: number; lines: string[]; }[] }[] = [];
-      let curPage: typeof pages[0] | null = null;
-      let blockLines: string[] = [];
-      let blockIdx = 0;
-      const pageRe = /^<<(\d+)Page>>$/;
-      const flush = () => {
-        if (blockLines.length > 0 && curPage) {
-          curPage.blocks.push({ id: `p${curPage.pageNumber}-b${blockIdx}`, originalIndex: blockIdx, lines: [...blockLines] });
-          blockIdx++;
-          blockLines = [];
-        }
-      };
-      for (const line of lines) {
-        const m = line.match(pageRe);
-        if (m) { flush(); blockIdx = 0; blockLines = []; curPage = { pageNumber: parseInt(m[1], 10), blocks: [] }; pages.push(curPage); }
-        else if (curPage) { if (line.trim() === "") flush(); else blockLines.push(line); }
-        else header.push(line);
-      }
-      flush();
-      viewerStore.setTextHeader(header);
-      viewerStore.setTextPages(pages);
-    } catch { /* ignore */ }
-  }, []);
 
   // JSON file selection handler
   const handleJsonSelect = useCallback(async (filePath: string) => {
@@ -332,6 +63,19 @@ export function TopNav() {
           }
         }
         if (presets.length > 0) { viewerStore.setFontPresets(presets); viewerStore.setPresetJsonPath(filePath); }
+        // workInfo（ジャンル/タイトル/巻数等）をscanPsdStoreにセット
+        const wi = data?.presetData?.workInfo ?? data?.workInfo;
+        if (wi && typeof wi === "object") {
+          const store = useScanPsdStore.getState();
+          store.setWorkInfo({
+            ...store.workInfo,
+            ...(wi.genre ? { genre: wi.genre } : {}),
+            ...(wi.label ? { label: wi.label } : {}),
+            ...(wi.title ? { title: wi.title } : {}),
+            ...(wi.author ? { author: wi.author } : {}),
+            // volume はフォルダ名から検出するためJSONからはセットしない
+          });
+        }
       }
     } catch { /* ignore */ }
     setJsonBrowserMode(null);
@@ -342,54 +86,54 @@ export function TopNav() {
       className="h-14 flex-shrink-0 bg-bg-secondary border-b border-border flex items-center px-3 gap-2 relative z-20 shadow-soft"
       data-tauri-drag-region
     >
-      {/* Logo */}
-      <button
-        className="flex items-center gap-2 mr-1 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-        onClick={() => {
-          usePsdStore.getState().clearFiles();
-          usePsdStore.getState().setCurrentFolderPath(null);
-          usePsdStore.getState().setContentLocked(false);
-          setActiveView("specCheck");
-        }}
-        title="リセット"
-      >
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-accent-secondary flex items-center justify-center shadow-sm">
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
-        </div>
-      </button>
-
-      <div className="w-px h-8 bg-border flex-shrink-0" />
-
-      {/* Workflow */}
+      {/* WF（左端） */}
       <WorkflowBar />
 
-      <div className="flex-1" />
-
-      {/* ホーム + ビューアー + ツール（中央配置） */}
+      {/* ツール + 設定 */}
       <div className="flex items-center gap-1 flex-shrink-0">
-        <button
-          className="px-3 py-1 text-[11px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
-          onClick={() => setActiveView("specCheck")}
-          title="ホーム（リセットなし）"
-        >
-          ホーム
-        </button>
-        <button
-          className="px-3 py-1 text-[11px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
-          onClick={() => setActiveView("unifiedViewer")}
-          title="ビューアー"
-        >
-          ビューアー
-        </button>
         <TopNavToolMenu />
         <SettingsButton />
       </div>
 
+      {/* リセットボタン */}
+      <button
+        className="w-7 h-7 flex items-center justify-center rounded transition-colors text-text-muted hover:text-accent hover:bg-accent/10"
+        onClick={() => {
+          const psd = usePsdStore.getState();
+          const uv = useUnifiedViewerStore.getState();
+          const hasData = psd.files.length > 0 || uv.textContent.length > 0 || uv.fontPresets.length > 0 || !!uv.checkData;
+          if (hasData) {
+            setShowResetConfirm(true);
+          } else {
+            // データがなくてもフォルダパス等をクリア
+            psd.clearFiles();
+            psd.setCurrentFolderPath(null);
+            psd.setContentLocked(false);
+            setActiveView("specCheck");
+          }
+        }}
+        title="リセットしてホームに戻る"
+      >
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </button>
+
+      <div className="w-px h-8 bg-border flex-shrink-0" />
+
+      {/* ナビボタン（左寄せ） */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <NavBarButtons />
+      </div>
+
       <div className="flex-1" />
 
-      {/* Right: Status + ツールボタン */}
+      {/* データ読み込みボタン（右寄せ） */}
+      <TopNavDataButtons />
+
+      <div className="w-px h-4 bg-border/50 mx-0.5 flex-shrink-0" />
+
+      {/* Right: ファイル数 + OK/NG */}
       {files.length > 0 && (
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-xs text-text-muted">{files.length} ファイル</span>
@@ -423,80 +167,35 @@ export function TopNav() {
             v{updater.updateInfo?.version}
           </button>
         ) : updater.phase === "checking" ? (
-          <svg
-            className="w-3.5 h-3.5 text-text-muted animate-spin"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
+          <svg className="w-3.5 h-3.5 text-text-muted animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         ) : updater.phase === "up-to-date" ? (
           <span className="text-[10px] text-accent-tertiary">
-            <svg
-              className="w-3 h-3 inline"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={3}
-            >
+            <svg className="w-3 h-3 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </span>
         ) : null}
       </div>
 
-      {/* Update Prompt Dialog (shown on startup when update available) */}
-      {updater.showPrompt &&
-        updater.updateInfo &&
+      {/* Update Prompt Dialog */}
+      {updater.showPrompt && updater.updateInfo &&
         createPortal(
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-bg-secondary border border-border rounded-2xl p-8 shadow-xl max-w-sm text-center space-y-4">
               <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-accent to-accent-secondary flex items-center justify-center shadow-lg">
-                <svg
-                  className="w-7 h-7 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
+                <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
               </div>
               <div>
                 <h3 className="text-base font-bold text-text-primary">アップデートがあります</h3>
-                <p className="text-xs text-text-muted mt-1">
-                  v{updater.appVersion} →{" "}
-                  <span className="text-accent-tertiary font-semibold">
-                    v{updater.updateInfo.version}
-                  </span>
-                </p>
+                <p className="text-xs text-text-muted mt-1">v{updater.appVersion} → <span className="text-accent-tertiary font-semibold">v{updater.updateInfo.version}</span></p>
               </div>
               <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => updater.dismissPrompt()}
-                  className="flex-1 px-4 py-2.5 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-xl hover:bg-bg-tertiary/80 transition-colors"
-                >
-                  あとで
-                </button>
-                <button
-                  onClick={() => {
-                    updater.dismissPrompt();
-                    updater.downloadAndInstall();
-                  }}
-                  className="flex-1 px-4 py-2.5 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-xl hover:-translate-y-0.5 transition-all shadow-sm"
-                >
-                  アップデートする
-                </button>
+                <button onClick={() => updater.dismissPrompt()} className="flex-1 px-4 py-2.5 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-xl hover:bg-bg-tertiary/80 transition-colors">あとで</button>
+                <button onClick={() => { updater.dismissPrompt(); updater.downloadAndInstall(); }} className="flex-1 px-4 py-2.5 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-xl hover:-translate-y-0.5 transition-all shadow-sm">アップデートする</button>
               </div>
             </div>
           </div>,
@@ -504,47 +203,23 @@ export function TopNav() {
         )}
 
       {/* Update Dialog (downloading / ready / error) */}
-      {(updater.phase === "downloading" ||
-        updater.phase === "ready" ||
-        updater.phase === "error") &&
+      {(updater.phase === "downloading" || updater.phase === "ready" || updater.phase === "error") &&
         createPortal(
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-bg-secondary border border-border rounded-2xl p-8 shadow-xl max-w-sm text-center space-y-4">
               {updater.phase === "downloading" && (
                 <>
-                  <svg
-                    className="w-12 h-12 mx-auto text-accent animate-spin"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
+                  <svg className="w-12 h-12 mx-auto text-accent animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                   <h3 className="text-base font-bold text-text-primary">アップデート中...</h3>
-                  <p className="text-xs text-text-muted">
-                    ダウンロードしています。しばらくお待ちください。
-                  </p>
+                  <p className="text-xs text-text-muted">ダウンロードしています。しばらくお待ちください。</p>
                 </>
               )}
               {updater.phase === "ready" && (
                 <>
-                  <svg
-                    className="w-12 h-12 mx-auto text-success"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
+                  <svg className="w-12 h-12 mx-auto text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <h3 className="text-base font-bold text-text-primary">インストール完了</h3>
                   <p className="text-xs text-text-muted">アプリを再起動します...</p>
@@ -552,33 +227,57 @@ export function TopNav() {
               )}
               {updater.phase === "error" && (
                 <>
-                  <svg
-                    className="w-12 h-12 mx-auto text-error"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
+                  <svg className="w-12 h-12 mx-auto text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <h3 className="text-base font-bold text-text-primary">アップデート失敗</h3>
                   <p className="text-xs text-text-muted">{updater.error}</p>
-                  <button
-                    onClick={updater.dismiss}
-                    className="px-4 py-2 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-xl hover:-translate-y-0.5 transition-all"
-                  >
-                    閉じる
-                  </button>
+                  <button onClick={updater.dismiss} className="px-4 py-2 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-xl hover:-translate-y-0.5 transition-all">閉じる</button>
                 </>
               )}
             </div>
           </div>,
           document.body,
         )}
+
+      {/* リセット確認ダイアログ */}
+      {showResetConfirm && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" onClick={() => setShowResetConfirm(false)}>
+          <div className="bg-bg-secondary border border-border rounded-2xl p-6 shadow-xl max-w-xs text-center space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="w-10 h-10 mx-auto rounded-xl bg-warning/15 flex items-center justify-center">
+              <svg className="w-5 h-5 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <p className="text-xs text-text-primary font-medium">読み込み中のファイル・テキスト・JSONを<br />すべてクリアしますか？</p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors"
+              >キャンセル</button>
+              <button
+                onClick={() => {
+                  setShowResetConfirm(false);
+                  usePsdStore.getState().clearFiles();
+                  usePsdStore.getState().setCurrentFolderPath(null);
+                  usePsdStore.getState().setContentLocked(false);
+                  const uv = useUnifiedViewerStore.getState();
+                  uv.setTextContent(""); uv.setTextFilePath(null); uv.setTextHeader([]); uv.setTextPages([]); uv.setIsDirty(false);
+                  uv.setFontPresets([]); uv.setPresetJsonPath(null);
+                  uv.setCheckData(null);
+                  useViewStore.getState().setKenbanPathA(null);
+                  useViewStore.getState().setKenbanPathB(null);
+                  usePsdStore.getState().triggerRefresh();
+                  setActiveView("specCheck");
+                }}
+                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-error rounded-lg hover:bg-error/90 transition-colors"
+              >リセット</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {/* JSON File Browser Modal */}
       {jsonBrowserMode &&
         createPortal(
@@ -605,169 +304,220 @@ export function TopNav() {
   );
 }
 
-// ─── Data Load Button with Clear (×) ───
-function DataLoadButton({ loaded, label, loadTitle, clearTitle, colorClass, borderClass, onLoad, onClear }: {
-  loaded: boolean;
-  label: string;
-  loadTitle: string;
-  clearTitle: string;
-  colorClass: string;   // e.g. "text-accent-tertiary hover:bg-accent-tertiary/15"
-  borderClass: string;  // e.g. "border-accent-tertiary/50"
-  onLoad: () => void;
-  onClear: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-0">
-      <button
-        onClick={onLoad}
-        className="px-2 py-0.5 text-[10px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-l transition-colors"
-        title={loadTitle}
-      >
-        {label}
-      </button>
-      {loaded ? (
-        <button
-          onClick={onClear}
-          className={`w-4 h-4 flex items-center justify-center rounded-r transition-colors ${colorClass}`}
-          title={clearTitle}
-        >
-          <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      ) : (
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 mr-1 border ${borderClass}`} />
-      )}
-    </div>
-  );
-}
-
-// ─── 差分/分割スイッチ + 検A / 検B ボタン ───
-
-// 差分モードでの非対応組み合わせチェック
-const DIFF_INCOMPATIBLE: Record<string, string[]> = {
-  // A側の拡張子 → B側で非対応の拡張子
-  pdf: ["psd"],
-  psd: ["pdf"],
-};
-
-function getMainExt(path: string): string {
-  const name = path.replace(/\\/g, "/").split("/").pop() || "";
-  const dot = name.lastIndexOf(".");
-  return dot > 0 ? name.substring(dot + 1).toLowerCase() : "";
-}
-
-function KenbanLoadButtons() {
+// ─── データ読み込みボタン（TopNav内、右寄せ） ───
+function TopNavDataButtons() {
+  const textLoaded = useUnifiedViewerStore((s) => s.textContent.length > 0);
+  const presetsLoaded = useUnifiedViewerStore((s) => s.fontPresets.length > 0);
+  const checkLoaded = useUnifiedViewerStore((s) => !!s.checkData);
   const kenbanPathA = useViewStore((s) => s.kenbanPathA);
   const kenbanPathB = useViewStore((s) => s.kenbanPathB);
   const kenbanViewMode = useViewStore((s) => s.kenbanViewMode);
 
-  const handleLoad = async (side: "A" | "B") => {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const { invoke } = await import("@tauri-apps/api/core");
-    const path = await open({ directory: true, multiple: false });
+  const [kenbanPickMode, setKenbanPickMode] = useState<{ side: "A" | "B" } | null>(null);
+  const pickRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!kenbanPickMode) return;
+    const h = (e: MouseEvent) => { if (pickRef.current && !pickRef.current.contains(e.target as Node)) setKenbanPickMode(null); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [kenbanPickMode]);
+
+  const handleOpenText = useCallback(async () => {
+    const path = await dialogOpen({ filters: [{ name: "テキスト", extensions: ["txt"] }], multiple: false });
     if (!path) return;
+    const bytes = await readFile(path as string);
+    const content = new TextDecoder("utf-8").decode(bytes);
+    const vs = useUnifiedViewerStore.getState();
+    vs.setTextContent(content);
+    vs.setTextFilePath(path as string);
+    vs.setIsDirty(false);
+  }, []);
 
-    // 差分モードの場合: A側のファイル形式チェック→B側の互換性確認
-    if (kenbanViewMode === "diff" && side === "B" && useViewStore.getState().kenbanPathA) {
-      try {
-        const allExts = ["psd", "tif", "tiff", "jpg", "jpeg", "png", "bmp", "pdf"];
-        const pathA = useViewStore.getState().kenbanPathA!;
-        const filesA = await invoke<string[]>("kenban_list_files_in_folder", { path: pathA, extensions: allExts });
-        const filesB = await invoke<string[]>("kenban_list_files_in_folder", { path: path as string, extensions: allExts });
-        if (filesA.length > 0 && filesB.length > 0) {
-          const extA = getMainExt(filesA[0]);
-          const extB = getMainExt(filesB[0]);
-          const blocked = DIFF_INCOMPATIBLE[extA];
-          if (blocked && blocked.includes(extB)) {
-            alert(`差分モードでは ${extA.toUpperCase()} と ${extB.toUpperCase()} の組み合わせは非対応です。\n同じ形式のフォルダを選択するか、分割ビューアーを使用してください。`);
-            return;
-          }
-        }
-      } catch { /* ignore */ }
-    }
-
-    if (side === "A") {
-      useViewStore.getState().setKenbanPathA(path as string);
+  const handleKenbanPick = async (type: "folder" | "file") => {
+    if (!kenbanPickMode) return;
+    const side = kenbanPickMode.side;
+    setKenbanPickMode(null);
+    let selected: string | null = null;
+    if (type === "folder") {
+      const r = await dialogOpen({ directory: true, multiple: false, title: `${side}側: フォルダを選択` });
+      if (r) selected = r as string;
     } else {
-      useViewStore.getState().setKenbanPathB(path as string);
+      const r = await dialogOpen({
+        directory: false, multiple: false, title: `${side}側: ファイルを選択`,
+        filters: [{ name: "対応ファイル", extensions: ["pdf", "psd", "tif", "tiff", "jpg", "jpeg", "png", "bmp"] }],
+      });
+      if (r) selected = r as string;
     }
+    if (!selected) return;
+    if (side === "A") useViewStore.getState().setKenbanPathA(selected);
+    else useViewStore.getState().setKenbanPathB(selected);
     const vs = useViewStore.getState();
-    if (vs.kenbanPathA && vs.kenbanPathB) {
-      vs.setActiveView("unifiedViewer");
-    }
-  };
-
-  const handleClear = (side: "A" | "B") => {
-    if (side === "A") useViewStore.getState().setKenbanPathA(null);
-    else useViewStore.getState().setKenbanPathB(null);
-  };
-
-  const toggleMode = () => {
-    const next = kenbanViewMode === "diff" ? "parallel" : "diff";
-    useViewStore.getState().setKenbanViewMode(next);
+    if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer");
   };
 
   return (
-    <>
+    <div className="flex items-center gap-0.5 flex-shrink-0">
+      {/* テキスト */}
+      <SmallBtn loaded={textLoaded} label="テキスト" title="テキスト読み込み" clearTitle="クリア"
+        cCls="text-accent-tertiary hover:bg-accent-tertiary/15" bCls="border-accent-tertiary/50"
+        onLoad={handleOpenText}
+        onClear={() => { const v = useUnifiedViewerStore.getState(); v.setTextContent(""); v.setTextFilePath(null); v.setTextHeader([]); v.setTextPages([]); v.setIsDirty(false); }}
+      />
+      {/* 作品情報 */}
+      <SmallBtn loaded={presetsLoaded} label="作品情報" title="作品情報JSON" clearTitle="クリア"
+        cCls="text-accent-secondary hover:bg-accent-secondary/15" bCls="border-accent-secondary/50"
+        onLoad={() => useViewStore.getState().setJsonBrowserMode("preset")}
+        onClear={() => { useUnifiedViewerStore.getState().setFontPresets([]); useUnifiedViewerStore.getState().setPresetJsonPath(null); }}
+      />
+      {/* 校正JSON */}
+      <SmallBtn loaded={checkLoaded} label="校正JSON" title="校正JSON" clearTitle="クリア"
+        cCls="text-warning hover:bg-warning/15" bCls="border-warning/50"
+        onLoad={() => useViewStore.getState().setJsonBrowserMode("check")}
+        onClear={() => useUnifiedViewerStore.getState().setCheckData(null)}
+      />
+      <div className="w-px h-3 bg-border/30 mx-0.5" />
       {/* 差分/分割スイッチ */}
       <button
-        onClick={toggleMode}
-        className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-colors ${
-          kenbanViewMode === "diff"
-            ? "bg-accent/15 text-accent"
-            : "bg-accent-secondary/15 text-accent-secondary"
-        }`}
-        title={kenbanViewMode === "diff" ? "差分モード（クリックで分割に切替）" : "分割モード（クリックで差分に切替）"}
+        onClick={() => useViewStore.getState().setKenbanViewMode(kenbanViewMode === "diff" ? "parallel" : "diff")}
+        className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-colors ${kenbanViewMode === "diff" ? "bg-accent/15 text-accent" : "bg-accent-secondary/15 text-accent-secondary"}`}
+        title="差分/分割切替"
       >
         {kenbanViewMode === "diff" ? "差分" : "分割"}
       </button>
-      <DataLoadButton
-        loaded={!!kenbanPathA}
-        label="検A"
-        loadTitle="検版A（変更前）フォルダを選択"
-        clearTitle="検Aをクリア"
-        colorClass="text-blue-500 hover:bg-blue-500/15"
-        borderClass="border-blue-500/50"
-        onLoad={() => handleLoad("A")}
-        onClear={() => handleClear("A")}
-      />
-      <DataLoadButton
-        loaded={!!kenbanPathB}
-        label="検B"
-        loadTitle="検版B（変更後）フォルダを選択"
-        clearTitle="検Bをクリア"
-        colorClass="text-orange-500 hover:bg-orange-500/15"
-        borderClass="border-orange-500/50"
-        onLoad={() => handleLoad("B")}
-        onClear={() => handleClear("B")}
-      />
-    </>
+      {/* A/B 統合ボタン */}
+      <ABPickerButton kenbanPickMode={kenbanPickMode} setKenbanPickMode={setKenbanPickMode} handleKenbanPick={handleKenbanPick} />
+    </div>
+  );
+}
+
+// ─── 小さなデータ読み込みボタン ───
+function SmallBtn({ loaded, label, title, clearTitle, cCls, bCls, onLoad, onClear }: {
+  loaded: boolean; label: string; title: string; clearTitle: string;
+  cCls: string; bCls: string; onLoad: () => void; onClear: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-0">
+      <button onClick={onLoad} className="px-1.5 py-0.5 text-[9px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-l transition-colors" title={title}>{label}</button>
+      {loaded ? (
+        <button onClick={onClear} className={`w-3.5 h-3.5 flex items-center justify-center rounded-r transition-colors ${cCls}`} title={clearTitle}>
+          <svg className="w-2 h-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      ) : <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mr-0.5 border ${bCls}`} />}
+    </div>
   );
 }
 
 // ─── ツールメニュー（ドットメニュー） ───
-const TOOL_MENU_TABS: { id: any; label: string }[] = [
-  { id: "layers", label: "レイヤー制御" },
-  { id: "replace", label: "差替え" },
-  { id: "compose", label: "合成" },
-  { id: "tiff", label: "TIFF化" },
-  { id: "scanPsd", label: "スキャナー" },
-  { id: "split", label: "見開き分割" },
-  { id: "rename", label: "リネーム" },
-  { id: "unifiedViewer", label: "ビューアー" },
-  { id: "folderSetup", label: "フォルダセットアップ" },
-  { id: "requestPrep", label: "依頼準備" },
-];
-
 const TOOL_PROGEN_MODES = [
   { id: "extraction" as const, label: "抽出プロンプト" },
   { id: "formatting" as const, label: "整形プロンプト" },
   { id: "proofreading" as const, label: "校正プロンプト" },
 ];
 
+// ─── A/B 統合ピッカーボタン ───
+function ABPickerButton({ kenbanPickMode, setKenbanPickMode, handleKenbanPick }: {
+  kenbanPickMode: { side: "A" | "B" } | null;
+  setKenbanPickMode: (v: { side: "A" | "B" } | null) => void;
+  handleKenbanPick: (type: "folder" | "file") => Promise<void>;
+}) {
+  const kenbanPathA = useViewStore((s) => s.kenbanPathA);
+  const kenbanPathB = useViewStore((s) => s.kenbanPathB);
+  const ref = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState(false);
+
+  // ホバーまたはピック中は開いたまま
+  const isOpen = hover || !!kenbanPickMode;
+
+  useEffect(() => {
+    if (!kenbanPickMode) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setKenbanPickMode(null); setHover(false); } };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [kenbanPickMode]);
+
+  const hasAny = !!kenbanPathA || !!kenbanPathB;
+  const nameA = kenbanPathA?.split("\\").pop() || "";
+  const nameB = kenbanPathB?.split("\\").pop() || "";
+
+  return (
+    <div ref={ref} className="relative" onMouseEnter={() => setHover(true)} onMouseLeave={() => { if (!kenbanPickMode) setHover(false); }}>
+      {/* メインボタン */}
+      <div className={`flex items-center gap-0 px-1.5 py-0.5 text-[9px] rounded transition-colors cursor-default ${
+        hasAny ? "bg-sky-100 text-sky-600" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
+      }`}>
+        <span>A/B</span>
+        {hasAny && (
+          <button onClick={() => { useViewStore.getState().setKenbanPathA(null); useViewStore.getState().setKenbanPathB(null); }}
+            className="ml-1 w-3 h-3 flex items-center justify-center rounded-full hover:bg-sky-200 text-sky-500">
+            <svg className="w-2 h-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        )}
+      </div>
+      {/* ホバードロップダウン */}
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1.5 min-w-[180px]">
+          {/* A */}
+          <div className="px-3 py-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold text-blue-500">A（変更前）</span>
+              {kenbanPathA && (
+                <button onClick={() => useViewStore.getState().setKenbanPathA(null)} className="text-[9px] text-text-muted hover:text-error">クリア</button>
+              )}
+            </div>
+            {kenbanPathA ? (
+              <div className="text-[9px] text-text-secondary truncate mb-1" title={kenbanPathA}>{nameA}</div>
+            ) : (
+              <div className="text-[9px] text-text-muted mb-1">未選択</div>
+            )}
+            <div className="flex gap-1">
+              <button onClick={async () => {
+                const r = await dialogOpen({ directory: true, multiple: false, title: "A側: フォルダを選択" });
+                setHover(false);
+                if (r) { const ok = await validateAndSetABPath("A", r as string); if (ok) { const vs = useViewStore.getState(); if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer"); } }
+              }} className="flex-1 px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-blue-50 hover:text-blue-600 rounded transition-colors">フォルダ</button>
+              <button onClick={async () => {
+                const r = await dialogOpen({ directory: false, multiple: false, title: "A側: ファイルを選択", filters: [{ name: "対応ファイル", extensions: ["pdf","psd","tif","tiff","jpg","jpeg","png","bmp"] }] });
+                setHover(false);
+                if (r) { useViewStore.getState().setKenbanPathA(r as string); const vs = useViewStore.getState(); if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer"); }
+              }} className="flex-1 px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-blue-50 hover:text-blue-600 rounded transition-colors">ファイル</button>
+            </div>
+          </div>
+          <div className="border-t border-border/40 my-1" />
+          {/* B */}
+          <div className="px-3 py-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold text-orange-500">B（変更後）</span>
+              {kenbanPathB && (
+                <button onClick={() => useViewStore.getState().setKenbanPathB(null)} className="text-[9px] text-text-muted hover:text-error">クリア</button>
+              )}
+            </div>
+            {kenbanPathB ? (
+              <div className="text-[9px] text-text-secondary truncate mb-1" title={kenbanPathB}>{nameB}</div>
+            ) : (
+              <div className="text-[9px] text-text-muted mb-1">未選択</div>
+            )}
+            <div className="flex gap-1">
+              <button onClick={async () => {
+                const r = await dialogOpen({ directory: true, multiple: false, title: "B側: フォルダを選択" });
+                setHover(false);
+                if (r) { const ok = await validateAndSetABPath("B", r as string); if (ok) { const vs = useViewStore.getState(); if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer"); } }
+              }} className="flex-1 px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-orange-50 hover:text-orange-600 rounded transition-colors">フォルダ</button>
+              <button onClick={async () => {
+                const r = await dialogOpen({ directory: false, multiple: false, title: "B側: ファイルを選択", filters: [{ name: "対応ファイル", extensions: ["pdf","psd","tif","tiff","jpg","jpeg","png","bmp"] }] });
+                setHover(false);
+                if (r) { useViewStore.getState().setKenbanPathB(r as string); const vs = useViewStore.getState(); if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer"); }
+              }} className="flex-1 px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-orange-50 hover:text-orange-600 rounded transition-colors">ファイル</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TopNavToolMenu() {
-  const [show, setShow] = useState(false);
+  const [hover, setHover] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const setActiveView = useViewStore((s) => s.setActiveView);
   const scanJsonPath = useScanPsdStore((s) => s.currentJsonFilePath);
@@ -775,18 +525,10 @@ function TopNavToolMenu() {
   const viewerPresetPath = useUnifiedViewerStore((s) => s.presetJsonPath);
   const hasWorkJson = !!(scanJsonPath || (viewerPresets.length > 0 && viewerPresetPath));
 
-  useEffect(() => {
-    if (!show) return;
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setShow(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [show]);
-
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       <button
-        onClick={() => setShow(!show)}
-        className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${show ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"}`}
+        className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${hover ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"}`}
         title="ツール"
       >
         <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
@@ -795,17 +537,23 @@ function TopNavToolMenu() {
           <circle cx="3" cy="13" r="1.3" /><circle cx="8" cy="13" r="1.3" /><circle cx="13" cy="13" r="1.3" />
         </svg>
       </button>
-      {show && (
+      {hover && (
         <div className="absolute left-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[140px]">
-          {TOOL_MENU_TABS.map((tab) => (
-            <button key={tab.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors" onClick={() => { setActiveView(tab.id); setShow(false); }}>
-              {tab.label}
-            </button>
-          ))}
+          {useSettingsStore.getState().toolMenuButtons.map((id) => {
+            const btn = ALL_NAV_BUTTONS.find((b) => b.id === id);
+            if (!btn) return null;
+            return (
+              <button key={btn.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors" onClick={() => {
+                if (btn.id === "layers") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("layers"); }
+                else setActiveView(btn.id as any);
+                setHover(false);
+              }}>{btn.label}</button>
+            );
+          })}
           <div className="border-t border-border/40 my-1" />
           <div className="px-3 py-0.5 text-[9px] text-text-muted/50 font-medium">ProGen</div>
           {TOOL_PROGEN_MODES.map((mode) => (
-            <button key={mode.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors" onClick={() => { useViewStore.getState().setProgenMode(mode.id); setActiveView("progen"); setShow(false); }}>
+            <button key={mode.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors" onClick={() => { useViewStore.getState().setProgenMode(mode.id); setActiveView("progen"); setHover(false); }}>
               {mode.label}
               {!hasWorkJson && <span className="text-[9px] text-text-muted/50 ml-1">新規</span>}
             </button>
@@ -813,5 +561,36 @@ function TopNavToolMenu() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── ナビバーボタン（設定で配置変更可能） ───
+function NavBarButtons() {
+  const navBarButtons = useSettingsStore((s) => s.navBarButtons);
+  const setActiveView = useViewStore((s) => s.setActiveView);
+
+  return (
+    <>
+      {navBarButtons.map((id) => {
+        const btn = ALL_NAV_BUTTONS.find((b) => b.id === id);
+        if (!btn) return null;
+        return (
+          <button
+            key={btn.id}
+            className="px-3 py-1 text-[11px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
+            onClick={() => {
+              if (btn.id === "layers") {
+                setActiveView("specCheck");
+                usePsdStore.getState().setSpecViewMode("layers");
+              } else {
+                setActiveView(btn.id as any);
+              }
+            }}
+          >
+            {btn.label}
+          </button>
+        );
+      })}
+    </>
   );
 }

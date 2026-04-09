@@ -50,21 +50,27 @@ export function ThumbnailCard({
   return (
     <div
       className={`
-        group relative bg-bg-tertiary rounded-2xl overflow-hidden cursor-pointer select-none
-        transition-all duration-200 shadow-card border border-border
+        group relative rounded-2xl overflow-hidden cursor-pointer select-none
+        transition-all duration-200 shadow-card border
         hover:-translate-y-1 hover:shadow-elevated
         ${
           isActive
-            ? "ring-2 ring-accent shadow-glow-pink"
+            ? "ring-2 ring-sky-400 bg-sky-50 border-sky-400"
             : isSelected
-              ? "ring-2 ring-accent/50 shadow-md"
-              : "hover:ring-1 hover:ring-accent/30"
+              ? "ring-2 ring-sky-400/60 bg-sky-50/80 border-sky-300 shadow-md"
+              : "bg-bg-tertiary border-border hover:ring-1 hover:ring-sky-300/30"
         }
         ${hasError ? "ring-2 ring-error shadow-glow-error" : ""}
         ${!hasError && isCaution ? "ring-2 ring-warning/60" : ""}
-        ${isPassed && isChecked && !isCaution ? "ring-1 ring-success/30" : ""}
+        ${isPassed && isChecked && !isCaution && !isSelected && !isActive ? "ring-1 ring-success/30" : ""}
       `}
-      style={{ aspectRatio: "1 / 1.4142", minHeight: `${_size}px` }} // A4/B5 aspect ratio + minimum size
+      style={{
+        aspectRatio: "1 / 1.4142",
+        minHeight: `${_size}px`,
+        ...(isActive ? { boxShadow: "0 0 0 12px rgba(56,189,248,0.5), 0 0 20px rgba(56,189,248,0.3)" }
+          : isSelected ? { boxShadow: "0 0 0 12px rgba(56,189,248,0.35)" }
+          : {}),
+      }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onMouseEnter={() => setIsHovered(true)}
@@ -178,28 +184,6 @@ export function ThumbnailCard({
         )}
       </div>
 
-      {/* Selection Checkbox */}
-      <div
-        className={`
-          absolute top-3 left-3 w-6 h-6 rounded-lg transition-all duration-200
-          flex items-center justify-center
-          ${
-            isSelected
-              ? "bg-gradient-to-br from-accent to-accent-secondary shadow-glow-pink"
-              : "border-2 border-white/40 bg-black/40 opacity-0 group-hover:opacity-100"
-          }
-        `}
-      >
-        {isSelected && (
-          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-        )}
-      </div>
 
       {/* Caution Badges (stacked vertically) */}
       {(isCanvasOutlier || cautionReasons?.includes("tombo")) && (
@@ -331,7 +315,7 @@ export function ThumbnailCard({
 
       {/* Active indicator glow */}
       {isActive && (
-        <div className="absolute inset-0 pointer-events-none border-2 border-accent rounded-2xl" />
+        <div className="absolute inset-0 pointer-events-none border-2 border-sky-400 rounded-2xl" />
       )}
     </div>
   );

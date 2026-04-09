@@ -390,13 +390,18 @@
 
 ### 22. 右クリックコンテキストメニュー
 - **FileContextMenu.tsx**: SpecCheckViewの中央コンテンツエリアで右クリック → フローティングメニュー表示
-- **メニュー構成**:
+- **PSDメニュー構成**:
   - Psで開く(P) / MojiQで開く(M)（PDF限定） / ファイルの場所を開く
+  - txtファイル: セリフテキストとして読み込み / プレビュー中テキスト読み込み
   - カット / コピー / 複製（`duplicate_files` Rustコマンド） / 削除
   - PDF作成（Tachimi起動） / TIFF作成（ビュー遷移） / テキスト抽出
-  - 編集 ▶（差し替え / 見開き分割 / レイヤー制御）
-  - リネーム ▶（このファイルをリネーム / バッチでリネーム / yyyymmdd_ジャンル_タイトル_巻）
-  - 読み込み ▶（別の作品を読み込み / セリフテキスト / 校正JSON / 作品JSON）
+  - 編集 ▶ / リネーム ▶（このファイルをリネーム / バッチ / yyyymmdd形式） / A/B比較 ▶（A/Bにセット）
+  - 読み込み ▶
+- **フォルダ/非PSDメニュー**: フォルダを開く / Ps一括 / PDF作成 / A/B比較 / リネーム ▶（名前変更 / yyyymmdd形式） / カット / コピー / 複製（フォルダはcopy_folder） / 削除 / 読み込み
+- **ファイル操作Undo（Ctrl+Z）**: 最大10操作。削除/カットはbackup_to_temp→restore_from_backup。複製は逆削除。リネームはbatch_rename_filesで逆変換（一括リネームも1操作）
+- **サブメニュー位置補正**: onMouseEnter + requestAnimationFrameで上下左右clamp
+- **グローバルPromptダイアログ**: `showPromptDialog()`（window.promptはTauri WebView2で動作しないため代替）。AppLayout内のGlobalPromptDialogで描画
+- **リネーム処理**: Rust側`fs::rename`失敗時に`fs::copy`+`fs::remove_file`フォールバック（Windowsファイルロック対応）。invoke前にcache無効化
 - **MojiQ自動検索**: `find_mojiq_path()` で7箇所+PATHから自動探索（全ユーザー対応）
 
 ### 23. ワークフローナビゲーション
@@ -423,15 +428,14 @@
 - **3モード**: 原稿入稿（テキスト/見本/原稿チェック）/ 外部校正（PDF/テキスト/統一表記表/NGワード）/ 白棒消し（PSD）
 - **外部校正モード**: ジャンル→レーベル2段階ドロップダウン選択（GENRE_LABELS使用）、Gドライブから統一表記表を自動検索、NGワード表はデフォルト設定
 - **内容自動検出**: サブフォルダ最奥まで再帰スキャン、TXT/PSD/画像/PDF種別を自動判定
-- **ZIP名自動生成**: `yyyymmdd_ジャンル_タイトル_巻` — 作品情報JSON(genre/title)参照、PSDフォルダから巻数検出
+- **ZIP名自動生成**: `yyyymmdd_ジャンル_タイトル_巻` — 作品情報JSON(`presetData.workInfo.genre/title`)参照、巻数はフォルダ名から検出（JSONのvolumeは無視）
+- **JSON workInfo自動読み込み**: プリセットJSON読み込み時に`presetData.workInfo`からgenre/label/title/authorをscanPsdStoreにセット（volumeはセットしない）
 - **create_zip Rustコマンド**: zip crate使用、フォルダ再帰対応、デスクトップに保存
 
 ### 25. 設定画面
-- **SettingsPanel**: TopNavのドットメニュー横に歯車アイコン
-- **文字サイズ**: 小(0.9倍)/中(デフォルト)/大(1.15倍)
-- **アクセントカラー**: 8色選択UI（今後対応予定）
-- **ダークモード**: ON/OFF（CSS filter invert方式）
-- **フォルダ階層デフォルト位置**: テキスト入力+参照ボタン
+- **SettingsPanel**: TopNavのツールメニュー横に歯車アイコン
+- **一般タブ**: 文字サイズ(小/中/大) / アクセントカラー(8色、今後対応予定) / ダークモード / フォルダ階層デフォルト位置
+- **ナビ/ツール配置タブ**: ナビバーとツールメニューに表示するボタンをチェックボックスで選択。チェック済みアイテムはドラッグで並べ替え可能（グリップハンドル＋番号表示）。未チェックは下部にグレー表示。「決定」ボタンで反映
 - **永続化**: localStorageに保存
 
 ### 26. ファイルプロパティパネル
@@ -469,9 +473,11 @@
 ## UI構成
 
 ### レイアウト
-- **TopNav** (h-14): CBロゴ（全リセット）| ホーム（リセットなし）+ ビューアー + ドットメニュー（中央配置）| WF | flex-1 | ファイル数+OK/NG | バージョン。全画面時は非表示
-- **GlobalAddressBar**: 戻る/進む/上/アドレス/×クリア/フォルダ参照/再読み込み | テキスト/作品情報/校正JSON（各×クリア可能）| 差分/分割切替 | 検A/検B。全画面時は非表示
-- **ドットメニュー**: TopNavのホーム/ビューアーの右に9点アイコン。全タブ + ProGen3モード
+- **TopNav** (h-14): WF（左端）| ツールメニュー（ホバー表示）+ 設定 | リセットボタン（確認ダイアログ付き、テキスト/JSON/検A・Bも全クリア）| ナビバー（左寄せ）| flex-1 | テキスト/作品情報/校正JSON/差分分割/A・B統合ボタン（右寄せ）| ファイル数+OK/NG | バージョン。全画面時は非表示
+- **GlobalAddressBar**: 戻る/進む/上/フォルダ参照/再読み込み | アドレスバー/×クリア。全画面時は非表示
+- **ツールメニュー**: ホバーで自動表示。全タブ + ProGen3モード
+- **A/B統合ボタン**: ホバーでA（青）/B（橙）の選択ドロップダウン。フォルダ/ファイル選択、パス表示、クリア。`validateAndSetABPath`で検証（ファイルなし/テキストのみは静かにスキップ、複数拡張子混在はconfirm）。差替え/合成のDropZoneはマウント時にkenbanPathA/Bを自動参照
+- **D&D時A自動セット**: Aが未セットの場合のみ検証付きで自動セット。巻数はJSONのvolumeを無視しフォルダ名から検出
 - **ViewRouter + viewStore**: タブベースのビュー切替管理。AppView型:
   ```typescript
   export type AppView =
@@ -499,9 +505,14 @@
   - リスト表示: 列順＝結果/ファイル名(拡張子非表示)/種類バッジ/カラー(白黒表記)/サイズ/DPI/Bit/テキスト(あり/なし)/ガイド(あり/なし)。NG行は赤背景、Caution行は黄色背景
   - 仕様選択: 単一ボタンクリックで仕様を順に切り替え（ループ）
   - キーボード操作: 左右キーで前後ファイル移動、上下キーでグリッド行移動（列数自動計算）
-  - 右プレビューパネル: ロック機能付き。ダブルクリックで中央拡大表示。作成/アクションモードでは画像を上部に表示しボタンを下部に配置
+  - 右プレビューパネル: 2タブ（プレビュー / アクション）。プレビューで画像表示＋プロパティ。アクションで作成（スキャナー/テキスト抽出/JSON登録）＋アクション（差替え/合成/TIFF化/リネーム）。アクションタブでは画像非表示
   - ファイルプロパティ: プレビュータブ時のみ表示。寸法(cm)+用紙サイズ併記、作成日/インチ表示なし
-  - フォルダ階層ツリー: 常時表示（ファイル未選択時はデスクトップパスを表示）
+  - フォルダ階層ツリー: 常時表示（ファイル未選択時はデスクトップパスを表示）。ファイル名ヘッダーはフォルダ階層の下に配置。ダブルクリックでリネーム可能
+  - フォルダ/テキスト/JSONの選択: 左クリックで水色ハイライト選択。右クリックでコンテキストメニュー（A/B比較/リネーム/カット/コピー/複製/削除対応）。PSD選択時は非PSD選択をクリア、逆も同様
+  - サムネイル選択: 水色の太枠（12px box-shadow）で表示。チェックマーク廃止。サムネイル間余白3倍化
+  - 折りたたみトグル: 全セクション（MetadataPanel/GuideSectionPanel/FolderBreadcrumbTree）のシェブロンアイコンを右側に配置
+  - リロード: psdStoreのrefreshCounter + triggerRefresh()でfolderContents強制更新。contentLockedに依存しない
+  - PSDなしフォルダ: D&D読み込み時にPSDがなければcontentLockしない
   - ビューアー連動: 拡大表示中のファイル→ビューアー切替時に同じファイルを自動表示
   - 中央コンテンツロック: 仕様バーにロックボタン。ロック中はアドレス変更でファイルリスト更新しない。D&D時は自動ロック
   - メイン画面でtxt/jsonクリック: txtは右プレビューに表示、jsonは校正JSON/作品情報として自動判定して読み込み
@@ -1043,7 +1054,9 @@ pdfium-renderによるPDFプレビュー/サムネイル生成:
 | `list_folder_files` | `folder_path, recursive` | `Vec<String>` | ファイル一覧（再帰対応） |
 | `list_all_files` | `folder_path` | `Vec<String>` | 全ファイル一覧 |
 | `list_subfolders` | `folder_path` | `Vec<String>` | サブフォルダ一覧 |
-| `batch_rename_files` | `entries, output_directory?, mode` | `Vec<BatchRenameResult>` | 一括ファイルリネーム |
+| `batch_rename_files` | `entries, output_directory?, mode` | `Vec<BatchRenameResult>` | 一括ファイルリネーム（rename失敗時copy+deleteフォールバック） |
+| `backup_to_temp` | `source_path` | `String` | ファイル/フォルダを一時バックアップ（Undo用） |
+| `restore_from_backup` | `backup_path, original_path` | `()` | バックアップから復元（Undo用） |
 | `detect_psd_folders` | `folder_path` | `serde_json::Value` | PSD含有フォルダ検出 |
 | `search_json_folders` | `base_path, query` | `Vec<JsonFolderResult>` | JSONフォルダ検索 |
 

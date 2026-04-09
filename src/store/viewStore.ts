@@ -31,6 +31,8 @@ interface ViewState {
   kenbanViewMode: "diff" | "parallel";
   /** JSONブラウザモード（TopNavモーダル用） */
   jsonBrowserMode: "preset" | "check" | null;
+  /** グローバルpromptダイアログ */
+  promptDialog: { message: string; defaultValue: string; resolve: (value: string | null) => void } | null;
 
   setActiveView: (view: AppView) => void;
   setDetailPanelOpen: (open: boolean) => void;
@@ -62,4 +64,66 @@ export const useViewStore = create<ViewState>((set) => ({
   setKenbanPathB: (kenbanPathB) => set({ kenbanPathB }),
   setKenbanViewMode: (kenbanViewMode) => set({ kenbanViewMode }),
   setJsonBrowserMode: (jsonBrowserMode) => set({ jsonBrowserMode }),
+  promptDialog: null,
 }));
+
+/** Tauri互換のpromptダイアログ（window.promptの代替） */
+export function showPromptDialog(message: string, defaultValue = ""): Promise<string | null> {
+  return new Promise((resolve) => {
+    useViewStore.setState({
+      promptDialog: { message, defaultValue, resolve },
+    });
+  });
+}
+
+/**
+ * A/Bパスセット時のフォルダ検証。
+ * PSDがあればPSD優先で通す。問題があればアラートを出してfalseを返す。
+ */
+export async function validateAndSetABPath(
+  side: "A" | "B",
+  folderPath: string,
+): Promise<boolean> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  try {
+    const files = await invoke<string[]>("list_folder_files", { folderPath, recursive: false });
+    if (files.length === 0) {
+      return false;
+    }
+    const getExt = (f: string) => { const d = f.lastIndexOf("."); return d > 0 ? f.substring(d).toLowerCase() : ""; };
+    const psdExts = new Set([".psd", ".psb"]);
+    const imageExts = new Set([".psd", ".psb", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".pdf", ".eps"]);
+
+    const psds = files.filter((f) => psdExts.has(getExt(f)));
+    const images = files.filter((f) => imageExts.has(getExt(f)));
+
+    // テキストのみ or 画像なし → セットしない（アラートなし）
+    if (images.length === 0) {
+      return false;
+    }
+    // PSDがある場合はPSD優先（混在OK）
+    if (psds.length > 0) {
+      // PSD以外の画像が混在 → 情報表示（ブロックしない）
+      const nonPsd = images.filter((f) => !psdExts.has(getExt(f)));
+      if (nonPsd.length > 0) {
+        // PSD優先なので通す
+      }
+    } else {
+      // PSDなし: 複数拡張子の混在チェック
+      const extSet = new Set(images.map((f) => getExt(f)));
+      if (extSet.size > 1) {
+        const extList = [...extSet].join(", ");
+        if (!confirm(`${side}側: 複数の拡張子が混在しています（${extList}）。\nこのまま続行しますか？`)) {
+          return false;
+        }
+      }
+    }
+  } catch {
+    // フォルダ読み取り失敗（ファイル指定の場合など）→ そのまま通す
+  }
+  // セット
+  const vs = useViewStore.getState();
+  if (side === "A") vs.setKenbanPathA(folderPath);
+  else vs.setKenbanPathB(folderPath);
+  return true;
+}

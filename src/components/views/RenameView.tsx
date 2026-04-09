@@ -26,6 +26,47 @@ export function RenameView() {
   const { loadFiles } = usePsdLoader();
   const [isDragOver, setIsDragOver] = useState(false);
 
+  // マウント時: psdStoreにファイルがあればfileEntriesに自動セット
+  useEffect(() => {
+    const psd = usePsdStore.getState();
+    if (fileEntries.length > 0) return; // 既にエントリがある場合はスキップ
+    if (psd.files.length > 0) {
+      const folderPath = psd.currentFolderPath || "";
+      const folderName = folderPath.split(/[\\/]/).pop() || folderPath;
+      const entries: FileRenameEntry[] = psd.files.map((f) => ({
+        id: crypto.randomUUID(),
+        filePath: f.filePath,
+        fileName: f.fileName,
+        folderPath,
+        folderName,
+        selected: true,
+        customName: null,
+      }));
+      addFileEntries(entries);
+    } else if (psd.currentFolderPath) {
+      // ファイルがないがフォルダパスがある → フォルダ内を読み込み
+      (async () => {
+        try {
+          const dir = await readDir(psd.currentFolderPath!);
+          const files = dir.filter((e) => e.isFile && e.name && isSupportedFile(e.name));
+          if (files.length === 0) return;
+          const folderPath = psd.currentFolderPath!;
+          const folderName = folderPath.split(/[\\/]/).pop() || folderPath;
+          const entries: FileRenameEntry[] = files.map((e) => ({
+            id: crypto.randomUUID(),
+            filePath: `${folderPath}\\${e.name}`,
+            fileName: e.name!,
+            folderPath,
+            folderName,
+            selected: true,
+            customName: null,
+          }));
+          addFileEntries(entries);
+        } catch { /* ignore */ }
+      })();
+    }
+  }, []);
+
   // fileEntries 内の PSD/PSB を psdStore へ自動同期（レイヤーリネーム用）
   const syncedPathsRef = useRef<Set<string>>(new Set());
   useEffect(() => {

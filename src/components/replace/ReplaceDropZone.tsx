@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, stat } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
+import { useViewStore } from "../../store/viewStore";
 import { useReplaceStore } from "../../store/replaceStore";
 
 /** readDir でフォルダ内のファイル数をカウント */
@@ -37,6 +38,13 @@ export function ReplaceDropZone() {
   const setNamedBatchFolder = useReplaceStore((s) => s.setNamedBatchFolder);
   const setBatchFolders = useReplaceStore((s) => s.setBatchFolders);
   const clearBatchFolders = useReplaceStore((s) => s.clearBatchFolders);
+
+  // A/BパスからSource/Target自動セット（マウント時1回）
+  useEffect(() => {
+    const vs = useViewStore.getState();
+    if (vs.kenbanPathA && !folders.sourceFolder) setSourceFolder(vs.kenbanPathA);
+    if (vs.kenbanPathB && !folders.targetFolder) setTargetFolder(vs.kenbanPathB);
+  }, []);
 
   const [dragTarget, setDragTarget] = useState<DragTarget>(null);
   const [sourceFileCount, setSourceFileCount] = useState<number | null>(null);

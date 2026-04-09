@@ -43,6 +43,8 @@ pub fn run() {
             commands::write_binary_file,
             commands::delete_file,
             commands::get_temp_dir,
+            commands::backup_to_temp,
+            commands::restore_from_backup,
             commands::create_directory,
             commands::create_zip,
             commands::copy_folder,

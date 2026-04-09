@@ -2870,8 +2870,13 @@ pub async fn write_binary_file(file_path: String, data: Vec<u8>) -> Result<(), S
 pub async fn delete_file(file_path: String) -> Result<(), String> {
     let path = Path::new(&file_path);
     if path.exists() {
-        fs::remove_file(path)
-            .map_err(|e| format!("Failed to delete file: {}", e))?;
+        if path.is_dir() {
+            fs::remove_dir_all(path)
+                .map_err(|e| format!("Failed to delete directory: {}", e))?;
+        } else {
+            fs::remove_file(path)
+                .map_err(|e| format!("Failed to delete file: {}", e))?;
+        }
     }
     Ok(())
 }
@@ -2990,6 +2995,74 @@ pub async fn copy_folder(source: String, destination: String) -> Result<u32, Str
 #[tauri::command]
 pub async fn get_temp_dir() -> String {
     std::env::temp_dir().to_string_lossy().to_string()
+}
+
+/// Backup a file or folder to temp directory, returns the backup path
+#[tauri::command]
+pub async fn backup_to_temp(source_path: String) -> Result<String, String> {
+    let src = Path::new(&source_path);
+    if !src.exists() {
+        return Err(format!("Source not found: {}", source_path));
+    }
+    let temp = std::env::temp_dir().join(format!(
+        "cb_undo_{}_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis(),
+        src.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    if src.is_dir() {
+        fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+            fs::create_dir_all(dst)?;
+            for entry in fs::read_dir(src)? {
+                let entry = entry?;
+                let ty = entry.file_type()?;
+                if ty.is_dir() {
+                    copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+                } else {
+                    fs::copy(entry.path(), dst.join(entry.file_name()))?;
+                }
+            }
+            Ok(())
+        }
+        copy_dir_all(src, &temp).map_err(|e| format!("Backup failed: {}", e))?;
+    } else {
+        fs::copy(src, &temp).map_err(|e| format!("Backup failed: {}", e))?;
+    }
+    Ok(temp.to_string_lossy().to_string())
+}
+
+/// Restore a backup to original path
+#[tauri::command]
+pub async fn restore_from_backup(backup_path: String, original_path: String) -> Result<(), String> {
+    let src = Path::new(&backup_path);
+    let dst = Path::new(&original_path);
+    if !src.exists() {
+        return Err("Backup not found".to_string());
+    }
+    if src.is_dir() {
+        fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+            fs::create_dir_all(dst)?;
+            for entry in fs::read_dir(src)? {
+                let entry = entry?;
+                let ty = entry.file_type()?;
+                if ty.is_dir() {
+                    copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+                } else {
+                    fs::copy(entry.path(), dst.join(entry.file_name()))?;
+                }
+            }
+            Ok(())
+        }
+        copy_dir_all(src, dst).map_err(|e| format!("Restore failed: {}", e))?;
+        // cleanup backup
+        let _ = fs::remove_dir_all(src);
+    } else {
+        fs::copy(src, dst).map_err(|e| format!("Restore failed: {}", e))?;
+        let _ = fs::remove_file(src);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -3936,7 +4009,17 @@ pub async fn batch_rename_files(
             // overwrite mode: rename in place
             let parent = source.parent().unwrap_or(Path::new("."));
             let dest = parent.join(&entry.new_name);
-            match fs::rename(source, &dest) {
+            // fs::rename を試し、失敗時は copy + delete にフォールバック
+            let rename_result = fs::rename(source, &dest).or_else(|_| {
+                // Windows: ファイルがロックされている場合 rename が失敗する
+                // copy → 元ファイル削除 で対処
+                fs::copy(source, &dest).and_then(|_| {
+                    // コピー成功後に元ファイルを削除（削除失敗は無視）
+                    let _ = fs::remove_file(source);
+                    Ok(())
+                })
+            });
+            match rename_result {
                 Ok(_) => BatchRenameResult {
                     original_path: entry.source_path.clone(),
                     original_name,

@@ -1,16 +1,20 @@
 import { useState, type ReactNode } from "react";
 import type { PsdFile, LayerNode } from "../../types";
 
-/** 折りたたみ可能セクション */
-function CollapsibleSection({ title, children, defaultOpen = true }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
+/** 折りたたみ可能セクション（アイコン付き） */
+function CollapsibleSection({ title, icon, children, defaultOpen = true, extra }: {
+  title: string; icon?: ReactNode; children: ReactNode; defaultOpen?: boolean; extra?: ReactNode;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div>
       <button onClick={() => setOpen(!open)} className="flex items-center gap-1.5 w-full text-left mb-1">
-        <svg className={`w-3 h-3 text-text-muted transition-transform ${open ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        {icon && <span className="flex-shrink-0 text-text-muted">{icon}</span>}
+        <span className="text-xs font-medium text-text-muted flex-1">{title}</span>
+        {extra}
+        <svg className={`w-3 h-3 text-text-muted transition-transform flex-shrink-0 ${open ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
-        <span className="text-xs font-medium text-text-muted">{title}</span>
       </button>
       {open && children}
     </div>
@@ -43,8 +47,6 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
   const { outlierFileIds, majoritySize } = useCanvasSizeCheck();
   const isCanvasOutlier = outlierFileIds.has(file.id);
 
-  // 写植サマリーは中央SpecLayerGridに統合済み
-
   return (
     <div className="p-4 space-y-5">
       {file.metadata ? (
@@ -53,7 +55,6 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
           <CollapsibleSection title="カラーモード・ビット深度">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-bg-tertiary rounded-xl p-3">
-              <h3 className="text-xs font-medium text-text-muted mb-2">カラーモード</h3>
               <span
                 className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${
                   file.metadata.colorMode === "RGB"
@@ -69,7 +70,6 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
               </span>
             </div>
             <div className="bg-bg-tertiary rounded-xl p-3">
-              <h3 className="text-xs font-medium text-text-muted mb-2">ビット深度</h3>
               <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-manga-lavender/20 text-manga-lavender">
                 {file.metadata.bitsPerChannel}bit
               </span>
@@ -79,18 +79,15 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
 
           {/* Alpha Channels */}
           {file.metadata.hasAlphaChannels && (
-          <CollapsibleSection title="αチャンネル">
+          <CollapsibleSection
+            title={`αチャンネル (${file.metadata.alphaChannelCount})`}
+            icon={<svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>}
+          >
             <div
               className={`bg-bg-tertiary rounded-xl p-3 ring-1 ${
                 file.metadata.hasOnlyTransparency ? "ring-warning/40" : "ring-error/40"
               }`}
             >
-              <h3 className="text-xs font-medium text-text-muted mb-2 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                </svg>
-                αチャンネル ({file.metadata.alphaChannelCount})
-              </h3>
               <div className="flex flex-wrap gap-1.5">
                 {file.metadata.alphaChannelNames.map((name, i) => {
                   const isTransparency = /^(透明部分|Transparency)$/i.test(name.trim());
@@ -118,26 +115,13 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
           )}
 
           {/* Canvas Size */}
-          <CollapsibleSection title="キャンバスサイズ">
+          <CollapsibleSection
+            title="キャンバスサイズ"
+            icon={<svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>}
+          >
           <div
             className={`bg-bg-tertiary rounded-xl p-3 ${isCanvasOutlier ? "ring-1 ring-warning/50" : ""}`}
           >
-            <h3 className="text-xs font-medium text-text-muted mb-2 flex items-center gap-1.5">
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                />
-              </svg>
-              キャンバスサイズ
-            </h3>
             <div className="flex items-baseline gap-3">
               <p className="text-lg text-text-primary font-mono font-medium">
                 {file.metadata.width} × {file.metadata.height}
@@ -173,24 +157,12 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
           </CollapsibleSection>
 
           {/* トンボ */}
-          <CollapsibleSection title="トンボ・ガイド" defaultOpen={false}>
+          <CollapsibleSection
+            title="トンボ・ガイド"
+            defaultOpen={false}
+            icon={<svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4h4M4 4v4M20 4h-4M20 4v4M4 20h4M4 20v-4M20 20h-4M20 20v-4" /></svg>}
+          >
           <div className="bg-bg-tertiary rounded-xl p-3">
-            <h3 className="text-xs font-medium text-text-muted mb-2 flex items-center gap-1.5">
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 4h4M4 4v4M20 4h-4M20 4v4M4 20h4M4 20v-4M20 20h-4M20 20v-4"
-                />
-              </svg>
-              トンボ
-            </h3>
             {file.metadata.hasTombo ? (
               <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-manga-peach/20 text-manga-peach">
                 あり
@@ -204,28 +176,13 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
           </CollapsibleSection>
 
           {/* Layer Tree */}
-          <CollapsibleSection title="レイヤー" defaultOpen={false}>
+          <CollapsibleSection
+            title="レイヤー"
+            defaultOpen={false}
+            icon={<svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>}
+            extra={<span className="px-1.5 py-0.5 rounded-md text-[10px] bg-accent/20 text-accent">{file.metadata.layerCount}</span>}
+          >
           <div>
-            <h3 className="text-xs font-medium text-text-muted mb-2 flex items-center gap-1.5">
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                />
-              </svg>
-              レイヤー
-              <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-accent/20 text-accent">
-                {file.metadata.layerCount}
-              </span>
-            </h3>
-            {/* 写植サマリーは中央のSpecLayerGridに統合 */}
             <label className="flex items-center gap-1.5 mb-1.5 cursor-pointer text-[10px] text-text-muted hover:text-text-secondary">
               <input
                 type="checkbox"

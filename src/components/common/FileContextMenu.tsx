@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { usePsdStore } from "../../store/psdStore";
-import { useViewStore, type AppView } from "../../store/viewStore";
+import { useViewStore, validateAndSetABPath, showPromptDialog, type AppView } from "../../store/viewStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { usePsdLoader } from "../../hooks/usePsdLoader";
@@ -24,6 +24,12 @@ interface FileContextMenuProps {
   onLaunchTachimi?: () => void;
   /** ビューアーモード: カット/コピー/複製/削除/読み込みを非表示 */
   viewerMode?: boolean;
+  /** 右プレビューに表示中のテキストファイル情報 */
+  previewText?: { name: string; path: string; content: string } | null;
+  /** 選択中の非PSDアイテム（"folder:名前" or "file:名前"） */
+  selectedNonPsdItem?: string | null;
+  /** 現在のフォルダパス */
+  currentFolderPath?: string | null;
 }
 
 interface MenuItem {
@@ -60,8 +66,8 @@ function SubMenu({ items, onClose }: { items: MenuItem[]; onClose: () => void })
             }`}
             disabled={item.disabled}
             onClick={() => {
-              if (item.onClick) item.onClick();
               onClose();
+              if (item.onClick) item.onClick();
             }}
           >
             {item.icon && <span className="w-4 text-center text-xs flex-shrink-0">{item.icon}</span>}
@@ -80,30 +86,38 @@ function SubMenuItem({ item, onClose }: { item: MenuItem; onClose: () => void })
   const ref = useRef<HTMLDivElement>(null);
   const subRef = useRef<HTMLDivElement>(null);
 
-  // Position submenu to the right, flip left if no space
-  useEffect(() => {
+  // ホバー時にサブメニューの位置をclamp（hidden→block後に実サイズが取れる）
+  const clampSubMenu = useCallback(() => {
     if (!ref.current || !subRef.current) return;
-    const parentRect = ref.current.getBoundingClientRect();
     const sub = subRef.current;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    // Horizontal
-    if (parentRect.right + sub.offsetWidth > vw) {
-      sub.style.left = "auto";
-      sub.style.right = "100%";
-    } else {
-      sub.style.left = "100%";
-      sub.style.right = "auto";
-    }
-    // Vertical clamp
-    const subRect = sub.getBoundingClientRect();
-    if (subRect.bottom > vh) {
-      sub.style.top = `${vh - subRect.bottom - 4}px`;
-    }
+    // リセット
+    sub.style.left = "100%";
+    sub.style.right = "auto";
+    sub.style.top = "0px";
+    // Horizontal: 右にはみ出す場合は左に展開
+    requestAnimationFrame(() => {
+      const subRect = sub.getBoundingClientRect();
+      if (subRect.right > vw) {
+        sub.style.left = "auto";
+        sub.style.right = "100%";
+      }
+      // Vertical: 下にはみ出す場合は上にずらす
+      const subRect2 = sub.getBoundingClientRect();
+      if (subRect2.bottom > vh) {
+        sub.style.top = `${vh - subRect2.bottom - 8}px`;
+      }
+      // 上にはみ出す場合
+      const subRect3 = sub.getBoundingClientRect();
+      if (subRect3.top < 0) {
+        sub.style.top = `${-subRect3.top + 8}px`;
+      }
+    });
   }, []);
 
   return (
-    <div ref={ref} className="relative group/sub">
+    <div ref={ref} className="relative group/sub" onMouseEnter={clampSubMenu}>
       <div
         className={`w-full flex items-center gap-2 px-3 py-1.5 text-[11px] rounded-md transition-colors ${
           item.disabled
@@ -141,6 +155,9 @@ export function FileContextMenu({
   onClose,
   onLaunchTachimi,
   viewerMode,
+  previewText,
+  selectedNonPsdItem,
+  currentFolderPath,
 }: FileContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const { loadFolder } = usePsdLoader();
@@ -164,19 +181,37 @@ export function FileContextMenu({
     };
   }, [onClose]);
 
-  // Position clamp
+  // Position clamp — 初回レンダリング後 + DOM変化時にも再計算
   useEffect(() => {
-    if (!menuRef.current) return;
-    const el = menuRef.current;
-    const rect = el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    if (rect.right > vw) el.style.left = `${vw - rect.width - 8}px`;
-    if (rect.bottom > vh) el.style.top = `${vh - rect.height - 8}px`;
-  }, []);
+    const clamp = () => {
+      if (!menuRef.current) return;
+      const el = menuRef.current;
+      const rect = el.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      if (rect.right > vw) el.style.left = `${Math.max(8, vw - rect.width - 8)}px`;
+      if (rect.bottom > vh) el.style.top = `${Math.max(8, vh - rect.height - 8)}px`;
+      if (rect.left < 0) el.style.left = "8px";
+      if (rect.top < 0) el.style.top = "8px";
+    };
+    // 初回 + rAFで確実にレイアウト確定後に実行
+    clamp();
+    requestAnimationFrame(clamp);
+  }, [x, y]);
 
   const hasPdf = targetFiles.some((f) => f.fileName.toLowerCase().endsWith(".pdf") || f.pdfSourcePath);
   const singleFile = targetFiles.length === 1 ? targetFiles[0] : null;
+  const isSingleTxt = singleFile?.fileName.toLowerCase().endsWith(".txt");
+
+  // 選択中のフォルダ/ファイルのフルパス
+  const selectedFolderName = selectedNonPsdItem?.startsWith("folder:") ? selectedNonPsdItem.slice(7) : null;
+  const selectedFileName = selectedNonPsdItem?.startsWith("file:") ? selectedNonPsdItem.slice(5) : null;
+  const selectedItemPath = selectedFolderName && currentFolderPath
+    ? `${currentFolderPath}\\${selectedFolderName}`
+    : selectedFileName && currentFolderPath
+      ? `${currentFolderPath}\\${selectedFileName}`
+      : null;
+  const hasNonPsdSelection = !!selectedItemPath;
 
   // ── Actions ──
 
@@ -264,6 +299,70 @@ export function FileContextMenu({
     } catch { /* ignore */ }
   }, []);
 
+  /** 右クリック対象のtxtファイルを直接テキストとして読み込み */
+  const handleLoadThisText = useCallback(async () => {
+    if (!singleFile?.filePath) return;
+    try {
+      const bytes = await readFile(singleFile.filePath);
+      const content = new TextDecoder("utf-8").decode(bytes);
+      const viewerStore = useUnifiedViewerStore.getState();
+      viewerStore.setTextContent(content);
+      viewerStore.setTextFilePath(singleFile.filePath);
+      viewerStore.setIsDirty(false);
+    } catch { /* ignore */ }
+  }, [singleFile]);
+
+  /** プレビュー中のテキストをセリフテキストとして読み込み */
+  const handleLoadPreviewText = useCallback(() => {
+    if (!previewText) return;
+    const vs = useUnifiedViewerStore.getState();
+    vs.setTextContent(previewText.content);
+    vs.setTextFilePath(previewText.path);
+    vs.setIsDirty(false);
+  }, [previewText]);
+
+  // ── フォルダ/ファイル選択時のアクション ──
+
+  const openSelectedItemLocation = useCallback(async () => {
+    if (!selectedItemPath) return;
+    if (selectedFolderName) {
+      await invoke("open_folder_in_explorer", { folderPath: selectedItemPath }).catch(() => {});
+    } else {
+      await invoke("reveal_files_in_explorer", { filePaths: [selectedItemPath] }).catch(() => {});
+    }
+  }, [selectedItemPath, selectedFolderName]);
+
+  const copySelectedItemPath = useCallback(async () => {
+    if (!selectedItemPath) return;
+    await navigator.clipboard.writeText(selectedItemPath).catch(() => {});
+  }, [selectedItemPath]);
+
+  /** フォルダ内のPSDファイ��をPhotoshopで開く */
+  const openFolderPsdsInPhotoshop = useCallback(async () => {
+    if (!selectedItemPath) return;
+    try {
+      const fileList = await invoke<string[]>("list_folder_files", { folderPath: selectedItemPath, recursive: false });
+      const psdExts = [".psd", ".psb"];
+      const psds = fileList.filter((f) => psdExts.some((e) => f.toLowerCase().endsWith(e)));
+      for (const p of psds) await invoke("open_file_in_photoshop", { filePath: p }).catch(() => {});
+    } catch { /* ignore */ }
+  }, [selectedItemPath]);
+
+  /** フォルダ内のPSDファイルを読み込んでPDF作成(Tachimi)起動 */
+  const launchTachimiForFolder = useCallback(async () => {
+    if (!selectedItemPath) return;
+    try {
+      // フォルダ内ファイル一覧を取得してPSD/画像のみ抽出
+      const fileList = await invoke<string[]>("list_folder_files", { folderPath: selectedItemPath, recursive: false });
+      const supportedExts = [".psd", ".psb", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".pdf", ".eps"];
+      const targets = fileList.filter((f) => supportedExts.some((e) => f.toLowerCase().endsWith(e)));
+      if (targets.length === 0) { alert("フォルダ内に対応ファイルがありません"); return; }
+      // フォルダを読み込んでTachimi起動
+      await loadFolder(selectedItemPath);
+      if (onLaunchTachimi) onLaunchTachimi();
+    } catch { /* ignore */ }
+  }, [selectedItemPath, loadFolder, onLaunchTachimi]);
+
   const handleLoadCheckJson = useCallback(async () => {
     const path = await dialogOpen({
       filters: [{ name: "JSON", extensions: ["json"] }],
@@ -340,59 +439,278 @@ export function FileContextMenu({
   const handleRenameYYYYMMDD = useCallback(async () => {
     if (targetFiles.length === 0) return;
 
-    // Get workInfo from scanPsdStore
     const workInfo = useScanPsdStore.getState().workInfo;
     const now = new Date();
     const yyyymmdd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
     const genre = workInfo.genre || "ジャンル";
     const title = workInfo.title || "タイトル";
-    const volume = workInfo.volume ? String(workInfo.volume) : "巻";
+    // フォルダ名から巻数を検出
+    const folderName = usePsdStore.getState().currentFolderPath?.split("\\").pop() || "";
+    const volMatch = folderName.match(/(\d+)/);
+    const volume = volMatch ? volMatch[1] : "巻";
 
     const entries = targetFiles.map((f, i) => {
       const ext = f.fileName.substring(f.fileName.lastIndexOf("."));
       const num = String(i + 1).padStart(3, "0");
       const newName = `${yyyymmdd}_${genre}_${title}_${volume}_${num}${ext}`;
-      return {
-        source_path: f.filePath,
-        new_name: newName,
-      };
+      return { sourcePath: f.filePath, newName: newName };
     });
 
     try {
-      await invoke("batch_rename_files", {
-        entries,
-        outputDirectory: null,
-        mode: "overwrite",
+      await invoke("batch_rename_files", { entries, outputDirectory: null, mode: "overwrite" });
+      const undoEntries = entries.map((e) => {
+        const dir = e.sourcePath.substring(0, e.sourcePath.lastIndexOf("\\"));
+        return { oldPath: e.sourcePath, newPath: `${dir}\\${e.newName}` };
       });
-      // Reload
-      const currentFolder = usePsdStore.getState().currentFolderPath;
-      if (currentFolder) await loadFolder(currentFolder);
+      usePsdStore.getState().pushFileOpsUndo({ type: "rename", entries: undoEntries });
     } catch (e) {
       console.error("Rename failed:", e);
+    }
+    try {
+      const currentFolder = usePsdStore.getState().currentFolderPath;
+      if (currentFolder) await loadFolder(currentFolder);
+      usePsdStore.getState().triggerRefresh();
+    } catch {
     }
   }, [targetFiles, loadFolder]);
 
   const handleRenameSingle = useCallback(async () => {
-    if (!singleFile) return;
-    const newName = window.prompt("新しいファイル名", singleFile.fileName);
-    if (!newName || newName === singleFile.fileName) return;
-
+    const file = singleFile || targetFiles[0];
+    if (!file) return;
+    const newName = await showPromptDialog("新しいファイル名", file.fileName);
+    if (!newName || newName === file.fileName) return;
+    const dir = file.filePath.substring(0, file.filePath.lastIndexOf("\\"));
+    const currentFolder = usePsdStore.getState().currentFolderPath;
     try {
-      await invoke("batch_rename_files", {
-        entries: [{ source_path: singleFile.filePath, new_name: newName }],
+      // キャッシュ無効化（ファイルハンドル解放）
+      await invoke("invalidate_file_cache", { filePath: file.filePath }).catch(() => {});
+      await invoke("clear_psd_cache").catch(() => {});
+      // リネーム実行
+      const results = await invoke<{ success: boolean; error?: string }[]>("batch_rename_files", {
+        entries: [{ sourcePath: file.filePath, newName: newName }],
         outputDirectory: null,
         mode: "overwrite",
       });
-      const currentFolder = usePsdStore.getState().currentFolderPath;
-      if (currentFolder) await loadFolder(currentFolder);
+      if (results[0]?.success) {
+        usePsdStore.getState().pushFileOpsUndo({
+          type: "rename",
+          entries: [{ oldPath: file.filePath, newPath: `${dir}\\${newName}` }],
+        });
+      } else {
+        console.error("Rename failed:", results[0]?.error);
+      }
     } catch (e) {
-      console.error("Rename failed:", e);
+      console.error("Rename invoke failed:", e);
     }
-  }, [singleFile, loadFolder]);
+    // 再読み込み
+    if (currentFolder) {
+      try { await loadFolder(currentFolder); } catch { /* ignore */ }
+    }
+    usePsdStore.getState().triggerRefresh();
+  }, [singleFile, targetFiles, loadFolder]);
 
   // ── Menu structure ──
 
-  const menuItems: MenuItem[] = [
+  // フォルダ/非PSDファイル選択時のメニュー（PSD未選択時）
+  const nonPsdMenuItems: MenuItem[] = hasNonPsdSelection && targetFiles.length === 0 ? [
+    ...(selectedFolderName ? [
+      {
+        label: "フォルダを開く",
+        icon: "📂",
+        onClick: openSelectedItemLocation,
+      },
+      {
+        label: "フォルダ内をPsで開く",
+        icon: "🎨",
+        onClick: openFolderPsdsInPhotoshop,
+      },
+      {
+        label: "PDF作成（フォルダ内）",
+        icon: "📑",
+        onClick: launchTachimiForFolder,
+      },
+      { separator: true, label: "sep-ab-folder" },
+      {
+        label: "A/B比較",
+        icon: "🔍",
+        children: [
+          { label: "Aにセット", icon: "🅰️", onClick: () => { if (selectedItemPath) validateAndSetABPath("A", selectedItemPath); } },
+          { label: "Bにセット", icon: "🅱️", onClick: () => { if (selectedItemPath) validateAndSetABPath("B", selectedItemPath); } },
+        ],
+      },
+    ] : [
+      {
+        label: "ファイルの場所を開く",
+        icon: "📂",
+        onClick: openSelectedItemLocation,
+      },
+    ]),
+    // プレビュー中のテキストを読み込み
+    ...(previewText ? [{
+      label: `「${previewText.name}」をテキストとして読み込み`,
+      icon: "📝",
+      onClick: handleLoadPreviewText,
+    }] : []),
+    { separator: true, label: "sep-np1" },
+    {
+      label: "カット",
+      icon: "✂️",
+      onClick: async () => {
+        if (!selectedItemPath) return;
+        await navigator.clipboard.writeText(selectedItemPath).catch(() => {});
+        try {
+          const backupPath = await invoke<string>("backup_to_temp", { sourcePath: selectedItemPath });
+          await invoke("delete_file", { filePath: selectedItemPath });
+          usePsdStore.getState().pushFileOpsUndo({ type: "cut", backupPath, originalPath: selectedItemPath });
+        } catch { /* ignore */ }
+        const folder = usePsdStore.getState().currentFolderPath;
+        if (folder) await loadFolder(folder);
+        usePsdStore.getState().triggerRefresh();
+      },
+    },
+    {
+      label: "コピー",
+      icon: "📋",
+      onClick: copySelectedItemPath,
+    },
+    {
+      label: "複製",
+      icon: "📄",
+      onClick: async () => {
+        if (!selectedItemPath) return;
+        let createdPath = "";
+        try {
+          if (selectedFolderName) {
+            const parent = selectedItemPath.substring(0, selectedItemPath.lastIndexOf("\\"));
+            let destName = `${selectedFolderName}_copy`;
+            let dest = `${parent}\\${destName}`;
+            let counter = 2;
+            while (await invoke<boolean>("path_exists", { path: dest })) {
+              destName = `${selectedFolderName}_copy${counter}`;
+              dest = `${parent}\\${destName}`;
+              counter++;
+            }
+            await invoke("copy_folder", { source: selectedItemPath, destination: dest });
+            createdPath = dest;
+          } else {
+            const results = await invoke<string[]>("duplicate_files", { filePaths: [selectedItemPath] });
+            if (results.length > 0 && !results[0].startsWith("Error")) createdPath = results[0];
+          }
+          if (createdPath) {
+            usePsdStore.getState().pushFileOpsUndo({ type: "duplicate", backupPath: "", originalPath: createdPath });
+          }
+        } catch { /* ignore */ }
+        const folder = usePsdStore.getState().currentFolderPath;
+        if (folder) await loadFolder(folder);
+        usePsdStore.getState().triggerRefresh();
+      },
+    },
+    {
+      label: "削除",
+      icon: "🗑️",
+      onClick: async () => {
+        if (!selectedItemPath) return;
+        if (!window.confirm(`「${selectedFolderName || selectedFileName}」を削除しますか？`)) return;
+        try {
+          const backupPath = await invoke<string>("backup_to_temp", { sourcePath: selectedItemPath });
+          await invoke("delete_file", { filePath: selectedItemPath });
+          usePsdStore.getState().pushFileOpsUndo({ type: "delete", backupPath, originalPath: selectedItemPath });
+        } catch { /* ignore */ }
+        const folder = usePsdStore.getState().currentFolderPath;
+        if (folder) await loadFolder(folder);
+        usePsdStore.getState().triggerRefresh();
+      },
+    },
+    {
+      label: "リネーム",
+      icon: "✏️",
+      children: [
+        {
+          label: "名前を変更",
+          icon: "📝",
+          onClick: async () => {
+            if (!selectedItemPath) return;
+            const name = selectedFolderName || selectedFileName || "";
+            const newName = await showPromptDialog("新しい名前", name);
+            if (!newName || newName === name) return;
+            const dir = selectedItemPath.substring(0, selectedItemPath.lastIndexOf("\\"));
+            try {
+              await invoke("invalidate_file_cache", { filePath: selectedItemPath }).catch(() => {});
+              await invoke("batch_rename_files", {
+                entries: [{ sourcePath: selectedItemPath, newName: newName }],
+                outputDirectory: null,
+                mode: "overwrite",
+              });
+              usePsdStore.getState().pushFileOpsUndo({
+                type: "rename",
+                entries: [{ oldPath: selectedItemPath, newPath: `${dir}\\${newName}` }],
+              });
+            } catch { /* ignore */ }
+            const folder = usePsdStore.getState().currentFolderPath;
+            if (folder) await loadFolder(folder);
+            usePsdStore.getState().triggerRefresh();
+          },
+        },
+        {
+          label: "yyyymmdd_ジャンル_タイトル_巻",
+          icon: "📅",
+          onClick: async () => {
+            if (!selectedItemPath) return;
+            const name = selectedFolderName || selectedFileName || "";
+            // 依頼準備と同じロジックでZIP名を生成
+            const scanWork = useScanPsdStore.getState().workInfo;
+            const scanJson = useScanPsdStore.getState().currentJsonFilePath;
+            const presetJson = useUnifiedViewerStore.getState().presetJsonPath;
+            const now = new Date();
+            const yyyymmdd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+            const genre = scanWork.genre || "";
+            let title = scanWork.title || "";
+            if (!title) {
+              const jp = scanJson || presetJson || "";
+              if (jp) title = (jp.replace(/\\/g, "/").split("/").pop() || "").replace(/\.json$/i, "");
+            }
+            // フォルダ名から巻数を抽出（常にフォルダ名優先）
+            const volMatch = name.match(/(\d+)/);
+            const vol = volMatch ? volMatch[1] : "1";
+            const suggested = genre || title
+              ? `${yyyymmdd}_${genre || "ジャンル"}_${title || "タイトル"}_${vol}巻`
+              : `${yyyymmdd}_${name}`;
+            const newName = await showPromptDialog("新しい名前", suggested);
+            if (!newName || newName === name) return;
+            const dir = selectedItemPath.substring(0, selectedItemPath.lastIndexOf("\\"));
+            try {
+              await invoke("invalidate_file_cache", { filePath: selectedItemPath }).catch(() => {});
+              await invoke("batch_rename_files", {
+                entries: [{ sourcePath: selectedItemPath, newName: newName }],
+                outputDirectory: null,
+                mode: "overwrite",
+              });
+              usePsdStore.getState().pushFileOpsUndo({
+                type: "rename",
+                entries: [{ oldPath: selectedItemPath, newPath: `${dir}\\${newName}` }],
+              });
+            } catch { /* ignore */ }
+            const folder = usePsdStore.getState().currentFolderPath;
+            if (folder) await loadFolder(folder);
+            usePsdStore.getState().triggerRefresh();
+          },
+        },
+      ],
+    },
+    { separator: true, label: "sep-np2" },
+    {
+      label: "読み込み",
+      icon: "📥",
+      children: [
+        { label: "別の作品を読み込み", icon: "📂", onClick: handleLoadFolder },
+        { label: "セリフテキスト読み込み", icon: "📄", onClick: handleLoadText },
+        { label: "校正JSON読み込み", icon: "📊", onClick: handleLoadCheckJson },
+        { label: "作品JSON読み込み", icon: "📋", onClick: handleLoadPresetJson },
+      ],
+    },
+  ] : [];
+
+  const menuItems: MenuItem[] = nonPsdMenuItems.length > 0 ? nonPsdMenuItems : [
     {
       label: "Psで開く",
       shortcut: "P",
@@ -413,6 +731,18 @@ export function FileContextMenu({
       onClick: openFileLocation,
       disabled: targetFiles.length === 0,
     },
+    // txtファイル: セリフテキストとして読み込み
+    ...(isSingleTxt ? [{
+      label: "セリフテキストとして読み込み",
+      icon: "📝",
+      onClick: handleLoadThisText,
+    }] : []),
+    // プレビュー中のテキストを読み込み
+    ...(!isSingleTxt && previewText ? [{
+      label: `「${previewText.name}」をテキストとして読み込み`,
+      icon: "📝",
+      onClick: handleLoadPreviewText,
+    }] : []),
     { separator: true, label: "sep1" },
     {
       label: "カット",
@@ -473,7 +803,7 @@ export function FileContextMenu({
           label: "このファイルをリネーム",
           icon: "📝",
           onClick: handleRenameSingle,
-          disabled: !singleFile,
+          disabled: targetFiles.length === 0,
         },
         { label: "バッチでリネーム", icon: "📋", onClick: () => navigateTo("rename") },
         {
@@ -488,6 +818,20 @@ export function FileContextMenu({
       label: "圧縮",
       icon: "📦",
       onClick: () => navigateTo("requestPrep" as any),
+    },
+    {
+      label: "A/B比較",
+      icon: "🔍",
+      children: [
+        { label: "Aにセット", icon: "🅰️", onClick: () => {
+          const path = singleFile?.filePath ? (singleFile.filePath.substring(0, singleFile.filePath.lastIndexOf("\\"))) : usePsdStore.getState().currentFolderPath;
+          if (path) validateAndSetABPath("A", path);
+        }},
+        { label: "Bにセット", icon: "🅱️", onClick: () => {
+          const path = singleFile?.filePath ? (singleFile.filePath.substring(0, singleFile.filePath.lastIndexOf("\\"))) : usePsdStore.getState().currentFolderPath;
+          if (path) validateAndSetABPath("B", path);
+        }},
+      ],
     },
     { separator: true, label: "sep3" },
     {

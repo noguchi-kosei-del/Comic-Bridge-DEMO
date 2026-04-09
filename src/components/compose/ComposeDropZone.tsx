@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, stat } from "@tauri-apps/plugin-fs";
 import { useComposeStore } from "../../store/composeStore";
+import { useViewStore } from "../../store/viewStore";
 
 /** readDir でフォルダ内のファイル数をカウント */
 async function countFiles(folderPath: string): Promise<number> {
@@ -16,6 +17,13 @@ export function ComposeDropZone() {
   const folders = useComposeStore((s) => s.folders);
   const setSourceFolder = useComposeStore((s) => s.setSourceFolder);
   const setTargetFolder = useComposeStore((s) => s.setTargetFolder);
+
+  // A/BパスからSource/Target自動セット（マウント時1回）
+  useEffect(() => {
+    const vs = useViewStore.getState();
+    if (vs.kenbanPathA && !folders.sourceFolder) setSourceFolder(vs.kenbanPathA);
+    if (vs.kenbanPathB && !folders.targetFolder) setTargetFolder(vs.kenbanPathB);
+  }, []);
 
   const [dragTarget, setDragTarget] = useState<DragTarget>(null);
   const [sourceFileCount, setSourceFileCount] = useState<number | null>(null);

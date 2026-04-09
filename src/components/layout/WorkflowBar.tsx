@@ -133,17 +133,14 @@ export function WorkflowBar() {
       <div className="relative">
         <button
           onClick={() => setShowPicker(!showPicker)}
-          className={`px-2 py-0.5 text-[10px] rounded transition-colors flex items-center gap-1 ${
+          className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
             showPicker
-              ? "text-accent bg-accent/10"
-              : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
+              ? "bg-gradient-to-br from-accent to-accent-secondary shadow-md scale-105"
+              : "bg-gradient-to-br from-accent to-accent-secondary shadow-sm hover:shadow-md hover:scale-105"
           }`}
           title="ワークフロー"
         >
-          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-          WF
+          <span className="text-[10px] font-bold text-white">WF</span>
         </button>
 
         {/* ワークフロー選択ドロップダウン */}

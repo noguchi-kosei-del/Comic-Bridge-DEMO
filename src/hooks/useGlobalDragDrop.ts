@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { usePsdLoader } from "./usePsdLoader";
-import { useViewStore } from "../store/viewStore";
+import { useViewStore, validateAndSetABPath } from "../store/viewStore";
 import { usePsdStore } from "../store/psdStore";
 import { useTiffStore } from "../store/tiffStore";
 import { isSupportedFile } from "../types";
@@ -59,6 +59,16 @@ export function useGlobalDragDrop() {
             usePsdStore.getState().setDroppedFolderPaths(folderPaths);
             usePsdStore.getState().setCurrentFolderPath(folderPaths[0]);
             usePsdStore.getState().setSingleFolderDrop(null);
+            // Aが未セットの場合のみ検証付き自動セット
+            if (!useViewStore.getState().kenbanPathA) {
+              validateAndSetABPath("A", folderPaths[0]);
+            }
+          } else if (imageFiles.length > 0) {
+            const firstFile = imageFiles[0];
+            const sep = firstFile.lastIndexOf("\\");
+            if (sep > 0 && !useViewStore.getState().kenbanPathA) {
+              validateAndSetABPath("A", firstFile.substring(0, sep));
+            }
           }
 
           // TIFFタブ: includeSubfolders有効 or ルートに画像なし（サブフォルダのみ）→自動サブフォルダ読み込み
@@ -89,7 +99,13 @@ export function useGlobalDragDrop() {
           } else if (folderPaths.length > 0) {
             // フォルダのみでファイルがない場合 → loadFolderで更新（追加ではなく置き換え）
             await loadFolder(folderPaths[0]);
+            // PSDがなければロック解除
+            if (usePsdStore.getState().files.length === 0) {
+              usePsdStore.getState().setContentLocked(false);
+            }
           }
+          // folderContentsも更新
+          usePsdStore.getState().triggerRefresh();
         }
       });
 
