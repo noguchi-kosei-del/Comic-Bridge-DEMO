@@ -1,4 +1,6 @@
 import { useScanPsdStore } from "../../store/scanPsdStore";
+import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
+import { useScanPsdProcessor } from "../../hooks/useScanPsdProcessor";
 import type { ScanPsdMode } from "../../types/scanPsd";
 
 const MODES: { id: ScanPsdMode; label: string; desc: string; icon: React.ReactNode }[] = [
@@ -47,6 +49,18 @@ const MODES: { id: ScanPsdMode; label: string; desc: string; icon: React.ReactNo
 
 export function ScanPsdModeSelector() {
   const setMode = useScanPsdStore((s) => s.setMode);
+  const presetJsonPath = useUnifiedViewerStore((s) => s.presetJsonPath);
+  const { loadPresetJson } = useScanPsdProcessor();
+
+  const handleModeSelect = async (modeId: ScanPsdMode) => {
+    // JSON編集モードで、TopNavの作品情報JSONが既に読み込まれている場合は自動読み込み
+    if (modeId === "edit" && presetJsonPath) {
+      setMode("edit");
+      await loadPresetJson(presetJsonPath);
+      return;
+    }
+    setMode(modeId);
+  };
 
   return (
     <div className="h-full flex items-center justify-center bg-bg-primary">
@@ -69,6 +83,11 @@ export function ScanPsdModeSelector() {
             </svg>
           </div>
           <h2 className="text-xl font-bold text-text-primary">PSDスキャナー</h2>
+          {presetJsonPath && (
+            <p className="text-[10px] text-accent-secondary">
+              作品情報JSON読み込み済み: {presetJsonPath.split("\\").pop()}
+            </p>
+          )}
         </div>
 
         {/* Mode Cards */}
@@ -76,7 +95,7 @@ export function ScanPsdModeSelector() {
           {MODES.map((mode) => (
             <button
               key={mode.id}
-              onClick={() => setMode(mode.id)}
+              onClick={() => handleModeSelect(mode.id)}
               className="group w-80 bg-bg-secondary border border-border rounded-2xl p-8 text-left
                 hover:border-accent/50 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
             >

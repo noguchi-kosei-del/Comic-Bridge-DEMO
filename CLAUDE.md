@@ -431,6 +431,8 @@
 - **ZIP名自動生成**: `yyyymmdd_ジャンル_タイトル_巻` — 作品情報JSON(`presetData.workInfo.genre/title`)参照、巻数はフォルダ名から検出（JSONのvolumeは無視）
 - **JSON workInfo自動読み込み**: プリセットJSON読み込み時に`presetData.workInfo`からgenre/label/title/authorをscanPsdStoreにセット（volumeはセットしない）
 - **テキスト読み込み時のCOMIC-POTパース**: TopNav/FileContextMenu/SpecCheckViewの全テキスト読み込み箇所で`parseComicPotText()`を呼び、`textPages`/`textHeader`をstoreにセット。UnifiedViewer内のuseEffectで`textContent`変更時に`parseChunks`を自動実行
+- **ProGen マスターJSON一覧**: ScanPsdEditView内にフォント帳と同形式のモーダル。`progen_get_master_label_list`でレーベル一覧取得、`workInfo.label`から自動選択。統一表記ルール/校正ルール/オプションを3タブ表示。4種類のGeminiプロンプト（抽出/整形/正誤/提案）をコピー→Gemini起動
+- **スキャナーJSON編集のTopNav連携**: ScanPsdModeSelectorで「JSON編集」選択時、TopNavで読み込み済みの作品情報JSON（`unifiedViewerStore.presetJsonPath`）があれば`loadPresetJson`で自動読み込み
 - **create_zip Rustコマンド**: zip crate使用、フォルダ再帰対応、デスクトップに保存
 
 ### 25. 設定画面

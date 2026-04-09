@@ -66,14 +66,13 @@ export function TopNav() {
         // workInfo（ジャンル/タイトル/巻数等）をscanPsdStoreにセット
         const wi = data?.presetData?.workInfo ?? data?.workInfo;
         if (wi && typeof wi === "object") {
-          const store = useScanPsdStore.getState();
-          store.setWorkInfo({
-            ...store.workInfo,
+          const scanStore = useScanPsdStore.getState();
+          scanStore.setWorkInfo({
+            ...scanStore.workInfo,
             ...(wi.genre ? { genre: wi.genre } : {}),
             ...(wi.label ? { label: wi.label } : {}),
             ...(wi.title ? { title: wi.title } : {}),
             ...(wi.author ? { author: wi.author } : {}),
-            // volume はフォルダ名から検出するためJSONからはセットしない
           });
         }
       }

@@ -10,6 +10,7 @@ import { FontSizesTab } from "./tabs/FontSizesTab";
 import { GuideLinesTab } from "./tabs/GuideLinesTab";
 import { TextRubyTab } from "./tabs/TextRubyTab";
 import { FontBookView } from "../views/FontBookView";
+import { ProgenJsonBrowser } from "./ProgenJsonBrowser";
 
 interface PendingFolder {
   path: string;
@@ -72,6 +73,7 @@ export function ScanPsdEditView() {
   // 追加スキャンダイアログ
   const [showScanDialog, setShowScanDialog] = useState(false);
   const [showFontBook, setShowFontBook] = useState(false);
+  const [showProgenJson, setShowProgenJson] = useState(false);
   const [pendingFolders, setPendingFolders] = useState<PendingFolder[]>([]);
 
   // スキャン完了ダイアログ
@@ -321,6 +323,20 @@ export function ScanPsdEditView() {
                 </div>
               </div>
               <div>
+                <SectionHeader icon="font" color="purple">
+                  ProGen マスターJSON
+                </SectionHeader>
+                <div className="bg-white rounded-2xl border border-border/60 shadow-card p-4 flex flex-col items-center gap-2">
+                  <p className="text-[11px] text-text-muted text-center">統一表記ルールの確認・Geminiへのコピーを行います</p>
+                  <button
+                    onClick={() => setShowProgenJson(true)}
+                    className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    ProGen JSON一覧を開く
+                  </button>
+                </div>
+              </div>
+              <div>
                 <SectionHeader icon="guide" color="mint">
                   ガイド線
                 </SectionHeader>
@@ -362,6 +378,21 @@ export function ScanPsdEditView() {
             </div>
             <div className="flex-1 overflow-auto">
               <FontBookView />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ProGen JSONモーダル */}
+      {showProgenJson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowProgenJson(false)}>
+          <div className="bg-bg-primary rounded-xl shadow-2xl w-[90vw] h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-bg-secondary">
+              <h3 className="text-sm font-medium">ProGen マスターJSON</h3>
+              <button onClick={() => setShowProgenJson(false)} className="text-text-muted hover:text-text-primary text-lg">✕</button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ProgenJsonBrowser />
             </div>
           </div>
         </div>

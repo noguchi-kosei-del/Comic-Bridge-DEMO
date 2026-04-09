@@ -698,6 +698,7 @@ pub fn progen_write_json_file(file_path: String, data: serde_json::Value) -> ser
 #[tauri::command]
 pub fn progen_read_master_rule(label_value: String, state: tauri::State<'_, ProgenState>) -> serde_json::Value {
     let map = state.master_rule_file_map.lock().unwrap();
+    println!("[ProGen] read_master_rule called with: '{}', map keys: {:?}", label_value, map.keys().collect::<Vec<_>>());
     match find_label_info(&map, &label_value) {
         Some(info) => {
             let full_path = PathBuf::from(MASTER_JSON_BASE_PATH).join(&info.path);
