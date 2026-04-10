@@ -10,7 +10,6 @@ export type AppView =
   | "tiff"
   | "scanPsd"
   | "typesetting"
-  | "kenban"
   | "progen"
   | "unifiedViewer"
   | "folderSetup"

@@ -10,8 +10,7 @@ import { TiffView } from "../views/TiffView";
 import { ScanPsdView } from "../views/ScanPsdView";
 // TypsettingView は隔離中 — 削除予定
 // import { TypsettingView } from "../views/TypsettingView";
-// KenbanView は隔離中 — 統合ビューアーに移行完了後に削除予定
-// import { KenbanView } from "../views/KenbanView";
+// KENBAN は完全削除済み（差分・分割は統合ビューアーへReact移植完了）
 import { ProgenView } from "../views/ProgenView";
 import { UnifiedViewerView } from "../views/UnifiedViewerView";
 import { FolderSetupView } from "../views/FolderSetupView";
@@ -44,13 +43,6 @@ export function ViewRouter() {
       {activeView === "scanPsd" && <ScanPsdView />}
       {activeView === "folderSetup" && <FolderSetupView />}
       {activeView === "requestPrep" && <RequestPrepView />}
-
-      {/* KENBAN: 隔離中 — 統合ビューアーに移行完了後に削除予定 */}
-      {/* kenbanMounted && (
-        <div style={{ display: activeView === "kenban" ? "contents" : "none" }}>
-          <KenbanView />
-        </div>
-      ) */}
 
       {/* ProGen: React native (state-preserving via display toggle) */}
       {progenMounted && (

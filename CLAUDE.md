@@ -9,7 +9,7 @@
 
 ## 概要
 
-漫画制作者や編集者が入稿前にPSDファイルの仕様をチェックし、必要に応じてPhotoshopと連携して一括修正できるツール。統合ビューアー（テキスト照合・写植確認・校正JSON・DTPビューアー機能を統合）とProGen（テキスト抽出・校正プロンプト生成ツール）を内蔵。KENBAN検版機能は統合ビューアーに移行中（差分モード・分割ビューアーは利用可能）。
+漫画制作者や編集者が入稿前にPSDファイルの仕様をチェックし、必要に応じてPhotoshopと連携して一括修正できるツール。統合ビューアー（テキスト照合・写植確認・校正JSON・DTPビューアー・差分モード・分割ビューアー）とProGen（テキスト抽出・校正プロンプト生成ツール）を内蔵。全機能React/Tailwind/Zustandネイティブ実装。
 
 ## 技術スタック
 
@@ -20,7 +20,8 @@
 - **PSD処理**: ag-psd（読み取り専用）、Photoshop ExtendScript（変換・書き込み）
 - **PDF処理**: pdfium-render（プレビュー/サムネイル）、Photoshop PDFOpenOptions（分割処理）
 - **バックエンド**: Rust
-- **KENBAN/統合ビューアー**: pdfjs-dist, pdf-lib, jspdf, lucide-react（kenban-scope CSSで隔離、LCS diff等のユーティリティは`kenban-utils/textExtract.ts`で共有）
+- **統合ビューアー**: pdfjs-dist, pdf-lib, jspdf, lucide-react（LCS diff等のユーティリティは`kenban-utils/textExtract.ts`で共有）
+- **差分ビューアー / 分割ビューアー**: React/Zustandネイティブ（v3.5.0でKENBANから完全移植済み）
 - **ProGenタブ**: React（Zustand + Tailwind、本体と統合済み）
 
 ## 設計思想
@@ -365,13 +366,21 @@
 **フォルダ検出** (`detect_psd_folders` Rustコマンド):
 - 指定フォルダ内のPSDファイルを含むサブフォルダを検出
 
-### 20. KENBAN検版（隔離中 — 統合ビューアーに移行完了後に削除予定）
-- **現在の状態**: ViewRouterでマウント無効化、ドットメニューから除外。コード自体は残存（コメントアウト）
-- **差分検出**: TIFF/PSD/PDF の pixel-level比較（ヒートマップ/マーカー表示）
-- **並列ビュー**: 同期/非同期スクロール、見開き分割モード
-- **テキスト照合**: PSDテキストレイヤーとメモテキストの差分比較（LCS文字レベルdiff — 統合ビューアーに移植済み）
-- **5つの比較モード**: tiff-tiff, psd-psd, pdf-pdf, psd-tiff, text-verify
-- **差分モード・分割ビューアーは統合ビューアー内で引き続き利用可能**（KenbanApp defaultAppModeプロップ経由）
+### 20. 差分ビューアー / 分割ビューアー（v3.5.0でKENBANから完全移植）
+- **配置**: 統合ビューアータブ内のサブタブ（差分モード / 分割ビューアー）
+- **差分ビューアー** (`src/components/diff-viewer/DiffViewerView.tsx` + `src/store/diffStore.ts`)
+  - **比較モード**: tiff-tiff / psd-psd / pdf-pdf / psd-tiff
+  - **表示モード**: 原稿A / 原稿B / 差分（ピクセル差分のヒートマップ・マーカー表示）
+  - **ペアリング**: ファイル順 / 名前順
+  - **オプション**: 差分のみ表示、マーカー表示、しきい値調整
+  - **自動差分計算**: ペア選択時に自動でRust側`compute_diff_simple`/`compute_diff_heatmap`を呼び出し
+- **分割ビューアー** (`src/components/parallel-viewer/ParallelViewerView.tsx` + `src/store/parallelStore.ts`)
+  - **2パネル並列表示**: 左右独立にフォルダ/ファイル管理
+  - **同期/独立モード**: 同期=両パネル同時ページング、独立=アクティブパネルのみ
+  - **対応形式**: PSD/PSB/TIFF/JPG/PNG/BMP/PDF
+  - **PDF見開き分割**: PDF1ファイルを複数ページエントリに展開
+- **キーボード**: ↑↓ペア/ページ移動、Space表示モード切替、Ctrl+/-ズーム、S同期切替（分割）
+- **Rust連携**: `kenban_*` 21コマンドはそのまま流用（変更なし）
 
 ### 21. ProGen（React統合済み）
 - **3モード**: 抽出プロンプト / 整形プロンプト / 校正プロンプト — ドットメニューから直接モード選択可能
@@ -502,9 +511,9 @@
   export type AppView =
     | "specCheck" | "layers" | "split" | "replace" | "compose"
     | "rename" | "tiff" | "scanPsd" | "typesetting"
-    | "kenban" | "progen" | "unifiedViewer";
+    | "progen" | "unifiedViewer";
   ```
-  progen は条件レンダリング（モード切替でリロード）、unifiedViewer は状態保持型マウント（display切替）。kenban/typesettingは隔離中（マウント無効化）
+  progen と unifiedViewer は状態保持型マウント（display切替）。typesettingは隔離中（マウント無効化）
 - **AppLayout**: TopNav + GlobalAddressBar + ViewRouter構成。グローバルD&Dリスナー（useGlobalDragDrop）。全画面時はTopNav/GlobalAddressBar非表示
 - **D&Dオーバーレイ**: ファイルをドラッグ中にホーム画面を暗くし「ドラッグして読み込み」を表示（Tauri `onDragDropEvent` enter/leave監視）
 - **DropZone（空状態）**: ファイル未読み込み時、中央エリアをクリックするとフォルダ選択ダイアログを表示。D&Dも対応
@@ -549,7 +558,7 @@
 - **RenameView**: リネーム（レイヤーリネーム / ファイルリネーム）
 - **TiffView**: TIFF化（3カラム: TiffSettingsPanel | TiffFileList | Center(プレビュー/一覧/ビューアータブ切替)）。TiffFileListヘッダーとTiffBatchQueueヘッダーにサブフォルダチェックを配置
 - **ScanPsdView**: Scan PSD（2カラム: ScanPsdPanel(5タブ) | ScanPsdContent(モード選択/スキャン/サマリー)）。JSON編集時に未登録フォントアラート表示。フォント帳を独立セクションとして追加（モーダル表示）
-- **KenbanView**: KENBAN検版（隔離中 — ViewRouterでマウント無効化、ドットメニューから除外。統合完了後に削除予定）
+- **(KenbanView 削除済み)** — v3.5.0で差分・分割ビューアーをReactネイティブ移植完了
 - **ProgenView**: React画面ルーター。progenStore.screenで6画面切替。viewStore.progenModeから自動初期化。状態保持型マウント（display切替）
 - **UnifiedViewerView**: 統合ビューアー + 差分モード + 分割ビューアーの3タブ。統合ビューアーは3カラム（全タブ共通パネル）。unifiedViewerStore独立管理。psdStoreとdoSync+loadImageRefで自動同期。PDF表示はpdf.jsで描画（isPdf/pdfPath/pdfPageを正しくマッピング）
 
@@ -616,15 +625,10 @@ src/
 │   │   ├── UnifiedSubComponents.tsx   # サブコンポーネント（ToolBtn, PanelTabBtn, LayerTreeView, SortableBlockItem, UnifiedDiffDisplay, CheckJsonBrowser）
 │   │   ├── useViewerFileOps.ts        # ファイル操作フック（openFolder, openTextFile, handleJsonFileSelect, handleSave, handleSaveAs）
 │   │   └── ProgenImageViewer.tsx      # ProGen画像ビューアー（React製、COMIC-POTスタイル）
-│   ├── kenban/           # KENBAN（隔離中 — 差分モード/分割ビューアーは統合ビューアー経由で利用可能）
-│   │   ├── KenbanApp.tsx         # メインアプリ（元App.tsx）
-│   │   ├── KenbanDiffViewer.tsx  # 差分ビューア
-│   │   ├── KenbanParallelViewer.tsx # 並列ビューア
-│   │   ├── KenbanTextVerifyViewer.tsx # テキスト照合
-│   │   ├── KenbanSidebar.tsx     # サイドバー
-│   │   ├── KenbanHeader.tsx      # ヘッダー
-│   │   ├── KenbanScreenshotEditor.tsx
-│   │   └── KenbanGDriveFolderBrowser.tsx
+│   ├── diff-viewer/      # 差分ビューアー（v3.5.0でKENBANから移植）
+│   │   └── DiffViewerView.tsx    # 比較モード/表示モード/ペアリング/差分計算
+│   ├── parallel-viewer/  # 分割ビューアー（v3.5.0でKENBANから移植）
+│   │   └── ParallelViewerView.tsx # 2パネル独立/同期切替/PDF見開き分割
 │   ├── views/             # ビューコンポーネント
 │   │   ├── FileView.tsx          # （未使用 — SpecCheckViewに統合済み）
 │   │   ├── FontBookView.tsx      # フォント帳ビュー
@@ -640,7 +644,7 @@ src/
 │   │   ├── ScanPsdView.tsx      # Scan PSDビュー（ScanPsdPanel + ScanPsdContent）
 │   │   ├── FolderSetupView.tsx  # フォルダセットアップ（原稿コピー+構造作成）
 │   │   ├── RequestPrepView.tsx  # 依頼準備（ZIP圧縮、3モード、内容チェック）
-│   │   ├── KenbanView.tsx       # KENBANラッパー（kenban-scope）
+│   │   # KenbanView.tsx 削除済み（v3.5.0）
 │   │   ├── ProgenView.tsx       # ProGen画面ルーター（React native、6画面切替）
 │   │   └── UnifiedViewerView.tsx # 統合ビューアー（6サブタブ）
 │   ├── metadata/          # メタデータ表示
@@ -799,23 +803,16 @@ src/
 │   ├── tiffStore.ts       # TIFF化設定・状態（settings, fileOverrides, cropPresets, cropGuides, phase, results）。localStorage永続化（crop.bounds除く）
 │   ├── scanPsdStore.ts    # Scan PSD（mode, scanData, presetSets, workInfo, guide選択/除外, パス設定）。パスのみlocalStorage永続化
 │   ├── progenStore.ts     # ProGen全状態（40+プロパティ、ルール管理、マスタールール読み込み、JSONルール適用）
+│   ├── diffStore.ts       # 差分ビューアー（v3.5.0、ペアリング/比較モード/差分計算）
+│   ├── parallelStore.ts   # 分割ビューアー（v3.5.0、2パネル独立/同期切替/PDF展開）
 │   ├── typesettingCheckStore.ts  # 写植チェック（checkData, checkTabMode, searchQuery, navigateToPage）
 │   └── unifiedViewerStore.ts    # 統合ビューアー（独立ファイル管理、テキスト、校正JSON、フォントプリセット、PanelTab共通タブ型）
 ├── styles/
 │   └── globals.css
-├── kenban-utils/         # KENBAN ユーティリティ
-│   ├── textExtract.ts   # テキスト抽出・差分計算
-│   ├── memoParser.ts    # メモ解析
-│   ├── pdf.ts           # PDF処理（pdfjs-dist）
-│   ├── kenbanTypes.ts   # KENBAN型定義
-│   ├── kenban.css       # KENBANスコープCSS
-│   └── kenbanApp.css    # KENBANアプリCSS
-├── kenban-hooks/         # KENBAN フック
-│   └── useTextExtractWorker.ts
-├── kenban-workers/       # KENBAN Web Worker
-│   └── textExtractWorker.ts
-├── kenban-assets/        # KENBANアセット
-│   └── kenpan_logo.png
+├── kenban-utils/         # 旧KENBAN由来の共有ユーティリティ（統合ビューアーで使用中）
+│   ├── textExtract.ts   # LCS文字レベルdiff、テキスト抽出
+│   ├── memoParser.ts    # COMIC-POT等のメモ解析
+│   └── kenbanTypes.ts   # ExtractedTextLayer, DiffPart等の型定義
 └── types/
     ├── index.ts           # PsdFile, PsdMetadata, LayerNode, TextInfo, Specification, SpecRule, SpecCheckResult, IMAGE_EXTENSIONS等
     ├── fontBook.ts        # FontBookEntry, FontBookData, FontBookParams

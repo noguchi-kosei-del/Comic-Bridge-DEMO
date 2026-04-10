@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { UnifiedViewer } from "../unified-viewer/UnifiedViewer";
 import { useViewStore } from "../../store/viewStore";
-import KenbanApp from "../kenban/KenbanApp";
-import "../../kenban-utils/kenban.css";
-import "../../kenban-utils/kenbanApp.css";
+import { DiffViewerView } from "../diff-viewer/DiffViewerView";
+import { ParallelViewerView } from "../parallel-viewer/ParallelViewerView";
 
 type ViewerSubMode = "viewer" | "diff" | "parallel";
 
@@ -60,18 +59,14 @@ export function UnifiedViewerView() {
         )}
 
         {activeSubMode === "diff" && (
-          <div className="kenban-scope">
-            <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
-              <KenbanApp defaultAppMode="diff-check" externalPathA={kenbanPathA} externalPathB={kenbanPathB} />
-            </div>
+          <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
+            <DiffViewerView externalPathA={kenbanPathA} externalPathB={kenbanPathB} />
           </div>
         )}
 
         {activeSubMode === "parallel" && (
-          <div className="kenban-scope">
-            <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
-              <KenbanApp defaultAppMode="parallel-view" externalPathA={kenbanPathA} externalPathB={kenbanPathB} />
-            </div>
+          <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
+            <ParallelViewerView externalPathA={kenbanPathA} externalPathB={kenbanPathB} />
           </div>
         )}
       </div>
