@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { UnifiedViewer } from "../unified-viewer/UnifiedViewer";
 import { useViewStore } from "../../store/viewStore";
 import { DiffViewerView } from "../diff-viewer/DiffViewerView";
@@ -17,15 +17,6 @@ export function UnifiedViewerView() {
   const isFullscreen = useViewStore((s) => s.isViewerFullscreen);
   const kenbanPathA = useViewStore((s) => s.kenbanPathA);
   const kenbanPathB = useViewStore((s) => s.kenbanPathB);
-
-  const kenbanViewMode = useViewStore((s) => s.kenbanViewMode);
-
-  // 検A+検B両方セットされたら自動で差分/分割モードに切り替え
-  useEffect(() => {
-    if (kenbanPathA && kenbanPathB && activeSubMode === "viewer") {
-      setActiveSubMode(kenbanViewMode === "parallel" ? "parallel" : "diff");
-    }
-  }, [kenbanPathA, kenbanPathB, kenbanViewMode]);
 
   return (
     <div className="flex-1 h-full overflow-hidden flex flex-col">

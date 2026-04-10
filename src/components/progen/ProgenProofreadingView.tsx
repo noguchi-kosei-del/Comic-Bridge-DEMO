@@ -32,6 +32,10 @@ const VARIATION_CHECK_ITEMS = [
 
 export function ProgenProofreadingView() {
   const { currentProofreadingMode, setCurrentProofreadingMode } = useProgenStore();
+  const symbolRules = useProgenStore((s) => s.symbolRules);
+  const currentProofRules = useProgenStore((s) => s.currentProofRules);
+  const progenOptions = useProgenStore((s) => s.options);
+  const numberRules = useProgenStore((s) => s.numberRules);
   const textContent = useUnifiedViewerStore((s) => s.textContent);
   const textFilePath = useUnifiedViewerStore((s) => s.textFilePath);
   const [copied, setCopied] = useState<string | null>(null);
@@ -43,26 +47,26 @@ export function ProgenProofreadingView() {
 
   const showCopied = (msg: string) => { setCopied(msg); setTimeout(() => setCopied(null), 2500); };
 
-  // プロンプト生成
+  // プロンプト生成（ProGenルールも含む）
   const handleGenerate = useCallback(() => {
     if (!hasText) return;
     const prompt = currentProofreadingMode === "simple"
-      ? generateSimpleCheckPrompt(textContent)
-      : generateVariationCheckPrompt(textContent);
+      ? generateSimpleCheckPrompt(textContent, symbolRules, currentProofRules, progenOptions, numberRules)
+      : generateVariationCheckPrompt(textContent, symbolRules, currentProofRules, progenOptions, numberRules);
     setGeneratedPrompt(prompt);
-  }, [hasText, currentProofreadingMode, textContent]);
+  }, [hasText, currentProofreadingMode, textContent, symbolRules, currentProofRules, progenOptions, numberRules]);
 
   // コピー → Gemini
   const handleCopyAndOpen = useCallback(async () => {
     if (!hasText) return;
     const prompt = currentProofreadingMode === "simple"
-      ? generateSimpleCheckPrompt(textContent)
-      : generateVariationCheckPrompt(textContent);
+      ? generateSimpleCheckPrompt(textContent, symbolRules, currentProofRules, progenOptions, numberRules)
+      : generateVariationCheckPrompt(textContent, symbolRules, currentProofRules, progenOptions, numberRules);
     setGeneratedPrompt(prompt);
     await navigator.clipboard.writeText(prompt).catch(() => {});
     showCopied(currentProofreadingMode === "simple" ? "正誤チェック" : "提案チェック");
     await openExternalUrl("https://gemini.google.com/app");
-  }, [hasText, currentProofreadingMode, textContent]);
+  }, [hasText, currentProofreadingMode, textContent, symbolRules, currentProofRules, progenOptions, numberRules]);
 
   // コピーのみ
   const handleCopyOnly = useCallback(async () => {

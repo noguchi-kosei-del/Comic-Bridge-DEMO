@@ -311,7 +311,6 @@ function TopNavDataButtons() {
   const checkLoaded = useUnifiedViewerStore((s) => !!s.checkData);
   const kenbanPathA = useViewStore((s) => s.kenbanPathA);
   const kenbanPathB = useViewStore((s) => s.kenbanPathB);
-  const kenbanViewMode = useViewStore((s) => s.kenbanViewMode);
 
   const [kenbanPickMode, setKenbanPickMode] = useState<{ side: "A" | "B" } | null>(null);
   const pickRef = useRef<HTMLDivElement>(null);
@@ -382,14 +381,6 @@ function TopNavDataButtons() {
         onClear={() => useUnifiedViewerStore.getState().setCheckData(null)}
       />
       <div className="w-px h-3 bg-border/30 mx-0.5" />
-      {/* 差分/分割スイッチ */}
-      <button
-        onClick={() => useViewStore.getState().setKenbanViewMode(kenbanViewMode === "diff" ? "parallel" : "diff")}
-        className={`px-1.5 py-0.5 text-[9px] font-bold rounded transition-colors ${kenbanViewMode === "diff" ? "bg-accent/15 text-accent" : "bg-accent-secondary/15 text-accent-secondary"}`}
-        title="差分/分割切替"
-      >
-        {kenbanViewMode === "diff" ? "差分" : "分割"}
-      </button>
       {/* A/B 統合ボタン */}
       <ABPickerButton kenbanPickMode={kenbanPickMode} setKenbanPickMode={setKenbanPickMode} handleKenbanPick={handleKenbanPick} />
     </div>

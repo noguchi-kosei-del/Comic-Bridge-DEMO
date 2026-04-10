@@ -3,9 +3,99 @@
  * progen-check-simple.js / progen-check-variation.js のプロンプトテンプレートをReactに移植
  */
 
+import type { ProofRule, SymbolRule, ProgenOptions, NumberRuleState } from "../types/progen";
+import { NUMBER_SUB_RULES } from "../types/progen";
+
+// ═══ ルール埋め込みヘルパー ═══
+
+/** ルール（symbol/proof）を XML 形式に整形 */
+function buildRulesXml(
+  symbolRules: SymbolRule[],
+  proofRules: ProofRule[],
+  options: ProgenOptions,
+  numberRules: NumberRuleState,
+): string {
+  const lines: string[] = [];
+
+  // 記号ルール
+  const activeSymbols = symbolRules.filter((r) => r.active);
+  if (activeSymbols.length > 0) {
+    lines.push("        <symbol_rules>");
+    for (const r of activeSymbols) {
+      lines.push(`            <rule><src>${escapeXml(r.src)}</src><dst>${escapeXml(r.dst)}</dst>${r.note ? `<note>${escapeXml(r.note)}</note>` : ""}</rule>`);
+    }
+    lines.push("        </symbol_rules>");
+  }
+
+  // 校正ルール（カテゴリ別）
+  const categories: { key: string; label: string }[] = [
+    { key: "basic", label: "基本表記" },
+    { key: "recommended", label: "推奨表記" },
+    { key: "auxiliary", label: "補助動詞" },
+    { key: "difficult", label: "難読文字" },
+    { key: "pronoun", label: "人称" },
+    { key: "character", label: "人物名" },
+  ];
+  for (const cat of categories) {
+    const rules = proofRules.filter((r) => r.category === cat.key && r.active);
+    if (rules.length === 0) continue;
+    lines.push(`        <${cat.key}_rules label="${cat.label}">`);
+    for (const r of rules) {
+      const modeAttr = r.mode ? ` mode="${r.mode}"` : "";
+      const rubyAttr = r.addRuby !== undefined ? ` ruby="${r.addRuby}"` : "";
+      lines.push(`            <rule${modeAttr}${rubyAttr}><before>${escapeXml(r.before)}</before><after>${escapeXml(r.after)}</after>${r.note ? `<note>${escapeXml(r.note)}</note>` : ""}</rule>`);
+    }
+    lines.push(`        </${cat.key}_rules>`);
+  }
+
+  // 数字ルール
+  const numberLabels = ["混在許容", "全て算用数字", "全て漢数字"];
+  lines.push("        <number_rules>");
+  lines.push(`            <base>${numberLabels[numberRules.base] || "混在許容"}</base>`);
+  if (numberRules.subRulesEnabled) {
+    const subs = ["personCount", "thingCount", "month"] as const;
+    for (const key of subs) {
+      const idx = numberRules[key];
+      const def = NUMBER_SUB_RULES[key];
+      if (def?.options[idx]) {
+        lines.push(`            <${key} label="${def.label}">${escapeXml(def.options[idx])}</${key}>`);
+      }
+    }
+  }
+  lines.push("        </number_rules>");
+
+  // オプション
+  lines.push("        <options>");
+  lines.push(`            <ng_word_masking>${options.ngWordMasking}</ng_word_masking>`);
+  lines.push(`            <punctuation_to_space>${options.punctuationToSpace}</punctuation_to_space>`);
+  lines.push(`            <difficult_ruby>${options.difficultRuby}</difficult_ruby>`);
+  lines.push(`            <typo_check>${options.typoCheck}</typo_check>`);
+  lines.push(`            <missing_char_check>${options.missingCharCheck}</missing_char_check>`);
+  lines.push(`            <name_ruby_check>${options.nameRubyCheck}</name_ruby_check>`);
+  lines.push(`            <non_joyo_check>${options.nonJoyoCheck}</non_joyo_check>`);
+  lines.push("        </options>");
+
+  return lines.join("\n");
+}
+
+function escapeXml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 // ═══ 正誤チェック（Simple Check）プロンプト ═══
 
-export function generateSimpleCheckPrompt(manuscriptText: string): string {
+export function generateSimpleCheckPrompt(
+  manuscriptText: string,
+  symbolRules: SymbolRule[] = [],
+  proofRules: ProofRule[] = [],
+  options: ProgenOptions = {} as ProgenOptions,
+  numberRules: NumberRuleState = {} as NumberRuleState,
+): string {
+  const rulesXml = buildRulesXml(symbolRules, proofRules, options, numberRules);
+  return _buildSimplePrompt(manuscriptText, rulesXml);
+}
+
+function _buildSimplePrompt(manuscriptText: string, rulesXml: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <prompt>
     <system_role>
@@ -16,6 +106,10 @@ export function generateSimpleCheckPrompt(manuscriptText: string): string {
     <behavior_trigger>
         ユーザーからテキストが送信されたら、挨拶や前置きは省略し、直ちに以下の \`<process_instruction>\` に基づくチェックを開始してください。
     </behavior_trigger>
+
+    <reference_rules>
+${rulesXml}
+    </reference_rules>
 
     <process_instruction>
         <task>入力された漫画のセリフ原稿について、誤字・脱字・人名ルビのチェックを5回実行してください。</task>
@@ -89,7 +183,18 @@ ${manuscriptText}`;
 
 // ═══ 提案チェック（Variation Check）プロンプト ═══
 
-export function generateVariationCheckPrompt(manuscriptText: string): string {
+export function generateVariationCheckPrompt(
+  manuscriptText: string,
+  symbolRules: SymbolRule[] = [],
+  proofRules: ProofRule[] = [],
+  options: ProgenOptions = {} as ProgenOptions,
+  numberRules: NumberRuleState = {} as NumberRuleState,
+): string {
+  const rulesXml = buildRulesXml(symbolRules, proofRules, options, numberRules);
+  return _buildVariationPrompt(manuscriptText, rulesXml);
+}
+
+function _buildVariationPrompt(manuscriptText: string, rulesXml: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <prompt>
     <system_role>
@@ -100,6 +205,10 @@ export function generateVariationCheckPrompt(manuscriptText: string): string {
     <behavior_trigger>
         ユーザーからテキストが送信されたら、挨拶や前置きは省略し、直ちに以下の \`<process_instruction>\` に基づくチェックを開始してください。
     </behavior_trigger>
+
+    <reference_rules>
+${rulesXml}
+    </reference_rules>
 
     <process_instruction>
         <task>入力された漫画のセリフ原稿について、表記・固有名詞のチェックを5回実行してください。</task>

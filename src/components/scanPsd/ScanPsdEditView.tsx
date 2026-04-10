@@ -68,10 +68,40 @@ export function ScanPsdEditView() {
   const { savePresetJson, startScan, removeVolumeData } = useScanPsdProcessor();
 
   // workInfo.label変更時にProGenマスタールールを自動読み込み
+  // + currentJsonFilePath からJSONを読み込み proofRules があれば適用
   const progenLoadMasterRule = useProgenStore((s) => s.loadMasterRule);
+  const progenApplyJsonRules = useProgenStore((s) => s.applyJsonRules);
+  const progenSetCurrentLoadedJson = useProgenStore((s) => s.setCurrentLoadedJson);
+  const progenSetCurrentJsonPath = useProgenStore((s) => s.setCurrentJsonPath);
   useEffect(() => {
-    if (workInfo.label) progenLoadMasterRule(workInfo.label);
-  }, [workInfo.label, progenLoadMasterRule]);
+    (async () => {
+      // 1. JSONファイルがあれば読み込んで proofRules を適用
+      if (currentJsonFilePath) {
+        try {
+          const data = await invoke<any>("progen_read_json_file", { filePath: currentJsonFilePath });
+          if (data) {
+            progenSetCurrentLoadedJson(data);
+            progenSetCurrentJsonPath(currentJsonFilePath);
+            // proofRules が JSONに含まれていれば優先的に適用
+            if (data?.proofRules) {
+              progenApplyJsonRules(data);
+              return; // 適用済み
+            }
+            if (data?.presetData?.proofRules) {
+              progenApplyJsonRules(data.presetData);
+              return;
+            }
+          }
+        } catch (e) {
+          console.error("ProGen JSON load error:", e);
+        }
+      }
+      // 2. JSONに proofRules がなければレーベルからマスタールール読み込み
+      if (workInfo.label) {
+        await progenLoadMasterRule(workInfo.label);
+      }
+    })();
+  }, [workInfo.label, currentJsonFilePath, progenLoadMasterRule, progenApplyJsonRules, progenSetCurrentLoadedJson, progenSetCurrentJsonPath]);
 
   // 未登録フォント数
   const unregisteredCount = useMemo(() => {

@@ -9,6 +9,7 @@ import type { SymbolRule, ProofRule } from "../../types/progen";
 import { showPromptDialog } from "../../store/viewStore";
 import { openExternalUrl } from "../../hooks/useProgenTauri";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
+import { generateSimpleCheckPrompt, generateVariationCheckPrompt } from "../../lib/progenPrompts";
 
 // ═══ メインコンポーネント ═══
 
@@ -311,11 +312,23 @@ function GeminiButtons() {
     await navigator.clipboard.writeText(prompt); showCopied("整形"); gemini();
   };
   const correctness = async () => {
-    const prompt = `以下のテキストの正誤チェック（誤字・脱字・人名ルビ）を5パス実行してください。\n\n【対象テキスト】\n${getTextContent() || "（未読み込み）"}\n\n【出力】\n| 種別 | ページ | 抜粋 | 指摘 |`;
+    const prompt = generateSimpleCheckPrompt(
+      getTextContent() || "（未読み込み）",
+      store.symbolRules,
+      store.currentProofRules,
+      store.options,
+      store.numberRules,
+    );
     await navigator.clipboard.writeText(prompt); showCopied("正誤"); gemini();
   };
   const proposal = async () => {
-    const prompt = `以下のテキストの表記ゆれチェック（10項目）を5パス実行してください。\n\n【対象テキスト】\n${getTextContent() || "（未読み込み）"}\n\n【出力】\n| 項目 | ページ | 抜粋 | 指摘 |`;
+    const prompt = generateVariationCheckPrompt(
+      getTextContent() || "（未読み込み）",
+      store.symbolRules,
+      store.currentProofRules,
+      store.options,
+      store.numberRules,
+    );
     await navigator.clipboard.writeText(prompt); showCopied("提案"); gemini();
   };
 

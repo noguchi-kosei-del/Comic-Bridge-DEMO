@@ -151,6 +151,26 @@ function naturalSort(a: string, b: string): number {
   return a.localeCompare(b, "ja", { numeric: true, sensitivity: "base" });
 }
 
+/** ファイルのプレビューURLを取得（PSD/PDF/通常画像対応） */
+export async function loadPreviewUrl(filePath: string): Promise<string> {
+  const ext = getExt(filePath);
+  if (ext === "pdf") {
+    const result = await invoke<{ src: string; width: number; height: number }>(
+      "kenban_render_pdf_page",
+      { path: filePath, page: 1, dpi: 150, splitSide: null },
+    );
+    return convertFileSrc(result.src);
+  } else if (ext === "psd" || ext === "psb") {
+    const result = await invoke<{ file_url: string; width: number; height: number }>(
+      "kenban_parse_psd",
+      { path: filePath },
+    );
+    return convertFileSrc(result.file_url);
+  } else {
+    return convertFileSrc(filePath);
+  }
+}
+
 /** ファイル拡張子からCompareModeを推定 */
 export function detectCompareMode(extA: string, extB?: string): CompareMode {
   const psdExts = ["psd", "psb"];
@@ -292,7 +312,32 @@ export const useDiffStore = create<DiffStore>((set, get) => ({
   processPair: async (index) => {
     const { pairs, compareMode, threshold, cropBounds } = get();
     const pair = pairs[index];
-    if (!pair || !pair.fileA || !pair.fileB) return;
+    if (!pair) return;
+
+    // ── A単独 or B単独 → プレビューだけ読み込む ──
+    if (!pair.fileA || !pair.fileB) {
+      const file = pair.fileA || pair.fileB;
+      if (!file) return;
+      try {
+        const url = await loadPreviewUrl(file.filePath);
+        set((s) => {
+          const next = [...s.pairs];
+          if (pair.fileA) {
+            next[index] = { ...next[index], status: "done", srcA: url };
+          } else {
+            next[index] = { ...next[index], status: "done", srcB: url };
+          }
+          return { pairs: next };
+        });
+      } catch (e) {
+        set((s) => {
+          const next = [...s.pairs];
+          next[index] = { ...next[index], status: "error", error: String(e) };
+          return { pairs: next };
+        });
+      }
+      return;
+    }
 
     // status: loading
     set((s) => {
@@ -300,6 +345,28 @@ export const useDiffStore = create<DiffStore>((set, get) => ({
       next[index] = { ...next[index], status: "loading" };
       return { pairs: next };
     });
+
+    // ── PDF-PDF の場合は差分計算をスキップしてプレビューだけ ──
+    if (compareMode === "pdf-pdf") {
+      try {
+        const [urlA, urlB] = await Promise.all([
+          loadPreviewUrl(pair.fileA.filePath),
+          loadPreviewUrl(pair.fileB.filePath),
+        ]);
+        set((s) => {
+          const next = [...s.pairs];
+          next[index] = { ...next[index], status: "done", srcA: urlA, srcB: urlB };
+          return { pairs: next };
+        });
+      } catch (e) {
+        set((s) => {
+          const next = [...s.pairs];
+          next[index] = { ...next[index], status: "error", error: String(e) };
+          return { pairs: next };
+        });
+      }
+      return;
+    }
 
     try {
       if (compareMode === "psd-tiff") {

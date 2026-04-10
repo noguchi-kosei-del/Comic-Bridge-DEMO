@@ -109,17 +109,21 @@ export const useParallelStore = create<ParallelStore>((set, get) => ({
     if (isFile) {
       // 単一ファイル
       if (ext === "pdf") {
-        // PDF: ページ情報取得 → 1ファイル（後でexpandPdfPagesで展開）
+        // PDF: 全ページを展開してエントリ化（ページ送り可能にする）
         try {
           const pageCount = await invoke<number>("kenban_get_pdf_page_count", { path });
-          const entry: ParallelFileEntry = {
-            name: getFileName(path),
-            filePath: path,
-            isPdf: true,
-            pdfPage: 1,
-            totalPdfPages: pageCount,
-          };
-          set((s) => ({ [side]: { ...s[side], folder: path, files: [entry], index: 0 } } as any));
+          const baseName = getFileName(path);
+          const entries: ParallelFileEntry[] = [];
+          for (let p = 1; p <= pageCount; p++) {
+            entries.push({
+              name: `${baseName} (p${p}/${pageCount})`,
+              filePath: path,
+              isPdf: true,
+              pdfPage: p,
+              totalPdfPages: pageCount,
+            });
+          }
+          set((s) => ({ [side]: { ...s[side], folder: path, files: entries, index: 0 } } as any));
         } catch (e) {
           console.error("PDF page count error:", e);
         }
@@ -128,19 +132,36 @@ export const useParallelStore = create<ParallelStore>((set, get) => ({
         set((s) => ({ [side]: { ...s[side], folder: path, files: [entry], index: 0 } } as any));
       }
     } else {
-      // フォルダ
+      // フォルダ → 中のファイル一覧取得 + PDFは全ページ展開
       try {
         const filePaths = await invoke<string[]>("kenban_list_files_in_folder", {
           path,
           extensions: SUPPORTED_EXTS,
         });
-        const files: ParallelFileEntry[] = filePaths
-          .map((p) => ({
-            name: getFileName(p),
-            filePath: p,
-            isPdf: getExt(p) === "pdf",
-          }))
-          .sort((a, b) => naturalSort(a.name, b.name));
+        const sortedPaths = [...filePaths].sort(naturalSort);
+        const files: ParallelFileEntry[] = [];
+        for (const p of sortedPaths) {
+          const fileName = getFileName(p);
+          if (getExt(p) === "pdf") {
+            // PDFは全ページ展開
+            try {
+              const pageCount = await invoke<number>("kenban_get_pdf_page_count", { path: p });
+              for (let pg = 1; pg <= pageCount; pg++) {
+                files.push({
+                  name: `${fileName} (p${pg}/${pageCount})`,
+                  filePath: p,
+                  isPdf: true,
+                  pdfPage: pg,
+                  totalPdfPages: pageCount,
+                });
+              }
+            } catch {
+              files.push({ name: fileName, filePath: p, isPdf: true, pdfPage: 1 });
+            }
+          } else {
+            files.push({ name: fileName, filePath: p, isPdf: false });
+          }
+        }
         set((s) => ({ [side]: { ...s[side], folder: path, files, index: 0 } } as any));
       } catch (e) {
         console.error("loadFolderSide error:", e);

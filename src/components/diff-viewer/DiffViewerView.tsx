@@ -50,10 +50,13 @@ export function DiffViewerView({ externalPathA, externalPathB }: Props = {}) {
   // ── 現在のペア ──
   const currentPair: FilePair | undefined = store.pairs[store.selectedIndex];
 
-  // ── 表示画像URL ──
+  // ── 表示画像URL（done時のみ表示、フォールバック対応）──
   const displayImageUrl = useMemo(() => {
     if (!currentPair || currentPair.status !== "done") return null;
-    if (store.viewMode === "diff") return currentPair.diffSrc || null;
+    if (store.viewMode === "diff") {
+      // 差分が無い（A or B 単独）場合はAを表示
+      return currentPair.diffSrc || currentPair.processedA || currentPair.srcA || currentPair.srcB || null;
+    }
     if (store.viewMode === "A") return currentPair.processedA || currentPair.srcA || null;
     if (store.viewMode === "B") return currentPair.srcB || null;
     return null;
@@ -65,10 +68,11 @@ export function DiffViewerView({ externalPathA, externalPathB }: Props = {}) {
     return store.pairs.filter((p) => p.hasDiff || p.status !== "done");
   }, [store.pairs, store.filterDiffOnly]);
 
-  // ── ペア選択時に自動で差分計算 ──
+  // ── ペア選択時に自動で差分計算 or プレビュー読み込み ──
   useEffect(() => {
     const pair = store.pairs[store.selectedIndex];
-    if (pair && pair.status === "pending" && pair.fileA && pair.fileB) {
+    // pending状態かつ片方でもファイルがあれば処理
+    if (pair && pair.status === "pending" && (pair.fileA || pair.fileB)) {
       store.processPair(store.selectedIndex);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
