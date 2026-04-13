@@ -38,10 +38,11 @@ const WORKFLOWS: Workflow[] = [
     name: "写植入稿",
     icon: "📦",
     steps: expandSteps([
-      { label: "完成原稿 読み込み", desc: "問題を検出、原稿の仕様を確認して選択", nav: "specCheck" },
+      { label: "完成原稿 読み込み", desc: "フォルダセットアップ → PSD自動読み込み", nav: "folderSetup" },
       { label: "仕様を一括で修正", desc: "カラーモード・ビット深度・解像度・ガイド一括反映", nav: "specCheck" },
-      { label: "ProGen テキスト整形・抽出", desc: "統一表記ルール JSON読み込み or 新規登録", nav: "progen", progenMode: "extraction" },
-      { label: "校正プロンプト", desc: "結果 貼り付け → JSON登録", nav: "progen", progenMode: "proofreading" },
+      { label: "ProGen テキスト整形・抽出", desc: "テキスト有無で自動分岐（整形/抽出）", nav: "progen", progenMode: "_auto" },
+      { label: "テキストチェック", desc: "画像/PDFとテキストを並べて確認", nav: "unifiedViewer" },
+      { label: "校正プロンプト", desc: "正誤チェック・提案チェック", nav: "progen", progenMode: "_check" },
       { label: "テキストエディタで修正", nav: "unifiedViewer" },
       { label: "ZIP リリース", desc: "依頼準備", nav: "requestPrep" },
     ]),
@@ -98,7 +99,24 @@ export function WorkflowBar() {
     if (!step.nav) return;
     const vs = useViewStore.getState();
     if (step.progenMode) {
-      vs.setProgenMode(step.progenMode as any);
+      // "_auto" の場合はフォルダセットアップのテキスト有無フラグから判定
+      let resolvedMode = step.progenMode;
+      if (resolvedMode === "_auto") {
+        try {
+          resolvedMode = localStorage.getItem("folderSetup_progenMode") || "extraction";
+          // 整形/抽出時は正誤チェックフラグをクリア
+          localStorage.removeItem("progen_wfCheckMode");
+        } catch { resolvedMode = "extraction"; }
+      }
+      // "_check" の場合はルール一覧画面に遷移 + 正誤チェックフラグをセット
+      if (resolvedMode === "_check") {
+        resolvedMode = "extraction";
+        try {
+          localStorage.setItem("progen_wfCheckMode", "simple");
+          localStorage.removeItem("folderSetup_progenMode");
+        } catch { /* ignore */ }
+      }
+      vs.setProgenMode(resolvedMode as any);
       // レーベル読み込み（ProGen起動時）
       const scan = useScanPsdStore.getState();
       const viewer = useUnifiedViewerStore.getState();
@@ -109,6 +127,34 @@ export function WorkflowBar() {
       }
       if (lbl) useProgenStore.getState().loadMasterRule(lbl);
     }
+
+    // テキストチェックステップ: コピー先の画像/PDFを検Aにセット
+    if (step.label.includes("テキストチェック")) {
+      try {
+        const copyDest = localStorage.getItem("folderSetup_copyDestFolder");
+        if (copyDest) vs.setKenbanPathA(copyDest);
+      } catch { /* ignore */ }
+    }
+
+    // テキストエディタで修正ステップ: テキスト+校正JSONが読み込み済みであることを確認
+    if (step.label.includes("テキストエディタで修正")) {
+      // テキストは既にunifiedViewerStoreに読み込み済み（整形/抽出後のResultSaveModalで保存時に自動セット）
+      // 校正JSONも既にunifiedViewerStoreのcheckDataに読み込み済み（校正プロンプト後のResultSaveModalで保存時に自動セット）
+      // 追加処理不要 — ビューアーに遷移するだけでOK
+    }
+
+    // ZIP リリースステップ: FolderSetupのコピー先の1つ上の階層をRequestPrepに自動セット
+    if (step.label.includes("ZIP リリース")) {
+      try {
+        const copyDest = localStorage.getItem("folderSetup_copyDestFolder");
+        if (copyDest) {
+          // copyDestFolder = numberFolder\1_原稿\sourceName → 親 = numberFolder\1_原稿
+          const parent = copyDest.replace(/[\\/][^\\/]+$/, "");
+          if (parent) localStorage.setItem("requestPrep_autoFolder", parent);
+        }
+      } catch { /* ignore */ }
+    }
+
     vs.setActiveView(step.nav as any);
   };
 

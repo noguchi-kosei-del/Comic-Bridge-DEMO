@@ -56,7 +56,7 @@ export function ProgenProofreadingView() {
     setGeneratedPrompt(prompt);
   }, [hasText, currentProofreadingMode, textContent, symbolRules, currentProofRules, progenOptions, numberRules]);
 
-  // コピー → Gemini
+  // コピー → Gemini → 結果保存ダイアログ
   const handleCopyAndOpen = useCallback(async () => {
     if (!hasText) return;
     const prompt = currentProofreadingMode === "simple"
@@ -66,6 +66,8 @@ export function ProgenProofreadingView() {
     await navigator.clipboard.writeText(prompt).catch(() => {});
     showCopied(currentProofreadingMode === "simple" ? "正誤チェック" : "提案チェック");
     await openExternalUrl("https://gemini.google.com/app");
+    // 結果保存ダイアログを表示（正誤/提案はJSON保存）
+    useProgenStore.getState().setResultSaveMode("json");
   }, [hasText, currentProofreadingMode, textContent, symbolRules, currentProofRules, progenOptions, numberRules]);
 
   // コピーのみ

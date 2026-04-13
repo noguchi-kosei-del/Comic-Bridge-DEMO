@@ -311,9 +311,9 @@ function GeminiButtons() {
       store.numberRules,
     );
     await navigator.clipboard.writeText(prompt); showCopied("抽出"); gemini();
+    useProgenStore.getState().setResultSaveMode("text");
   };
   const formatting = async () => {
-    // 整形プロンプトはルールのみ（テキストは添付ファイルとしてGeminiに送る想定）
     const prompt = generateFormattingPrompt(
       store.symbolRules,
       store.currentProofRules,
@@ -321,6 +321,7 @@ function GeminiButtons() {
       store.numberRules,
     );
     await navigator.clipboard.writeText(prompt); showCopied("整形"); gemini();
+    useProgenStore.getState().setResultSaveMode("text");
   };
   const correctness = async () => {
     const prompt = generateSimpleCheckPrompt(
@@ -331,6 +332,7 @@ function GeminiButtons() {
       store.numberRules,
     );
     await navigator.clipboard.writeText(prompt); showCopied("正誤"); gemini();
+    useProgenStore.getState().setResultSaveMode("json");
   };
   const proposal = async () => {
     const prompt = generateVariationCheckPrompt(
@@ -341,6 +343,7 @@ function GeminiButtons() {
       store.numberRules,
     );
     await navigator.clipboard.writeText(prompt); showCopied("提案"); gemini();
+    useProgenStore.getState().setResultSaveMode("json");
   };
 
   return (

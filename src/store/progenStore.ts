@@ -58,6 +58,10 @@ interface ProgenStore {
   pendingWorkTitle: string;
   txtFolderBasePath: string;
 
+  // ===== 結果保存ダイアログ =====
+  /** "text" = テキスト保存（整形/抽出）, "json" = JSON保存（正誤/提案）, null = 非表示 */
+  resultSaveMode: "text" | "json" | null;
+
   // ===== Actions: 画面 =====
   setScreen: (screen: ProgenScreen) => void;
 
@@ -95,6 +99,9 @@ interface ProgenStore {
 
   // ===== Actions: JSONルール適用 =====
   applyJsonRules: (jsonData: any) => void;
+
+  // ===== Actions: 結果保存 =====
+  setResultSaveMode: (mode: "text" | "json" | null) => void;
 
   // ===== Actions: リセット =====
   reset: () => void;
@@ -141,6 +148,7 @@ export const useProgenStore = create<ProgenStore>((set, get) => ({
   pendingNewCreationMode: null,
   pendingWorkTitle: "",
   txtFolderBasePath: "",
+  resultSaveMode: null,
 
   // ===== Actions =====
 
@@ -258,6 +266,9 @@ export const useProgenStore = create<ProgenStore>((set, get) => ({
       }));
     }
   },
+
+  // --- 結果保存 ---
+  setResultSaveMode: (mode) => set({ resultSaveMode: mode }),
 
   // --- リセット ---
   reset: () => set({

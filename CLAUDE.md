@@ -398,6 +398,7 @@
   - `ProgenJsonBrowser` — GドライブJSONフォルダツリー（検索・読込・保存・新規作成）
   - `ProgenResultViewer` — 校正結果表示（3タブ+ピックアップ+CSV貼り付け）
   - `ProgenCalibrationSave` — 校正データ保存（TXTフォルダ選択→巻数入力）
+  - `ResultSaveModal`（ProgenView内） — 校正結果保存モーダル。`parseCheckText()`でCSV・Markdownテーブル両対応→`{ checks: { simple, variation }, volume, savedAt }`形式で構造化保存。巻数入力付き、ファイル名`calibration_{N}巻_{timestamp}.json`。保存後にunifiedViewerStore.checkDataへ自動読み込み
   - `ComicPotEditor` — COMIC-POTテキスト編集（チャンク表示+D&D+ルビ+形式変換）
   - `ProgenAdminView` — パスワード付き管理画面（レーベルCRUD+ルール編集）
 - **JSON 自動反映**: TopNav の作品情報JSON / `loadPresetJson` / `currentJsonFilePath` 変更時に proofRules を `progenStore.applyJsonRules` で自動適用 (basic/recommended/auxiliary/difficult/number/pronoun/character + symbol + options)
@@ -435,6 +436,7 @@
   - **校正確認**: 校正確認→赤字修正→MojiQ→編集確認
   - **白消しTIFF**: 差し替え→差分検知→TIFF化→差分検知→TIFF格納
 - **自動ナビゲーション**: 各ステップに`nav`（AppView）と`progenMode`を設定。ステップ進行時に自動画面遷移
+- **ZIP リリースステップ**: `copyDestFolder`の親フォルダ（1_原稿レベル）を`requestPrep_autoFolder` localStorage経由でRequestPrepViewに自動セット
 - **色分け**: 開始=アクセントカラー、終了=緑（success）
 - **進行UI**: プログレスバー + ステップ番号 + 現在のステップ名（クリックで次へ）
 
@@ -444,6 +446,7 @@
 - **ナンバリング自動検出**: フォルダ名から数字を抽出して番号フォルダを作成（手動修正可能）
 - **テンプレート設定2種類**: アドレス指定（フォルダコピー）/ フォルダ構造（クリック取得、localStorage保存）
 - **デフォルト構造**: 新作9フォルダ / 続話6フォルダ（アドレス未指定）
+- **作品情報JSON**: 新規作成時はGENRE_LABELS（scanPsd.ts）による2段階ドロップダウン（ジャンル→レーベル）で選択。既存JSON選択も可能
 - **create_directory / copy_folder Rustコマンド**: .keepファイル不使用
 
 ### 24b. 依頼準備ツール
@@ -453,6 +456,9 @@
 - **内容自動検出**: サブフォルダ最奥まで再帰スキャン、TXT/PSD/画像/PDF種別を自動判定
 - **ZIP名自動生成**: `yyyymmdd_ジャンル_タイトル_巻` — 作品情報JSON(`presetData.workInfo.genre/title`)参照、巻数はフォルダ名から検出（JSONのvolumeは無視）
 - **JSON workInfo自動読み込み**: プリセットJSON読み込み時に`presetData.workInfo`からgenre/label/title/authorをscanPsdStoreにセット（volumeはセットしない）
+- **WF自動読み込み**: `requestPrep_autoFolder` localStorage flag経由でFolderSetupのコピー先親フォルダを自動セット
+- **Ingest/Whiteoutモード保存先**: Desktop内にzipName名サブフォルダを作成してZIP保存。`desktopDir()`の末尾スラッシュ正規化で正しいパス結合
+- **ZIP内テキスト差し替え**: 元データは触らず一時フォルダにコピー → `findTxtRecursive`（`kenban_list_files_in_folder`+`list_folder_contents`再帰）でTXT検出 → unifiedViewerStoreの現在テキストで置換 → ZIP化 → 一時フォルダ削除
 - **テキスト読み込み時のCOMIC-POTパース**: TopNav/FileContextMenu/SpecCheckViewの全テキスト読み込み箇所で`parseComicPotText()`を呼び、`textPages`/`textHeader`をstoreにセット。UnifiedViewer内のuseEffectで`textContent`変更時に`parseChunks`を自動実行
 - **ProGen React移植（Phase 0-6完了、iframe廃止）**:
   - `src/types/progen.ts` — 全型定義+定数
@@ -815,7 +821,7 @@ src/
 │   ├── renameStore.ts     # リネーム設定（subMode, layerSettings, fileSettings, fileEntries）
 │   ├── tiffStore.ts       # TIFF化設定・状態（settings, fileOverrides, cropPresets, cropGuides, phase, results）。localStorage永続化（crop.bounds除く）
 │   ├── scanPsdStore.ts    # Scan PSD（mode, scanData, presetSets, workInfo, guide選択/除外, パス設定）。パスのみlocalStorage永続化
-│   ├── progenStore.ts     # ProGen全状態（40+プロパティ、ルール管理、マスタールール読み込み、JSONルール適用）
+│   ├── progenStore.ts     # ProGen全状態（40+プロパティ、ルール管理、マスタールール読み込み、JSONルール適用、resultSaveMode）
 │   ├── diffStore.ts       # 差分ビューアー（v3.5.0、ペアリング/比較モード/差分計算）
 │   ├── parallelStore.ts   # 分割ビューアー（v3.5.0、2パネル独立/同期切替/PDF展開）
 │   ├── typesettingCheckStore.ts  # 写植チェック（checkData, checkTabMode, searchQuery, navigateToPage）

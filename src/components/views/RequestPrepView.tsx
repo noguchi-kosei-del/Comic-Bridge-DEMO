@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+import { desktopDir } from "@tauri-apps/api/path";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { GENRE_LABELS } from "../../types/scanPsd";
@@ -115,6 +116,20 @@ export function RequestPrepView() {
     if (scanWorkInfo.label && !proofLabel) setProofLabel(scanWorkInfo.label);
   }, [scanWorkInfo.genre, scanWorkInfo.label]);
 
+  // WFからの自動フォルダ読み込み
+  useEffect(() => {
+    try {
+      const autoFolder = localStorage.getItem("requestPrep_autoFolder");
+      if (!autoFolder) return;
+      localStorage.removeItem("requestPrep_autoFolder");
+      (async () => {
+        const detected = await detectContentsDeep(autoFolder, true);
+        const name = autoFolder.replace(/\\/g, "/").split("/").pop() || "";
+        setItems([{ path: autoFolder, name, isFolder: true, detected }]);
+      })();
+    } catch { /* ignore */ }
+  }, []);
+
   // フォルダ追加
   const handleAddFolder = useCallback(async () => {
     const folder = await dialogOpen({ directory: true, multiple: false, title: "フォルダを選択" });
@@ -171,13 +186,72 @@ export function RequestPrepView() {
     if (!zipName) { setStatus({ type: "error", msg: "ZIP名を入力してください" }); return; }
     setProcessing(true);
     setStatus({ type: "idle", msg: "ZIP作成中..." });
+    let tempFolderToCleanup: string | null = null;
     try {
-      const { desktopDir } = await import("@tauri-apps/api/path");
-      const desktop = await desktopDir();
-      const zipPath = await invoke<string>("create_zip", { outputDir: desktop, zipName, sourcePaths });
+      const desktop = (await desktopDir()).replace(/[\\/]$/, "") + "\\";
+      let outputDir = desktop;
+      // 原稿入稿・白棒消しモードはzipName名のサブフォルダ内に保存
+      if (mode === "ingest" || mode === "whiteout") {
+        const safeFolder = zipName.replace(/[\\/:*?"<>|]/g, "_");
+        outputDir = `${desktop}${safeFolder}\\`;
+        await invoke("create_directory", { path: outputDir }).catch(() => {});
+      }
+
+      // テキスト置換: 読み込み済みテキストがあり、アイテムにTXTが含まれる場合
+      // 元データは触らず、一時コピーしてテキストを差し替えてからZIP化
+      const viewerText = useUnifiedViewerStore.getState().textContent;
+      const needTextReplace = mode !== "proof" && viewerText && items.some((i) => i.detected.hasTxt);
+      if (needTextReplace) {
+        const tempDir = `${desktop}__temp_zip_${Date.now()}`;
+        tempFolderToCleanup = tempDir;
+        await invoke("create_directory", { path: tempDir });
+        // 再帰的にTXTファイルを検索するヘルパー
+        const findTxtRecursive = async (dir: string): Promise<string[]> => {
+          const result: string[] = [];
+          try {
+            const files = await invoke<string[]>("kenban_list_files_in_folder", { folderPath: dir, extensions: ["txt"] });
+            for (const f of files) result.push(`${dir}\\${f}`);
+          } catch { /* ignore */ }
+          try {
+            const contents = await invoke<{ folders: string[]; json_files: string[] }>("list_folder_contents", { folderPath: dir });
+            for (const sub of contents.folders) {
+              const subResults = await findTxtRecursive(`${dir}\\${sub}`);
+              result.push(...subResults);
+            }
+          } catch { /* ignore */ }
+          return result;
+        };
+        const newSourcePaths: string[] = [];
+        for (const item of items) {
+          const destPath = `${tempDir}\\${item.name}`;
+          if (item.isFolder) {
+            await invoke<number>("copy_folder", { source: item.path, destination: destPath });
+            // フォルダ内のTXTファイルを再帰検索して置換
+            const txtFiles = await findTxtRecursive(destPath);
+            for (const fp of txtFiles) {
+              await invoke("write_text_file", { filePath: fp, content: viewerText });
+            }
+          } else {
+            const ext = item.path.substring(item.path.lastIndexOf(".") + 1).toLowerCase();
+            if (ext === "txt") {
+              await invoke("write_text_file", { filePath: destPath, content: viewerText });
+            } else {
+              await invoke<number>("copy_folder", { source: item.path, destination: destPath });
+            }
+          }
+          newSourcePaths.push(destPath);
+        }
+        sourcePaths = newSourcePaths;
+      }
+
+      const zipPath = await invoke<string>("create_zip", { outputDir, zipName, sourcePaths });
       setStatus({ type: "success", msg: `作成完了: ${zipPath}` });
-      await invoke("open_folder_in_explorer", { folderPath: desktop }).catch(() => {});
+      await invoke("open_folder_in_explorer", { folderPath: outputDir }).catch(() => {});
     } catch (e) { setStatus({ type: "error", msg: `エラー: ${String(e)}` }); }
+    // 一時フォルダのクリーンアップ
+    if (tempFolderToCleanup) {
+      try { await invoke("delete_file", { filePath: tempFolderToCleanup }); } catch { /* ignore */ }
+    }
     setProcessing(false);
   }, [items, zipName, mode, proofPdf, proofTxt, proofNotationFile, proofNgFile]);
 

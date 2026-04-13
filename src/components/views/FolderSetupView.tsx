@@ -1,6 +1,12 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+import { usePsdStore } from "../../store/psdStore";
+import { useScanPsdStore } from "../../store/scanPsdStore";
+import { useProgenStore } from "../../store/progenStore";
+import { usePsdLoader } from "../../hooks/usePsdLoader";
+import { GENRE_LABELS } from "../../types/scanPsd";
+import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 
 const DEFAULT_COPY_DEST = "1_原稿";
 
@@ -33,6 +39,25 @@ export function FolderSetupView() {
   const [status, setStatus] = useState<{ type: "idle" | "success" | "error"; message: string }>({ type: "idle", message: "" });
   const [processing, setProcessing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const { loadFolder } = usePsdLoader();
+
+  // 作品情報JSON
+  const [jsonMode, setJsonMode] = useState<"none" | "select" | "new">("none");
+  const [selectedJsonPath, setSelectedJsonPath] = useState("");
+  const [newJsonGenre, setNewJsonGenre] = useState("");
+  const [newJsonLabel, setNewJsonLabel] = useState("");
+  const [newJsonTitle, setNewJsonTitle] = useState("");
+
+  // コピー完了後のファイル確認結果
+  const [fileCheck, setFileCheck] = useState<{
+    hasPsd: boolean;
+    hasPdfOrImage: boolean;
+    hasText: boolean;
+    psdCount: number;
+    pdfImageCount: number;
+    textCount: number;
+    checkedFolder: string;
+  } | null>(null);
 
   // 設定
   const [newTemplatePath, setNewTemplatePath] = useState(loadSetting("newTemplatePath", ""));
@@ -116,13 +141,157 @@ export function FolderSetupView() {
       const copyDestFolder = `${numberFolder}\\${copyDest}\\${sourceFolderName}`;
       const copiedCount = await invoke<number>("copy_folder", { source: sourcePath, destination: copyDestFolder });
 
-      setStatus({ type: "success", message: `完了: ${number}フォルダを作成し、${copiedCount}ファイルを${copyDest}/${sourceFolderName}にコピーしました` });
+      // ── 番号フォルダ全体をスキャン（kenban_list_files_in_folder で全拡張子取得）──
+      // ※ list_folder_files は PSD/TIFF しか返さないため、kenban_list_files_in_folder を使用
+      const normalizedNumberFolder = numberFolder.replace(/\//g, "\\");
+      let scanResult = { hasPsd: false, hasPdfOrImage: false, hasText: false, psdCount: 0, pdfImageCount: 0, textCount: 0 };
+      const textFilePaths: string[] = [];
+      let psdFolderPath = "";
+      let scanError = "";
+
+      // 全対象拡張子で一括検索
+      const ALL_SCAN_EXTS = ["psd", "psb", "pdf", "jpg", "jpeg", "png", "bmp", "tif", "tiff", "txt"];
+
+      // copyDestFolder 内を検索（ソースがコピーされた場所）
+      const scanFolders = [copyDestFolder, normalizedNumberFolder];
+      for (const scanTarget of scanFolders) {
+        try {
+          const foundFiles = await invoke<string[]>("kenban_list_files_in_folder", {
+            path: scanTarget,
+            extensions: ALL_SCAN_EXTS,
+          });
+          if (foundFiles && foundFiles.length > 0) {
+            for (const f of foundFiles) {
+              const dotIdx = f.lastIndexOf(".");
+              if (dotIdx < 0) continue;
+              const ext = f.substring(dotIdx + 1).toLowerCase();
+              if (ext === "psd" || ext === "psb") {
+                scanResult.psdCount++;
+                if (!psdFolderPath) {
+                  const sep = Math.max(f.lastIndexOf("\\"), f.lastIndexOf("/"));
+                  if (sep >= 0) psdFolderPath = f.substring(0, sep);
+                }
+              }
+              if (["pdf", "jpg", "jpeg", "png", "bmp", "tif", "tiff"].includes(ext)) scanResult.pdfImageCount++;
+              if (ext === "txt") { scanResult.textCount++; textFilePaths.push(f); }
+            }
+            scanResult.hasPsd = scanResult.psdCount > 0;
+            scanResult.hasPdfOrImage = scanResult.pdfImageCount > 0;
+            scanResult.hasText = scanResult.textCount > 0;
+            if (scanResult.hasPsd) break; // PSDが見つかったフォルダで確定
+          }
+        } catch (e) {
+          console.error(`Scan error (${scanTarget}):`, e);
+          scanError = String(e);
+        }
+      }
+      setFileCheck({ ...scanResult, checkedFolder: psdFolderPath || copyDestFolder });
+
+      // ── テキストファイルがあれば自動読み込み（整形プロンプト用）──
+      if (textFilePaths.length > 0) {
+        try {
+          let combinedText = "";
+          for (const tp of textFilePaths) {
+            const content = await invoke<string>("read_text_file", { filePath: tp });
+            if (content) {
+              if (combinedText) combinedText += "\n\n";
+              combinedText += content;
+            }
+          }
+          if (combinedText) {
+            const viewerStore = useUnifiedViewerStore.getState();
+            viewerStore.setTextContent(combinedText);
+            viewerStore.setTextFilePath(textFilePaths[0]);
+          }
+        } catch (e) {
+          console.error("Text file read error:", e);
+        }
+      }
+
+      // ── ステータスメッセージ（警告含む）──
+      const warnings: string[] = [];
+      if (!scanResult.hasPsd) warnings.push("PSDなし");
+      if (!scanResult.hasPdfOrImage) warnings.push("PDF/画像なし");
+      if (scanError) warnings.push(`スキャンエラー: ${scanError}`);
+      const warnMsg = warnings.length > 0 ? `  ⚠ ${warnings.join("、")}` : "";
+      setStatus({ type: "success", message: `完了: ${copiedCount}ファイルをコピー（検出: PSD ${scanResult.psdCount}, PDF/画像 ${scanResult.pdfImageCount}, テキスト ${scanResult.textCount}）${warnMsg}` });
+
+      // ── テキスト有無で ProGen モードフラグを保存 ──
+      // hasText=true → 整形 (formatting), hasText=false → 抽出 (extraction)
+      try {
+        localStorage.setItem("folderSetup_progenMode", scanResult.hasText ? "formatting" : "extraction");
+        localStorage.setItem("folderSetup_copyDestFolder", copyDestFolder);
+        localStorage.setItem("folderSetup_numberFolder", numberFolder);
+      } catch { /* ignore */ }
+
+      // ── PSD フォルダを specCheck に自動読み込み ──
+      if (psdFolderPath && scanResult.hasPsd) {
+        try {
+          usePsdStore.getState().setCurrentFolderPath(psdFolderPath);
+          usePsdStore.getState().setContentLocked(true);
+          await loadFolder(psdFolderPath);
+        } catch (e) {
+          console.error("PSD auto-load error:", e);
+        }
+      }
+
+      // ── 作品情報JSON処理 ──
+      if (jsonMode === "select" && selectedJsonPath) {
+        // 既存JSONを読み込み → ProGenルール適用
+        try {
+          const content = await invoke<string>("read_text_file", { filePath: selectedJsonPath });
+          const data = JSON.parse(content);
+          const scanStore = useScanPsdStore.getState();
+          scanStore.setCurrentJsonFilePath(selectedJsonPath);
+          // workInfo読み込み
+          const wi = data?.presetData?.workInfo ?? data?.workInfo;
+          if (wi) {
+            scanStore.setWorkInfo({ ...scanStore.workInfo, ...(wi.genre ? { genre: wi.genre } : {}), ...(wi.label ? { label: wi.label } : {}), ...(wi.title ? { title: wi.title } : {}), ...(wi.author ? { author: wi.author } : {}) });
+          }
+          // ProGenルール適用
+          const ps = useProgenStore.getState();
+          ps.setCurrentLoadedJson(data);
+          ps.setCurrentJsonPath(selectedJsonPath);
+          if (data?.proofRules) ps.applyJsonRules(data);
+          else if (data?.presetData?.proofRules) ps.applyJsonRules(data.presetData);
+          else if (wi?.label) await ps.loadMasterRule(wi.label);
+        } catch (e) { console.error("JSON load error:", e); }
+      } else if (jsonMode === "new" && newJsonLabel && newJsonTitle) {
+        // 新規JSON作成
+        const safeLabel = newJsonLabel.replace(/[\\/:*?"<>|]/g, "_");
+        const safeTitle = newJsonTitle.replace(/[\\/:*?"<>|]/g, "_");
+        const jsonBasePath = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/編集企画_C班(AT業務推進)/DTP制作部/JSONフォルダ";
+        const jsonDir = `${jsonBasePath}/${safeLabel}`;
+        const jsonFilePath = `${jsonDir}/${safeTitle}.json`;
+        // テキストログフォルダに校正チェックデータ格納先を作成
+        const textLogBase = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/写植・校正用テキストログ";
+        const calibrationDir = `${textLogBase}/${safeLabel}/${safeTitle}/校正チェックデータ`;
+        try {
+          await invoke("create_directory", { path: jsonDir });
+          await invoke("create_directory", { path: calibrationDir });
+          // 新規JSON生成
+          const newJson = {
+            presetData: { presets: {}, fontSizeStats: {}, guides: [], workInfo: { label: newJsonLabel, title: newJsonTitle } },
+            proofRules: { proof: [], symbol: [], options: {} },
+          };
+          await invoke("write_text_file", { filePath: jsonFilePath, content: JSON.stringify(newJson, null, 2) });
+          // ストアに反映
+          const scanStore = useScanPsdStore.getState();
+          scanStore.setCurrentJsonFilePath(jsonFilePath);
+          scanStore.setWorkInfo({ ...scanStore.workInfo, label: newJsonLabel, title: newJsonTitle });
+          const ps = useProgenStore.getState();
+          ps.setCurrentLoadedJson(newJson);
+          ps.setCurrentJsonPath(jsonFilePath);
+          await ps.loadMasterRule(newJsonLabel);
+        } catch (e) { console.error("New JSON create error:", e); }
+      }
+
       await invoke("open_folder_in_explorer", { folderPath: numberFolder }).catch(() => {});
     } catch (e) {
       setStatus({ type: "error", message: `エラー: ${String(e)}` });
     }
     setProcessing(false);
-  }, [sourcePath, destBase, extractedNumber, mode, newStructure, sequelStructure, newTemplatePath, sequelTemplatePath, copyDest]);
+  }, [sourcePath, destBase, extractedNumber, mode, newStructure, sequelStructure, newTemplatePath, sequelTemplatePath, copyDest, loadFolder, jsonMode, selectedJsonPath, newJsonGenre, newJsonLabel, newJsonTitle]);
 
   const saveAllSettings = () => {
     saveSetting("newTemplatePath", newTemplatePath);
@@ -269,6 +438,81 @@ export function FolderSetupView() {
           </div>
         </div>
 
+        {/* 作品情報JSON */}
+        <div className="p-4 rounded-xl bg-bg-secondary border border-border space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-purple-500/15 text-purple-500 text-xs font-bold flex items-center justify-center">J</span>
+            <span className="text-xs font-medium text-text-primary">作品情報JSON</span>
+            <span className="text-[9px] text-text-muted">（ProGen校正ルール連携）</span>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setJsonMode("select")}
+              className={`flex-1 py-2 rounded-lg text-[10px] font-medium transition-all ${jsonMode === "select" ? "bg-purple-500/15 text-purple-500 border border-purple-500/30" : "bg-bg-tertiary text-text-secondary border border-border/50 hover:bg-bg-elevated"}`}>
+              既存JSONを選択
+            </button>
+            <button onClick={() => setJsonMode("new")}
+              className={`flex-1 py-2 rounded-lg text-[10px] font-medium transition-all ${jsonMode === "new" ? "bg-accent/15 text-accent border border-accent/30" : "bg-bg-tertiary text-text-secondary border border-border/50 hover:bg-bg-elevated"}`}>
+              新規作成
+            </button>
+          </div>
+
+          {jsonMode === "select" && (
+            <div className="space-y-1.5">
+              <div className="flex gap-2">
+                <input type="text" value={selectedJsonPath} onChange={(e) => setSelectedJsonPath(e.target.value)}
+                  className="flex-1 text-[10px] px-2 py-1.5 bg-bg-primary border border-border/50 rounded text-text-primary outline-none font-mono" placeholder="JSONファイルパス..." />
+                <button onClick={async () => {
+                  const path = await dialogOpen({ multiple: false, filters: [{ name: "JSON", extensions: ["json"] }], title: "作品情報JSONを選択", defaultPath: "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/編集企画_C班(AT業務推進)/DTP制作部/JSONフォルダ" });
+                  if (path) setSelectedJsonPath(path as string);
+                }} className="px-2 py-1.5 text-[10px] bg-bg-tertiary border border-border/50 rounded hover:bg-bg-elevated text-text-secondary">参照</button>
+              </div>
+              {selectedJsonPath && <div className="text-[9px] text-purple-500">✓ {selectedJsonPath.split(/[/\\]/).pop()}</div>}
+            </div>
+          )}
+
+          {jsonMode === "new" && (
+            <div className="space-y-1.5">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-[9px] text-text-muted block mb-0.5">ジャンル</label>
+                  <select value={newJsonGenre} onChange={(e) => {
+                    setNewJsonGenre(e.target.value);
+                    const labels = GENRE_LABELS[e.target.value];
+                    setNewJsonLabel(labels?.[0] || "");
+                  }}
+                    className="w-full text-[10px] px-2 py-1.5 bg-bg-primary border border-border/50 rounded text-text-primary outline-none">
+                    <option value="">選択...</option>
+                    {Object.keys(GENRE_LABELS).map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-[9px] text-text-muted block mb-0.5">レーベル</label>
+                  <select value={newJsonLabel} onChange={(e) => setNewJsonLabel(e.target.value)}
+                    className="w-full text-[10px] px-2 py-1.5 bg-bg-primary border border-border/50 rounded text-text-primary outline-none"
+                    disabled={!newJsonGenre}>
+                    <option value="">選択...</option>
+                    {(GENRE_LABELS[newJsonGenre] || []).map((l) => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-[9px] text-text-muted block mb-0.5">タイトル</label>
+                  <input type="text" value={newJsonTitle} onChange={(e) => setNewJsonTitle(e.target.value)}
+                    className="w-full text-[10px] px-2 py-1.5 bg-bg-primary border border-border/50 rounded text-text-primary outline-none" placeholder="作品名" />
+                </div>
+              </div>
+              {newJsonLabel && newJsonTitle && (
+                <div className="text-[9px] text-text-muted font-mono">
+                  保存先: JSONフォルダ/{newJsonLabel}/{newJsonTitle}.json
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Step 3: コピー先 */}
         <div className="p-4 rounded-xl bg-bg-secondary border border-border space-y-2">
           <div className="flex items-center gap-2">
@@ -296,6 +540,60 @@ export function FolderSetupView() {
         {status.message && (
           <div className={`p-3 rounded-xl text-xs ${status.type === "success" ? "bg-success/10 text-success border border-success/20" : status.type === "error" ? "bg-error/10 text-error border border-error/20" : "bg-bg-tertiary text-text-muted"}`}>
             {status.message}
+          </div>
+        )}
+
+        {/* ── ファイル確認結果 ── */}
+        {fileCheck && (
+          <div className="bg-bg-secondary border border-border rounded-xl p-4 space-y-3">
+            <div className="text-[11px] font-medium text-text-primary">📋 コピー先のファイル確認</div>
+            <div className="grid grid-cols-3 gap-3">
+              {/* PSD */}
+              <div className={`p-3 rounded-lg border text-center ${fileCheck.hasPsd ? "bg-success/5 border-success/20" : "bg-error/5 border-error/20"}`}>
+                <div className={`text-lg ${fileCheck.hasPsd ? "text-success" : "text-error"}`}>{fileCheck.hasPsd ? "✓" : "✕"}</div>
+                <div className="text-[10px] font-medium text-text-primary mt-1">PSD</div>
+                <div className="text-[9px] text-text-muted">{fileCheck.psdCount}件</div>
+              </div>
+              {/* PDF/画像 */}
+              <div className={`p-3 rounded-lg border text-center ${fileCheck.hasPdfOrImage ? "bg-success/5 border-success/20" : "bg-error/5 border-error/20"}`}>
+                <div className={`text-lg ${fileCheck.hasPdfOrImage ? "text-success" : "text-error"}`}>{fileCheck.hasPdfOrImage ? "✓" : "✕"}</div>
+                <div className="text-[10px] font-medium text-text-primary mt-1">PDF / 画像</div>
+                <div className="text-[9px] text-text-muted">{fileCheck.pdfImageCount}件</div>
+              </div>
+              {/* テキスト */}
+              <div className={`p-3 rounded-lg border text-center ${fileCheck.hasText ? "bg-blue-500/5 border-blue-500/20" : "bg-bg-tertiary border-border/50"}`}>
+                <div className={`text-lg ${fileCheck.hasText ? "text-blue-500" : "text-text-muted"}`}>{fileCheck.hasText ? "✓" : "—"}</div>
+                <div className="text-[10px] font-medium text-text-primary mt-1">テキスト</div>
+                <div className="text-[9px] text-text-muted">{fileCheck.textCount}件</div>
+              </div>
+            </div>
+
+            {/* 警告 */}
+            {(!fileCheck.hasPsd || !fileCheck.hasPdfOrImage) && (
+              <div className="p-2.5 bg-warning/10 border border-warning/20 rounded-lg">
+                <div className="text-[10px] text-warning font-medium">⚠ 注意</div>
+                <div className="text-[10px] text-warning/80 mt-0.5">
+                  {!fileCheck.hasPsd && <div>PSDファイルが見つかりません。写植データが不足している可能性があります。</div>}
+                  {!fileCheck.hasPdfOrImage && <div>PDFまたは画像ファイルが見つかりません。原稿データが不足している可能性があります。</div>}
+                </div>
+              </div>
+            )}
+
+            {/* ProGenモード案内 */}
+            <div className="p-2.5 bg-accent/5 border border-accent/15 rounded-lg">
+              <div className="text-[10px] text-accent font-medium">
+                {fileCheck.hasText
+                  ? "📝 テキストあり → ProGen「整形プロンプト」モードで処理"
+                  : "🔍 テキストなし → ProGen「抽出プロンプト」モードで処理"}
+              </div>
+              <div className="text-[9px] text-text-muted mt-0.5">
+                {fileCheck.hasText
+                  ? "テキストファイルが見つかったため、統一表記ルールを適用して整形します。"
+                  : "テキストファイルがないため、PDF/画像からセリフを抽出します。"}
+              </div>
+            </div>
+
+            {/* WFの次工程ボタンで遷移するため、個別ボタンは不要 */}
           </div>
         )}
       </div>
