@@ -3,9 +3,18 @@ import { useState, useEffect, useCallback } from "react";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { usePsdStore } from "../../store/psdStore";
 import { usePsdLoader } from "../../hooks/usePsdLoader";
+import { useWorkflowStore } from "../../store/workflowStore";
+import { WorkflowDescriptionBar } from "./WorkflowBar";
 
 
+// WFアクティブ時はアドレスバーを塗りつぶしてワークフロー説明バーを表示
 export function GlobalAddressBar() {
+  const wfActive = useWorkflowStore((s) => s.activeWorkflow !== null);
+  if (wfActive) return <WorkflowDescriptionBar />;
+  return <NormalAddressBar />;
+}
+
+function NormalAddressBar() {
   const currentFolderPath = usePsdStore((s) => s.currentFolderPath);
   const [addressInput, setAddressInput] = useState(currentFolderPath || "");
   const [history, setHistory] = useState<string[]>([]);

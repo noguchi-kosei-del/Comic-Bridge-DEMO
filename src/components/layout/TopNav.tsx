@@ -14,6 +14,7 @@ import type { ProofreadingCheckItem } from "../../types/typesettingCheck";
 import { JsonFileBrowser } from "../scanPsd/JsonFileBrowser";
 import { CheckJsonBrowser } from "../unified-viewer/UnifiedViewer";
 import { WorkflowBar } from "./WorkflowBar";
+import { useWorkflowStore } from "../../store/workflowStore";
 import { SettingsButton } from "./SettingsPanel";
 import { useSettingsStore, ALL_NAV_BUTTONS } from "../../store/settingsStore";
 import { parseComicPotText } from "../unified-viewer/utils";
@@ -92,60 +93,66 @@ export function TopNav() {
     setJsonBrowserMode(null);
   }, [jsonBrowserMode]);
 
+  // WFアクティブ時はTopNavの他の要素を非表示にし、WorkflowBarに全幅を譲る
+  const wfActive = useWorkflowStore((s) => s.activeWorkflow !== null);
+
   return (
     <nav
       className="h-14 flex-shrink-0 bg-bg-secondary border-b border-border flex items-center px-3 gap-2 relative z-20 shadow-soft"
       data-tauri-drag-region
     >
-      {/* WF（左端） */}
+      {/* WF（左端） — WFアクティブ時は全幅展開（ツール/ナビボタン類を非表示にする） */}
       <WorkflowBar />
 
-      {/* ツール + 設定 */}
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <TopNavToolMenu />
-        <SettingsButton />
-      </div>
+      {!wfActive && (
+        <>
+          {/* ツール + 設定 */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <TopNavToolMenu />
+            <SettingsButton />
+          </div>
 
-      {/* リセットボタン */}
-      <button
-        className="w-7 h-7 flex items-center justify-center rounded transition-colors text-text-muted hover:text-accent hover:bg-accent/10"
-        onClick={() => {
-          const psd = usePsdStore.getState();
-          const uv = useUnifiedViewerStore.getState();
-          const hasData = psd.files.length > 0 || uv.textContent.length > 0 || uv.fontPresets.length > 0 || !!uv.checkData;
-          if (hasData) {
-            setShowResetConfirm(true);
-          } else {
-            // データがなくてもフォルダパス等をクリア + サムネイル表示にリセット
-            psd.clearFiles();
-            psd.setCurrentFolderPath(null);
-            psd.setContentLocked(false);
-            psd.setSpecViewMode("thumbnails");
-            setActiveView("specCheck");
-          }
-        }}
-        title="リセットしてホームに戻る"
-      >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-      </button>
+          {/* リセットボタン */}
+          <button
+            className="w-7 h-7 flex items-center justify-center rounded transition-colors text-text-muted hover:text-accent hover:bg-accent/10"
+            onClick={() => {
+              const psd = usePsdStore.getState();
+              const uv = useUnifiedViewerStore.getState();
+              const hasData = psd.files.length > 0 || uv.textContent.length > 0 || uv.fontPresets.length > 0 || !!uv.checkData;
+              if (hasData) {
+                setShowResetConfirm(true);
+              } else {
+                psd.clearFiles();
+                psd.setCurrentFolderPath(null);
+                psd.setContentLocked(false);
+                psd.setSpecViewMode("thumbnails");
+                setActiveView("specCheck");
+              }
+            }}
+            title="リセットしてホームに戻る"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
 
-      <div className="w-px h-8 bg-border flex-shrink-0" />
+          <div className="w-px h-8 bg-border flex-shrink-0" />
 
-      {/* ナビボタン（左寄せ） */}
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <NavBarButtons />
-      </div>
+          {/* ナビボタン（左寄せ） */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <NavBarButtons />
+          </div>
 
-      <div className="flex-1" />
+          <div className="flex-1" />
+        </>
+      )}
 
-      {/* データ読み込みボタン（右寄せ） */}
+      {/* データ読み込みボタン（右寄せ）— WF中も残す */}
       <TopNavDataButtons />
 
       <div className="w-px h-4 bg-border/50 mx-0.5 flex-shrink-0" />
 
-      {/* Right: ファイル数 + OK/NG */}
+      {/* Right: ファイル数 + OK/NG — WF中も残す */}
       {files.length > 0 && (
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-xs text-text-muted">{files.length} ファイル</span>
@@ -324,6 +331,7 @@ function TopNavDataButtons() {
   const checkLoaded = useUnifiedViewerStore((s) => !!s.checkData);
   const kenbanPathA = useViewStore((s) => s.kenbanPathA);
   const kenbanPathB = useViewStore((s) => s.kenbanPathB);
+  const wfActive = useWorkflowStore((s) => s.activeWorkflow !== null);
 
   const [kenbanPickMode, setKenbanPickMode] = useState<{ side: "A" | "B" } | null>(null);
   const pickRef = useRef<HTMLDivElement>(null);
@@ -375,24 +383,41 @@ function TopNavDataButtons() {
 
   return (
     <div className="flex items-center gap-0.5 flex-shrink-0">
-      {/* テキスト */}
-      <SmallBtn loaded={textLoaded} label="テキスト" title="テキスト読み込み" clearTitle="クリア"
-        cCls="text-accent-tertiary hover:bg-accent-tertiary/15" bCls="border-accent-tertiary/50"
-        onLoad={handleOpenText}
-        onClear={() => { const v = useUnifiedViewerStore.getState(); v.setTextContent(""); v.setTextFilePath(null); v.setTextHeader([]); v.setTextPages([]); v.setIsDirty(false); }}
-      />
-      {/* 作品情報 */}
-      <SmallBtn loaded={presetsLoaded} label="作品情報" title="作品情報JSON" clearTitle="クリア"
-        cCls="text-accent-secondary hover:bg-accent-secondary/15" bCls="border-accent-secondary/50"
-        onLoad={() => useViewStore.getState().setJsonBrowserMode("preset")}
-        onClear={() => { useUnifiedViewerStore.getState().setFontPresets([]); useUnifiedViewerStore.getState().setPresetJsonPath(null); }}
-      />
-      {/* 校正JSON */}
-      <SmallBtn loaded={checkLoaded} label="校正JSON" title="校正JSON" clearTitle="クリア"
-        cCls="text-warning hover:bg-warning/15" bCls="border-warning/50"
-        onLoad={() => useViewStore.getState().setJsonBrowserMode("check")}
-        onClear={() => useUnifiedViewerStore.getState().setCheckData(null)}
-      />
+      {wfActive ? (
+        /* WF中: 1つのピッカーボタン + ホバードロップダウン */
+        <WfDataPickerButton
+          textLoaded={textLoaded}
+          presetsLoaded={presetsLoaded}
+          checkLoaded={checkLoaded}
+          onLoadText={handleOpenText}
+          onClearText={() => { const v = useUnifiedViewerStore.getState(); v.setTextContent(""); v.setTextFilePath(null); v.setTextHeader([]); v.setTextPages([]); v.setIsDirty(false); }}
+          onLoadPreset={() => useViewStore.getState().setJsonBrowserMode("preset")}
+          onClearPreset={() => { useUnifiedViewerStore.getState().setFontPresets([]); useUnifiedViewerStore.getState().setPresetJsonPath(null); }}
+          onLoadCheck={() => useViewStore.getState().setJsonBrowserMode("check")}
+          onClearCheck={() => useUnifiedViewerStore.getState().setCheckData(null)}
+        />
+      ) : (
+        <>
+          {/* テキスト */}
+          <SmallBtn loaded={textLoaded} label="テキスト" title="テキスト読み込み" clearTitle="クリア"
+            cCls="text-accent-tertiary hover:bg-accent-tertiary/15" bCls="border-accent-tertiary/50"
+            onLoad={handleOpenText}
+            onClear={() => { const v = useUnifiedViewerStore.getState(); v.setTextContent(""); v.setTextFilePath(null); v.setTextHeader([]); v.setTextPages([]); v.setIsDirty(false); }}
+          />
+          {/* 作品情報 */}
+          <SmallBtn loaded={presetsLoaded} label="作品情報" title="作品情報JSON" clearTitle="クリア"
+            cCls="text-accent-secondary hover:bg-accent-secondary/15" bCls="border-accent-secondary/50"
+            onLoad={() => useViewStore.getState().setJsonBrowserMode("preset")}
+            onClear={() => { useUnifiedViewerStore.getState().setFontPresets([]); useUnifiedViewerStore.getState().setPresetJsonPath(null); }}
+          />
+          {/* 校正JSON */}
+          <SmallBtn loaded={checkLoaded} label="校正JSON" title="校正JSON" clearTitle="クリア"
+            cCls="text-warning hover:bg-warning/15" bCls="border-warning/50"
+            onLoad={() => useViewStore.getState().setJsonBrowserMode("check")}
+            onClear={() => useUnifiedViewerStore.getState().setCheckData(null)}
+          />
+        </>
+      )}
       <div className="w-px h-3 bg-border/30 mx-0.5" />
       {/* A/B 統合ボタン */}
       <ABPickerButton kenbanPickMode={kenbanPickMode} setKenbanPickMode={setKenbanPickMode} handleKenbanPick={handleKenbanPick} />
@@ -413,6 +438,112 @@ function SmallBtn({ loaded, label, title, clearTitle, cCls, bCls, onLoad, onClea
           <svg className="w-2 h-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       ) : <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mr-0.5 border ${bCls}`} />}
+    </div>
+  );
+}
+
+// ─── WF中のデータピッカーボタン（A/Bスタイル: 1つのボタン + ホバードロップダウン） ───
+function WfDataPickerButton({
+  textLoaded, presetsLoaded, checkLoaded,
+  onLoadText, onClearText,
+  onLoadPreset, onClearPreset,
+  onLoadCheck, onClearCheck,
+}: {
+  textLoaded: boolean; presetsLoaded: boolean; checkLoaded: boolean;
+  onLoadText: () => void; onClearText: () => void;
+  onLoadPreset: () => void; onClearPreset: () => void;
+  onLoadCheck: () => void; onClearCheck: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState(false);
+
+  const loadedCount = (textLoaded ? 1 : 0) + (presetsLoaded ? 1 : 0) + (checkLoaded ? 1 : 0);
+  const hasAny = loadedCount > 0;
+
+  return (
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={() => { clearTimeout((ref.current as any)?._hoverTimer); setHover(true); }}
+      onMouseLeave={() => { (ref.current as any)._hoverTimer = setTimeout(() => setHover(false), 300); }}
+    >
+      {/* メインボタン */}
+      <div className={`flex items-center gap-1 px-2 py-0.5 text-[9px] rounded transition-colors cursor-default ${
+        hasAny ? "bg-sky-100 text-sky-600" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
+      }`}>
+        <span>データ</span>
+        {hasAny && (
+          <span className="text-[8px] font-bold opacity-70">{loadedCount}/3</span>
+        )}
+      </div>
+
+      {/* ホバードロップダウン */}
+      {hover && (
+        <div className="absolute right-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1.5 min-w-[220px]">
+          {/* テキスト */}
+          <div className="px-3 py-1.5 border-b border-border/30">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold text-emerald-600">📝 テキスト</span>
+              {textLoaded && (
+                <button onClick={onClearText} className="text-[9px] text-text-muted hover:text-error">クリア</button>
+              )}
+            </div>
+            {textLoaded ? (
+              <div className="text-[9px] text-emerald-600 mb-1">✓ 読み込み済み</div>
+            ) : (
+              <div className="text-[9px] text-text-muted mb-1">未読み込み</div>
+            )}
+            <button
+              onClick={() => { setHover(false); onLoadText(); }}
+              className="w-full px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-emerald-50 hover:text-emerald-600 rounded transition-colors"
+            >
+              {textLoaded ? "別のテキストを読み込む" : "テキストを読み込む"}
+            </button>
+          </div>
+
+          {/* 作品情報JSON */}
+          <div className="px-3 py-1.5 border-b border-border/30">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold text-purple-600">📄 作品情報JSON</span>
+              {presetsLoaded && (
+                <button onClick={onClearPreset} className="text-[9px] text-text-muted hover:text-error">クリア</button>
+              )}
+            </div>
+            {presetsLoaded ? (
+              <div className="text-[9px] text-purple-600 mb-1">✓ 読み込み済み</div>
+            ) : (
+              <div className="text-[9px] text-text-muted mb-1">未読み込み</div>
+            )}
+            <button
+              onClick={() => { setHover(false); onLoadPreset(); }}
+              className="w-full px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-purple-50 hover:text-purple-600 rounded transition-colors"
+            >
+              {presetsLoaded ? "別のJSONを読み込む" : "作品情報JSONを読み込む"}
+            </button>
+          </div>
+
+          {/* 校正JSON */}
+          <div className="px-3 py-1.5">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold text-amber-600">✓ 校正JSON</span>
+              {checkLoaded && (
+                <button onClick={onClearCheck} className="text-[9px] text-text-muted hover:text-error">クリア</button>
+              )}
+            </div>
+            {checkLoaded ? (
+              <div className="text-[9px] text-amber-600 mb-1">✓ 読み込み済み</div>
+            ) : (
+              <div className="text-[9px] text-text-muted mb-1">未読み込み</div>
+            )}
+            <button
+              onClick={() => { setHover(false); onLoadCheck(); }}
+              className="w-full px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-amber-50 hover:text-amber-600 rounded transition-colors"
+            >
+              {checkLoaded ? "別の校正JSONを読み込む" : "校正JSONを読み込む"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -438,17 +438,54 @@
 - **リネーム処理**: Rust側`fs::rename`失敗時に`fs::copy`+`fs::remove_file`フォールバック（Windowsファイルロック対応）。invoke前にcache無効化
 - **MojiQ自動検索**: `find_mojiq_path()` で7箇所+PATHから自動探索（全ユーザー対応）
 
-### 23. ワークフローナビゲーション
+### 23. ワークフローナビゲーション（v3.6.5 大幅刷新）
 - **WorkflowBar.tsx**: TopNavのCBロゴ右横に「WF」ボタン。クリックで4ワークフローから選択
-- **4ワークフロー**: 各ステップが「開始」「終了」の2つに展開（expandSteps関数）
+- **workflowStore.ts（v3.6.5新設）**: zustandストアで `activeWorkflow` / `currentStep` を一元管理
+  - アクション: `startWorkflow` / `abortWorkflow` / `nextStep` / `prevStep` / `jumpToStep`
+  - `WORKFLOWS` 定数もストア側に定義（複数コンポーネントから参照可能）
+- **1ステップ=1工程（v3.6.5変更）**: 旧版の「開始/終了」2分割（`expandSteps`関数）を廃止。シンプルに1ステップ=1工程の構造に
+- **4ワークフロー**:
   - **写植入稿**: 読み込み→仕様修正→ProGen整形→校正→テキスト修正→ZIP
   - **初校確認**: 読み込み→ビューアー確認→テキスト抽出→Tachimi→ZIP
   - **校正確認**: 校正確認→赤字修正→MojiQ→編集確認
   - **白消しTIFF**: 差し替え→差分検知→TIFF化→差分検知→TIFF格納
 - **自動ナビゲーション**: 各ステップに`nav`（AppView）と`progenMode`を設定。ステップ進行時に自動画面遷移
 - **ZIP リリースステップ**: `copyDestFolder`の親フォルダ（1_原稿レベル）を`requestPrep_autoFolder` localStorage経由でRequestPrepViewに自動セット
-- **色分け**: 開始=アクセントカラー、終了=緑（success）
-- **進行UI**: プログレスバー + ステップ番号 + 現在のステップ名（クリックで次へ）
+
+### 23-b. WF表示（v3.6.5 全面リデザイン）
+**WFアクティブ時は TopNav と アドレスバーを塗りつぶして全工程ナビゲーションUIに変更:**
+
+**TopNav行（WorkflowBar フルバー）**:
+- **ワークフロー名ピル**: グラデーション塗りつぶし（accent → accent-secondary）
+- **戻るボタン**: 前のステップへ移動（最初のステップでdisabled）
+- **進める/完了ボタン**: 次のステップへ移動。**最終ステップでは「完了」に変化し、緑色でWFを終了**
+- **中断ボタン**: 赤色のX印、クリックでWF強制終了
+- **全工程横並び（スクロール可）**: 各ステップを `flex items-center gap-1 overflow-x-auto` で横並び表示
+  - アクティブステップ: アクセント色 + ring-2 リング強調
+  - 完了済ステップ: success 色（緑）
+  - 未着手ステップ: bg-tertiary + border
+  - **全ステップクリックで自由にジャンプ可能**（`jumpToStep`）
+- **非表示になる要素**: ツールメニュー / 設定 / リセット / NavBarButtons
+
+**アドレスバー行（WorkflowDescriptionBar）**:
+- WFアクティブ時は `GlobalAddressBar` を完全置換
+- 構成: `[N/M] | ステップ名 | ステップ説明 | プログレスバー N%`
+- グラデーション背景（accent/8 → accent-secondary/5 → accent/8）
+- ディスパッチャパターン: `GlobalAddressBar` が wfActive で `WorkflowDescriptionBar` / `NormalAddressBar` を返す（hooks順序を保証）
+
+**WF中も表示継続（v3.6.5）**:
+- **TopNavDataButtons** (テキスト/作品情報JSON/校正JSON/A/B統合): WF中も読み込み操作を継続できるように表示維持
+- ファイル数 / OK/NG / バージョン表示も継続
+
+**WfDataPickerButton（v3.6.5）**: WF中のみ `テキスト・作品情報JSON・校正JSON` の3ボタンを **1つの「データ」ボタン + ホバードロップダウン** に統合
+- A/Bピッカーと同じUXパターン（300ms遅延ホバー + 詳細パネル）
+- メインボタン表示: `データ N/3`（N=読み込み済み件数、0件ならシンプル表示）
+- ホバードロップダウン内の各項目:
+  - タイトル（絵文字+カテゴリ名、色分け: 緑/紫/琥珀）
+  - 状態表示（✓ 読み込み済み / 未読み込み）
+  - クリアボタン
+  - 読み込みボタン
+- WF未起動時は従来の3つの個別 SmallBtn を表示
 
 ### 24. フォルダセットアップツール
 - **FolderSetupView**: ツールメニューから起動。原稿フォルダを作業フォルダにコピー＋フォルダ構造を自動作成
@@ -836,6 +873,7 @@ src/
 │   ├── diffStore.ts       # 差分ビューアー（v3.5.0、ペアリング/比較モード/差分計算）
 │   ├── parallelStore.ts   # 分割ビューアー（v3.5.0、2パネル独立/同期切替/PDF展開）
 │   ├── typesettingCheckStore.ts  # 写植チェック（checkData, checkTabMode, searchQuery, navigateToPage）
+│   ├── workflowStore.ts   # WF状態（v3.6.5、activeWorkflow/currentStep + WORKFLOWS定数）
 │   └── unifiedViewerStore.ts    # 統合ビューアー（独立ファイル管理、テキスト、校正JSON、フォントプリセット、PanelTab共通タブ型）
 ├── styles/
 │   └── globals.css
