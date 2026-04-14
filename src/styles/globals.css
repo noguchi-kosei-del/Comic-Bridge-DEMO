@@ -2,24 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== CSS変数 ===== */
+/* ============================================================
+   :root — ベーストークン
+   Editorial Precision: Notion×Figma ハイブリッド
+   ============================================================ */
 :root {
   /* フォント */
-  --font-ui: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
-  --font-display: "Zen Maru Gothic", "M PLUS Rounded 1c", sans-serif;
+  --font-ui:
+    "Inter",
+    "Noto Sans JP",
+    "Yu Gothic UI",
+    "Meiryo",
+    sans-serif;
+  --font-display:
+    "IBM Plex Sans JP",
+    "Noto Sans JP",
+    "Yu Gothic UI",
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono",
+    "IBM Plex Mono",
+    Consolas,
+    Menlo,
+    monospace;
 
-  /* グラデーション（WCAG AA対応の濃色） */
-  --gradient-pop: linear-gradient(135deg, #d6336c, #6d28d9);
-  --gradient-fresh: linear-gradient(135deg, #0d8a6f, #6d28d9);
-  --gradient-warm: linear-gradient(135deg, #c2680a, #d6336c);
+  /* グラデーション（同系色のみ） */
+  --gradient-pop:   linear-gradient(135deg, #4f46e5, #4338ca);
+  --gradient-fresh: linear-gradient(135deg, #0e7490, #4f46e5);
+  --gradient-warm:  linear-gradient(135deg, #b45309, #a16207);
 
+  /* ベースタイポグラフィ */
   font-family: var(--font-ui);
   font-size: 15px;
   line-height: 1.65;
   font-weight: 450;
-  letter-spacing: 0.005em;
+  letter-spacing: 0.003em;
+  font-feature-settings: "palt", "calt";
 
-  color: #1f1f2c;
+  color: #1a1a24;
   background-color: #fbfaf7;
 
   font-synthesis: none;
@@ -41,7 +61,108 @@ body,
   overflow: hidden;
 }
 
-/* ===== スクロールバー（視認性向上）===== */
+/* ===== 見出し要素に display フォントを自動適用 ===== */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #1a1a24;
+}
+
+code, pre, kbd, samp {
+  font-family: var(--font-mono);
+  font-feature-settings: "calt" 0;
+}
+
+/* ============================================================
+   主要テキストの可読性保証
+   ============================================================ */
+body, #root {
+  color: #1a1a24;
+  background-color: #fbfaf7;
+}
+
+button, a, label, [role="button"] {
+  font-weight: 500;
+}
+
+/* ============================================================
+   【防衛策1】フォントサイズ強制引き上げ
+   既存の text-[Npx] を最小12pxに強制
+   ============================================================ */
+.text-\[8px\],
+.text-\[9px\]  {
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+  letter-spacing: 0.005em !important;
+}
+.text-\[10px\] {
+  font-size: 12.5px !important;
+  line-height: 1.55 !important;
+  letter-spacing: 0.003em !important;
+}
+.text-\[11px\],
+.text-\[12px\] {
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+
+/* ============================================================
+   【防衛策2】レイアウト破綻防止
+   フォント拡大で flex item が溢れないよう min-width を強制
+   ============================================================ */
+.flex > *,
+.inline-flex > * {
+  min-width: 0;
+}
+
+/* テーブルセルの overflow 対策 */
+td, th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================
+   【機能カラー化】metadata バッジの色剥奪
+   bg-manga-* / text-manga-* を完全にニュートラル化し、
+   「装飾色」を「機能色」に絞り込む
+   ============================================================ */
+[class*="bg-manga-"] {
+  background-color: #ebeae5 !important;  /* bg-tertiary */
+}
+[class*="text-manga-"] {
+  color: #4a4a5a !important;  /* text-secondary */
+}
+
+/* ============================================================
+   TopNav 左タブの視認性向上
+   背景や枠線は付与せず、色のみ濃色化してミニマル維持
+   ============================================================ */
+nav button.text-text-secondary {
+  color: #1a1a24 !important;
+  position: relative;
+  transition: color 0.15s ease;
+}
+nav button.text-text-secondary:hover {
+  color: #4f46e5 !important;
+}
+nav button.text-text-secondary:focus {
+  color: #4f46e5 !important;
+}
+nav button.text-text-secondary:focus::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 12%;
+  right: 12%;
+  height: 2px;
+  background: #4f46e5;
+  border-radius: 1px;
+}
+
+/* ============================================================
+   スクロールバー: 温中性グレー
+   ============================================================ */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -52,22 +173,22 @@ body,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #c1a4b4, #b1a0c8);
+  background: #c4bfb3;
   border-radius: 5px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #a8889c, #9888c0);
-  border: 2px solid transparent;
+  background: #a8a396;
   background-clip: padding-box;
+  border: 2px solid transparent;
 }
 
 /* ===== 選択時のスタイル ===== */
 ::selection {
-  background: rgba(214, 51, 108, 0.25);
-  color: #1f1f2c;
+  background: rgba(79, 70, 229, 0.2);
+  color: #1a1a24;
 }
 
 /* ===== ドラッグ無効化 ===== */
@@ -76,58 +197,16 @@ img {
   -webkit-user-drag: none;
 }
 
-/* ===== フォーカスリング（視認性向上）===== */
+/* ===== フォーカスリング ===== */
 :focus-visible {
-  outline: 2px solid #d6336c;
+  outline: 2px solid #4f46e5;
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* ===== 小さすぎるフォントサイズの可読性向上（WCAG準拠）=====
-   既存のtext-[Npx]アービトラリ値クラスを上書き。
-   レイアウト・構造・コンポーネント配置は変更せず、
-   フォントサイズと行間のみ調整。 */
-.text-\[8px\]  { font-size: 11px !important; line-height: 1.45 !important; }
-.text-\[9px\]  { font-size: 11.5px !important; line-height: 1.45 !important; }
-.text-\[10px\] { font-size: 12px !important; line-height: 1.5 !important; }
-.text-\[11px\] { font-size: 12.5px !important; line-height: 1.5 !important; }
-.text-\[12px\] { font-size: 13px !important; line-height: 1.55 !important; }
-
-/* 主要テキストの可読性: 全体的な文字色トーンを統一 */
-body, #root {
-  color: #1f1f2c;
-  background-color: #fbfaf7;
-}
-
-/* リンク・ボタンの最低フォント太さ確保 */
-button, a, label {
-  font-weight: 500;
-}
-
-/* ===== TopNav 左タブ（NavBarButtons）のテキスト視認性 =====
-   レイアウト・装飾は変更せず、文字色のみ濃色化して可読性を確保。
-   背景や枠線は付与しない（元のミニマルなデザインを維持）。 */
-nav button.text-text-secondary {
-  color: #1f1f2c !important;
-}
-
-nav button.text-text-secondary:hover {
-  color: #d6336c !important;
-}
-
-/* ===== text-manga-* クラスの可読性向上 =====
-   manga-* はパステルカラーで背景用として設計されているが、
-   原稿仕様パネル等で text-manga-* としても使用されている。
-   text 用途には濃色を割り当て、bg 用途のパステルは維持。
-   bg-manga-* はそのまま、text-manga-* のみ濃色化。 */
-.text-manga-pink     { color: #be185d !important; }  /* ピンク（背景用#ffcce5に対するテキスト） */
-.text-manga-mint     { color: #0d8a6f !important; }  /* ミントグリーン */
-.text-manga-lavender { color: #6d28d9 !important; }  /* ラベンダー（パープル） */
-.text-manga-peach    { color: #c2680a !important; }  /* ピーチ（オレンジ） */
-.text-manga-sky      { color: #1e6091 !important; }  /* スカイブルー */
-.text-manga-yellow   { color: #a16207 !important; }  /* イエロー */
-
-/* ===== コンポーネントスタイル ===== */
+/* ============================================================
+   コンポーネントスタイル
+   ============================================================ */
 @layer components {
   /* ===== ボタン ===== */
   .btn {
@@ -138,18 +217,18 @@ nav button.text-text-secondary:hover {
 
   .btn-primary {
     @apply text-white;
-    background: linear-gradient(135deg, #d6336c, #6d28d9);
-    box-shadow: 0 4px 15px rgba(214, 51, 108, 0.35);
+    background: linear-gradient(135deg, #4f46e5, #4338ca);
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.28);
   }
 
   .btn-primary:hover {
-    box-shadow: 0 6px 20px rgba(214, 51, 108, 0.45);
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.38);
     transform: translateY(-2px);
   }
 
   .btn-secondary {
     @apply bg-bg-tertiary text-text-primary;
-    @apply border border-accent/30 hover:border-accent/50;
+    @apply border border-border hover:border-accent/40;
     @apply hover:bg-bg-elevated;
   }
 
@@ -159,14 +238,14 @@ nav button.text-text-secondary:hover {
   }
 
   .btn-danger {
-    @apply bg-error/20 text-error hover:bg-error/30;
+    @apply bg-error/10 text-error hover:bg-error/15;
     @apply border border-error/30;
   }
 
   .btn-success {
     @apply text-white;
-    background: linear-gradient(135deg, #0d8a6f, #6d28d9);
-    box-shadow: 0 4px 15px rgba(13, 138, 111, 0.35);
+    background: linear-gradient(135deg, #15803d, #0e7490);
+    box-shadow: 0 4px 15px rgba(21, 128, 61, 0.28);
   }
 
   /* ===== アイコンボタン ===== */
@@ -176,90 +255,82 @@ nav button.text-text-secondary:hover {
   }
 
   .btn-icon-active {
-    @apply bg-accent/20 text-accent;
+    @apply bg-accent/10 text-accent;
   }
 
   /* ===== パネル ===== */
   .panel {
     @apply bg-bg-secondary rounded-2xl;
-    @apply border border-white/5;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    @apply border border-border;
+    box-shadow: 0 2px 12px rgba(26, 26, 36, 0.05);
   }
 
   .panel-elevated {
     @apply bg-bg-tertiary rounded-2xl;
-    @apply border border-white/10;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+    @apply border border-border;
+    box-shadow: 0 4px 20px rgba(26, 26, 36, 0.08);
   }
 
   /* ===== カード（グロー効果付き）===== */
   .card {
     @apply bg-bg-tertiary rounded-xl p-4;
-    @apply border border-white/5;
+    @apply border border-border-light;
     @apply transition-all duration-300;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   }
 
   .card:hover {
     @apply border-accent/30;
-    box-shadow: 0 4px 20px rgba(255, 107, 157, 0.15);
+    box-shadow: 0 4px 16px rgba(79, 70, 229, 0.10);
     transform: translateY(-2px);
   }
 
   .card-selected {
     @apply border-accent;
-    box-shadow: 0 0 20px rgba(255, 107, 157, 0.25);
+    box-shadow: 0 0 16px rgba(79, 70, 229, 0.18);
   }
 
   /* ===== 入力フィールド ===== */
   .input {
     @apply bg-bg-tertiary rounded-xl px-4 py-2.5;
-    @apply border border-white/10;
+    @apply border border-border;
     @apply text-text-primary placeholder-text-muted;
     @apply transition-all duration-200;
   }
 
   .input:focus {
     @apply border-accent outline-none;
-    box-shadow: 0 0 0 3px rgba(214, 51, 108, 0.18);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.18);
   }
 
-  /* ===== バッジ ===== */
+  /* ===== バッジ（4種固定：Success/Warning/Error/Neutral） ===== */
   .badge {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium;
     @apply transition-all duration-200;
   }
 
-  .badge-rgb {
-    @apply bg-accent-tertiary/20 text-accent-tertiary;
-  }
-
-  .badge-grayscale {
-    @apply bg-text-secondary/20 text-text-secondary;
-  }
-
-  .badge-cmyk {
-    @apply bg-manga-sky/20 text-manga-sky;
-  }
-
   .badge-success {
-    @apply bg-success/20 text-success;
+    @apply bg-success/12 text-success;
   }
 
   .badge-error {
-    @apply bg-error/20 text-error;
+    @apply bg-error/12 text-error;
   }
 
   .badge-warning {
-    @apply bg-warning/20 text-warning;
+    @apply bg-warning/12 text-warning;
   }
 
-  .badge-pink {
-    @apply bg-manga-pink/20 text-manga-pink;
+  .badge-neutral {
+    @apply bg-bg-tertiary text-text-secondary border border-border-light;
   }
 
+  /* 旧バッジ名は全て Neutral にエイリアス */
+  .badge-rgb,
+  .badge-grayscale,
+  .badge-cmyk,
+  .badge-pink,
   .badge-purple {
-    @apply bg-accent-secondary/20 text-accent-secondary;
+    @apply bg-bg-tertiary text-text-secondary border border-border-light;
   }
 
   /* ===== タブ ===== */
@@ -271,15 +342,15 @@ nav button.text-text-secondary:hover {
 
   .tab-active {
     @apply text-white;
-    background: linear-gradient(135deg, #d6336c, #6d28d9);
+    background: linear-gradient(135deg, #4f46e5, #4338ca);
   }
 
   /* ===== ツールチップ ===== */
   .tooltip {
     @apply absolute z-50 px-3 py-2 text-sm rounded-xl;
     @apply bg-bg-elevated text-text-primary;
-    @apply border border-white/10;
-    @apply shadow-lg;
+    @apply border border-border;
+    box-shadow: 0 4px 16px rgba(26, 26, 36, 0.08);
     @apply animate-slide-up;
   }
 
@@ -292,7 +363,7 @@ nav button.text-text-secondary:hover {
 
   .dropzone-active {
     @apply border-accent bg-accent/5;
-    box-shadow: inset 0 0 30px rgba(255, 107, 157, 0.1);
+    box-shadow: inset 0 0 30px rgba(79, 70, 229, 0.10);
   }
 
   /* ===== プログレスバー ===== */
@@ -302,42 +373,42 @@ nav button.text-text-secondary:hover {
 
   .progress-bar-fill {
     @apply h-full rounded-full transition-all duration-300;
-    background: linear-gradient(90deg, #d6336c, #6d28d9);
+    background: linear-gradient(90deg, #4f46e5, #4338ca);
   }
 
   /* ===== モーダル ===== */
   .modal-overlay {
-    @apply fixed inset-0 bg-black/60 backdrop-blur-sm;
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm;
     @apply flex items-center justify-center;
     @apply z-50;
   }
 
   .modal-content {
-    @apply bg-bg-secondary rounded-3xl;
-    @apply border border-white/10;
-    @apply shadow-2xl;
+    @apply bg-bg-secondary rounded-2xl;
+    @apply border border-border;
     @apply animate-slide-up;
+    box-shadow: 0 16px 48px rgba(26, 26, 36, 0.14);
   }
 
   /* ===== 吹き出し ===== */
   .speech-bubble {
     @apply relative bg-bg-elevated rounded-2xl px-4 py-3;
-    @apply border border-white/10;
-    @apply shadow-lg;
+    @apply border border-border;
+    box-shadow: 0 2px 12px rgba(26, 26, 36, 0.06);
   }
 
   .speech-bubble::after {
     content: '';
     @apply absolute -bottom-2 left-6;
     @apply w-4 h-4 bg-bg-elevated;
-    @apply border-r border-b border-white/10;
+    @apply border-r border-b border-border;
     transform: rotate(45deg);
   }
 
   /* ===== セクションヘッダー ===== */
   .section-header {
     @apply flex items-center gap-2 text-sm font-medium text-text-secondary;
-    @apply pb-2 mb-3 border-b border-white/5;
+    @apply pb-2 mb-3 border-b border-border-light;
   }
 
   /* ===== ステータスドット ===== */
@@ -347,17 +418,17 @@ nav button.text-text-secondary:hover {
 
   .status-dot-success {
     @apply bg-success;
-    box-shadow: 0 0 8px rgba(125, 216, 125, 0.5);
+    box-shadow: 0 0 8px rgba(21, 128, 61, 0.45);
   }
 
   .status-dot-error {
     @apply bg-error;
-    box-shadow: 0 0 8px rgba(224, 117, 117, 0.5);
+    box-shadow: 0 0 8px rgba(185, 28, 28, 0.45);
   }
 
   .status-dot-warning {
     @apply bg-warning;
-    box-shadow: 0 0 8px rgba(240, 198, 116, 0.5);
+    box-shadow: 0 0 8px rgba(161, 98, 7, 0.45);
   }
 
   /* ===== 漫画的装飾 ===== */
@@ -371,24 +442,24 @@ nav button.text-text-secondary:hover {
     opacity: 0.05;
   }
 
-  /* ===== グロー効果 ===== */
+  /* ===== グロー効果（Indigo系に統一） ===== */
   .glow-pink {
-    box-shadow: 0 0 20px rgba(214, 51, 108, 0.3);
+    box-shadow: 0 0 20px rgba(79, 70, 229, 0.22);
   }
 
   .glow-purple {
-    box-shadow: 0 0 20px rgba(109, 40, 217, 0.3);
+    box-shadow: 0 0 20px rgba(67, 56, 202, 0.22);
   }
 
   .glow-mint {
-    box-shadow: 0 0 20px rgba(13, 138, 111, 0.3);
+    box-shadow: 0 0 20px rgba(14, 116, 144, 0.22);
   }
 }
 
 /* ===== アニメーションユーティリティ ===== */
 @layer utilities {
   .animate-in {
-    animation: slide-up 0.3s ease-out;
+    animation: slide-up 0.25s ease-out;
   }
 
   .hover-lift {
@@ -396,7 +467,7 @@ nav button.text-text-secondary:hover {
   }
 
   .hover-lift:hover {
-    transform: translateY(-3px);
+    transform: translateY(-2px);
   }
 
   .hover-glow {
@@ -404,18 +475,18 @@ nav button.text-text-secondary:hover {
   }
 
   .hover-glow:hover {
-    box-shadow: 0 0 25px rgba(214, 51, 108, 0.25);
+    box-shadow: 0 0 20px rgba(79, 70, 229, 0.22);
   }
 
   /* スクリーントーン風背景 */
   .bg-tone {
-    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-image: radial-gradient(circle, rgba(26, 26, 36, 0.03) 1px, transparent 1px);
     background-size: 4px 4px;
   }
 
   /* グラデーションテキスト */
   .text-gradient-pop {
-    background: linear-gradient(135deg, #d6336c, #6d28d9);
+    background: linear-gradient(135deg, #4f46e5, #4338ca);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

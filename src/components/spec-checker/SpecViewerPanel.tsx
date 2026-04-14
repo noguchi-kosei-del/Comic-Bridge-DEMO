@@ -770,7 +770,9 @@ export function SpecViewerPanel({
       {/* Image Viewer */}
       <div
         ref={viewerRef}
-        className="flex-1 overflow-hidden relative flex items-center justify-center bg-[#1a1a1e]"
+        className={`flex-1 overflow-hidden relative flex items-center justify-center ${
+          imageUrl || viewerFile?.thumbnailUrl ? "bg-[#1a1a1e]" : "bg-bg-primary"
+        }`}
       >
         {imageUrl ? (
           <img

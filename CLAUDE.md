@@ -1205,73 +1205,123 @@ pdfium-renderによるPDFプレビュー/サムネイル生成:
 - ビット深度: 8bit
 - αチャンネル: なし
 
-## UIテーマ（ライトテーマ / WCAG AA対応）
+## UIテーマ: Editorial Precision (v3.6.3〜)
 
-明るくポップな漫画風UIをベースに、v3.6.2でWCAG AA（4.5:1以上）準拠の配色に調整:
+**コンセプト**: 編集部の静謐さ（Notion的な温中性グレー）× Figma的な骨格（直線的な精密ツール感）のハイブリッド。プロ編集者が1日8時間作業しても疲れない「引き算のデザイン」。
+
+### 設計原則
+1. **Subtract, don't add** — 色・装飾を極力削る
+2. **Color = Meaning, not decoration** — 色は意味（成功/警告/エラー）にのみ使う
+3. **Single Accent Discipline** — メインアクセントは Indigo 1色に集約
 
 ### カラーパレット
 ```javascript
-// 背景（ライトテーマ）
-bg-primary: "#fbfaf7"    // クリームホワイト（メイン背景）
-bg-secondary: "#ffffff"  // 純白（パネル）
-bg-tertiary: "#f1eee9"   // 柔らかいグレー（カード、コントラスト強化）
+// 背景（クリームホワイト維持 + 温中性tertiary）
+bg-primary:   "#fbfaf7"  // クリームホワイト（メイン背景）
+bg-secondary: "#ffffff"  // 純白（パネル・モーダル）
+bg-tertiary:  "#ebeae5"  // 温中性薄グレー（カード・非アクティブ）
+bg-elevated:  "#ffffff"  // 浮き上がり要素
 
-// テキスト（WCAG AA: 4.5:1以上を確保）
-text-primary: "#1f1f2c"  // 主要テキスト（19.4:1、AAA）
-text-secondary: "#4a4a5c" // 副次テキスト（9.6:1、AAA）
-text-muted: "#6b6b7a"    // 控えめテキスト（5.5:1、AA）
+// テキスト（AAA/AAA/AA 準拠）
+text-primary:   "#1a1a24"  // 主要 (17.8:1 AAA)
+text-secondary: "#4a4a5a"  // 副次 (9.6:1 AAA)
+text-muted:     "#6b6b7a"  // 控えめ (5.5:1 AA)
 
-// アクセント（テキストとしてもAA合格に調整）
-accent: "#d6336c"        // ピンク（4.7:1）
-accent-hover: "#b8265a"
-accent-secondary: "#6d28d9" // パープル（6.7:1）
-accent-tertiary: "#0d8a6f"  // ミントグリーン（4.7:1）
-accent-warm: "#c2680a"      // オレンジ（4.7:1）
+// アクセント（単一Indigo原則、徹底引き算）
+accent:           "#4f46e5"  // Indigo (6.3:1) 主要操作
+accent-hover:     "#4338ca"  // Deep Indigo (8.2:1)
+accent-secondary: "#a16207"  // Amber (5.9:1) 編集朱入れ（使用最小限）
+accent-tertiary:  "#0e7490"  // Teal (6.1:1) 情報リンク
+accent-warm:      "#b45309"  // Burnt Orange (5.4:1) 注意喚起
 
-// ステータス（AA合格）
-success: "#15803d"       // 緑（5.5:1）
-warning: "#b45309"       // オレンジ（5.4:1）
-error: "#b91c1c"         // 赤（6.4:1）
+// ステータス（印刷インク調、全AA）
+success: "#15803d"  // 緑 (5.5:1)
+warning: "#a16207"  // オレンジブラウン (5.9:1)
+error:   "#b91c1c"  // 赤 (6.4:1)
 
-// ボーダー（視認性向上）
-border: "#d1d1d9"        // 標準ボーダー
-border-light: "#e3e3eb"  // 薄ボーダー
+// 漫画装飾カラー: 事実上廃止（ほぼ無彩色、globals.cssで強制上書き）
+manga-pink: "#f5ecec", manga-mint: "#eaf0eb",
+manga-lavender: "#ecebf0", manga-peach: "#f2ede4",
+manga-sky: "#e8ecf0", manga-yellow: "#f3f0e4"
 
-// 漫画的装飾カラー（パステル、背景用）
-manga-pink: "#ffcce5", manga-mint: "#c5ffe0",
-manga-lavender: "#e0d5ff", manga-peach: "#ffe5d5",
-manga-sky: "#d5f0ff", manga-yellow: "#fff9c4"
+// ボーダー（温中性）
+border:       "#d9d7d0"  // 明確な区切り
+border-light: "#e9e7e0"  // 薄い区切り
 ```
 
-### フォント（globals.css）
-- **UI本文**: `--font-ui` = Noto Sans JP
-- **見出し**: `--font-display` = Zen Maru Gothic
-- **ベースサイズ**: 15px / line-height 1.65 / font-weight 450 / letter-spacing 0.005em
+### フォント（v3.6.3〜 刷新）
+- **UI本文**: Inter + Noto Sans JP + Yu Gothic UI fallback
+- **見出し**: IBM Plex Sans JP + Noto Sans JP fallback（Zen Maru Gothic廃止）
+- **コード**: JetBrains Mono + IBM Plex Mono + Consolas fallback
+- **index.html**: Google Fonts経由ロード（Inter/IBM Plex Sans JP/JetBrains Mono）
+- **ベース**: 15px / line-height 1.65 / font-weight 450 / letter-spacing 0.003em
+- **feature-settings**: "palt", "calt"（日本語プロポーショナル + 合字）
 
-### フォントサイズ強制引き上げ（v3.6.2）
-globals.cssで`text-[Npx]`アービトラリ値クラスを上書き。小さすぎるフォントを最低11px以上に:
+### Type Scale（Tailwind fontSize、最小12px保証）
+```javascript
+'xs':   ['12px', { lineHeight: '1.55', letterSpacing: '0.005em'  }]
+'sm':   ['13px', { lineHeight: '1.6',  letterSpacing: '0.003em'  }]
+'base': ['14px', { lineHeight: '1.65'                            }]
+'md':   ['15px', { lineHeight: '1.6'                             }]
+'lg':   ['17px', { lineHeight: '1.55', letterSpacing: '-0.005em' }]
+'xl':   ['19px', { lineHeight: '1.5',  letterSpacing: '-0.01em'  }]
+'2xl':  ['22px', { lineHeight: '1.45', letterSpacing: '-0.015em' }]
+'3xl':  ['28px', { lineHeight: '1.35', letterSpacing: '-0.02em'  }]
+'4xl':  ['34px', { lineHeight: '1.3',  letterSpacing: '-0.025em' }]
+```
+
+### フォントサイズ強制引き上げ（globals.css）
+`text-[Npx]`アービトラリ値クラスを最小12pxに上書き:
 ```css
-.text-\[8px\]  { font-size: 11px !important; line-height: 1.45 !important; }
-.text-\[9px\]  { font-size: 11.5px !important; line-height: 1.45 !important; }
-.text-\[10px\] { font-size: 12px !important; line-height: 1.5 !important; }
-.text-\[11px\] { font-size: 12.5px !important; line-height: 1.5 !important; }
-.text-\[12px\] { font-size: 13px !important; line-height: 1.55 !important; }
+.text-\[8px\], .text-\[9px\]  { font-size: 12px !important; line-height: 1.55 !important; }
+.text-\[10px\]                { font-size: 12.5px !important; line-height: 1.55 !important; }
+.text-\[11px\], .text-\[12px\] { font-size: 13px !important; line-height: 1.6 !important; }
 ```
-- レイアウト・構造・コンポーネント配置は変更せず、フォントサイズと行間のみ調整
-- `button, a, label` の最低 font-weight を 500 に強制
+- レイアウト・構造は一切変更せず、フォントサイズ・行間・文字色のみ調整
+- `button, a, label, [role="button"]` の最低 font-weight を 500 に強制
 
-### 特殊な可読性ルール（globals.css）
-- **TopNav 左タブ**: `nav button.text-text-secondary` の文字色を`#1f1f2c`に濃色化、ホバー時`#d6336c`。背景・枠線は付与せずミニマルなフラットデザイン維持
-- **text-manga-* クラス**: パステル背景用色は維持、テキスト用途のみ濃色に上書き（`text-manga-pink: #be185d`, `text-manga-lavender: #6d28d9`等）。原稿仕様パネル内のバッジ数値が読めるようになる
+### 【防衛策】レイアウト破綻防止（globals.css）
+フォント拡大に伴う flex item の溢れを防ぐ:
+```css
+.flex > *, .inline-flex > * { min-width: 0; }
+td, th { overflow: hidden; text-overflow: ellipsis; }
+```
+
+### 【機能カラー化】metadata バッジの色剥奪（globals.css）
+装飾色を完全に廃止し、色は意味（semantic）のみに使用:
+```css
+[class*="bg-manga-"]   { background-color: #ebeae5 !important; /* bg-tertiary */ }
+[class*="text-manga-"] { color: #4a4a5a !important;            /* text-secondary */ }
+```
+- 原稿仕様パネル等の「8bit」「350 dpi」「RGB」バッジは自動的にニュートラル化
+- 結果として「本当の警告色（赤/緑/橙）」が画面で際立つ
+
+### バッジ体系（4種固定）
+| 種別 | 背景 | テキスト | 用途 |
+|------|------|---------|------|
+| Success | `bg-success/12` | `text-success` | OK・完了・合格 |
+| Error | `bg-error/12` | `text-error` | NG・エラー |
+| Warning | `bg-warning/12` | `text-warning` | 注意・確認要 |
+| Neutral | `bg-bg-tertiary` | `text-text-secondary` + `border-border-light` | **その他全て**（DPI/カラーモード/サイズ/フォント名等） |
+
+### TopNav 左タブの視認性（globals.css）
+```css
+nav button.text-text-secondary { color: #1a1a24 !important; }
+nav button.text-text-secondary:hover { color: #4f46e5 !important; }
+nav button.text-text-secondary:focus::after { /* 下線演出 */ }
+```
+- 背景・枠線は付与せず、色のみ濃色化してミニマルなフラットデザインを維持
+- `:focus::after` で選択中のタブに下線を表示（擬似アクティブ状態）
 
 ### デザイン要素
-- 角丸の大きいカード・ボタン（rounded-xl, rounded-2xl）
-- ソフトシャドウ（shadow-soft, shadow-card）
-- グラデーション（gradient-pop: #d6336c → #6d28d9）
-- グロー効果（shadow-glow-pink, shadow-glow-error）
-- スクロールバー: 10px幅、#c1a4b4 → #b1a0c8の濃色グラデ
-- フォーカスリング: 2px solid #d6336c
-- 選択色: 半透明ピンク背景（rgba(214,51,108,0.25)）
+- **角丸**: xl=12px / 2xl=16px / 3xl=20px（中間値、ソフト感維持）
+- **影**: ドロップシャドウ維持（`soft`/`card`/`elevated`、rgba(26,26,36)ベース）
+- **グロー**: 3色変種（`glow-pink`/`glow-purple`/`glow-mint`）全てIndigo系に統一
+- **グラデーション**: 同系色のみ（Indigo→Deep Indigo等、pink/purple系は廃止）
+- **スクロールバー**: 10px幅、温中性グレー（#c4bfb3 → #a8a396）
+- **フォーカスリング**: 2px solid #4f46e5
+- **選択色**: 半透明Indigo（rgba(79,70,229,0.2)）
+- **プレビュー背景**: SpecCheckViewの右パネルプレビュー（`FilePreviewImage`）は`bg-bg-primary`に統一（従来の`#1a1a1e`黒背景を廃止、ファイル未選択時・表示時ともにクリーム背景）
 
 ## 主要依存関係
 

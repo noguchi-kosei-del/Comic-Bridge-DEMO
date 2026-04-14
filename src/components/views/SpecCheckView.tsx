@@ -1212,7 +1212,7 @@ export function SpecCheckView() {
                 </pre>
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center bg-[#1a1a1e] text-text-muted/30 text-xs">
+              <div className="flex-1 flex items-center justify-center bg-bg-primary text-text-muted text-xs">
                 ファイルを選択
               </div>
             )}
@@ -1778,7 +1778,7 @@ function FilePreviewImage({ file }: { file: PsdFile }) {
   });
 
   return (
-    <div className="flex-1 overflow-hidden flex items-center justify-center bg-[#1a1a1e] min-h-0">
+    <div className="flex-1 overflow-hidden flex items-center justify-center bg-bg-primary min-h-0">
       {isLoading ? (
         <svg className="w-5 h-5 animate-spin text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1798,7 +1798,7 @@ function FilePreviewImage({ file }: { file: PsdFile }) {
           draggable={false}
         />
       ) : (
-        <div className="text-text-muted/30 text-xs">プレビューなし</div>
+        <div className="text-text-muted text-xs">プレビューなし</div>
       )}
     </div>
   );
