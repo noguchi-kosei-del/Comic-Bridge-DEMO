@@ -376,12 +376,17 @@
   - **プレビューキャッシュ**: `previewMap` (filePath→URL) で全ファイルを並行プレビュー取得 → 差分計算前から表示
   - **自動差分計算**: ペア選択時に自動で Rust側 `compute_diff_simple`/`compute_diff_heatmap` を呼び出し（失敗してもプレビューは残る）
   - **不適切な組み合わせ判定**: `isValidPairCombination()` で compareMode に合わない場合は差分計算をスキップし、A単独表示。B側は赤いエラーカード表示
-  - **タブ移動時の自動セットアップ**: 差分タブを開いた瞬間に `kenbanPathA/B` から filesA/B を自動読み込み + `computeCompareMode()` で compareMode 自動判定
+  - **タブ移動時の自動セットアップ**: 差分タブを開いた瞬間に `kenbanPathA/B` から filesA/B を自動読み込み + `computeCompareMode()` で compareMode 自動判定。**v3.7.2: A/B両方揃っている場合のみ読み込み実行**
+  - **全画面（v3.7.2）**: サイドバー・ツールバー・ステータスバーすべて非表示、画像のみ表示。OSレベルフルスクリーン（タイトルバーも非表示）。Escapeで解除
+  - **背景色（v3.7.2）**: 画像エリアを `#1a1a1e`（黒）に統一
 - **分割ビューアー** (`src/components/parallel-viewer/ParallelViewerView.tsx` + `src/store/parallelStore.ts`)
   - **2パネル並列表示**: 左右独立にフォルダ/ファイル管理
   - **同期/独立モード**: 同期=両パネル同時ページング、独立=アクティブパネルのみ
   - **対応形式**: PSD/PSB/TIFF/JPG/PNG/BMP/PDF
   - **PDF全ページ自動展開**: PDF読み込み時に `kenban_get_pdf_page_count` で全ページを個別エントリ化（1ページずつページ送り可能）
+  - **全画面（v3.7.2）**: ヘッダー非表示、画像エリアのみ表示。OSレベルフルスクリーン。Escapeで解除
+  - **A/B必須（v3.7.2）**: 両パスが揃っている場合のみファイル読み込み実行
+  - **背景色（v3.7.2）**: 画像エリアを `#1a1a1e`（黒）に統一
 - **キーボード**: ↑↓ペア/ページ移動、Space表示モード切替、Ctrl+/-ズーム、S同期切替（分割）
 - **TopNav A/B との双方向同期**: ビューアー内でフォルダ/ファイル選択 → `viewStore.kenbanPathA/B` に書き戻し、TopNavから変更 → ビューアー再読み込み（最新優先）
 - **PDF ページ番号**: Rust側は0-indexed、フロント側は1-indexed → `pdfPage - 1` で変換
@@ -518,7 +523,7 @@
   - `src/hooks/useProgenTauri.ts` — 26個のprogen_*コマンドのinvokeラッパー
   - `src/hooks/useProgenJson.ts` — JSON読み書き+CSV解析+カテゴリグループ化
   - `src/hooks/useComicPotState.ts` — COMIC-POTエディタ専用useReducerステート
-  - `src/components/progen/ProgenRuleView.tsx` — ルール編集（6カテゴリ+Gemini）
+  - `src/components/progen/ProgenRuleView.tsx` — ルール編集（6カテゴリ+Gemini+保存ボタン+Ctrl+S対応）
   - `src/components/progen/ProgenProofreadingView.tsx` — 校正チェック（正誤/提案）
   - `src/components/progen/ProgenJsonBrowser.tsx` — GドライブJSONブラウザ
   - `src/components/progen/ProgenResultViewer.tsx` — 校正結果ビューア（3タブ）
@@ -1544,7 +1549,7 @@ textLogFolderPath: string      // テキストログフォルダパス
 | 前のページ | ←/↑ | レイヤー制御ビューアー・ビューアータブ |
 | 次のページ | →/↓ | レイヤー制御ビューアー・ビューアータブ |
 | ページ送り | マウスホイール | レイヤー制御ビューアー・ビューアータブ |
-| 全画面切替 | ボタン | ビューアータブ（Esc で解除） |
+| 全画面切替 | ボタン | ビューアー/差分/分割タブ（Esc で解除、OSフルスクリーン連動） |
 
 ## CSP（Content Security Policy）
 

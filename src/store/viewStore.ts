@@ -58,7 +58,13 @@ export const useViewStore = create<ViewState>((set) => ({
   setDetailPanelOpen: (isDetailPanelOpen) => set({ isDetailPanelOpen }),
   toggleDetailPanel: () => set((state) => ({ isDetailPanelOpen: !state.isDetailPanelOpen })),
   setProgenMode: (progenMode) => set({ progenMode }),
-  setViewerFullscreen: (isViewerFullscreen) => set({ isViewerFullscreen }),
+  setViewerFullscreen: (isViewerFullscreen) => {
+    set({ isViewerFullscreen });
+    // OSレベルのフルスクリーン切替（タイトルバーも非表示にする）
+    import("@tauri-apps/api/webviewWindow").then(({ getCurrentWebviewWindow }) => {
+      getCurrentWebviewWindow().setFullscreen(isViewerFullscreen).catch(() => {});
+    });
+  },
   setKenbanPathA: (kenbanPathA) => set({ kenbanPathA }),
   setKenbanPathB: (kenbanPathB) => set({ kenbanPathB }),
   setKenbanViewMode: (kenbanViewMode) => set({ kenbanViewMode }),

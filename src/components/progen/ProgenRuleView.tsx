@@ -2,7 +2,7 @@
  * ProGen ルール編集ビュー（Phase 1）
  * サイドバー（6カテゴリ）+ メインエリア（ルールカード/リスト）
  */
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -77,6 +77,8 @@ export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}
             className="w-full text-[9px] px-2 py-1 bg-bg-primary border border-border/50 rounded text-text-primary outline-none focus:border-accent/50"
           />
         </div>
+        {/* 保存ボタン */}
+        <SaveButton />
         {/* Geminiボタン群 */}
         <GeminiButtons />
       </div>
@@ -395,6 +397,94 @@ function NumberRulePanel() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ═══ 保存ボタン ═══
+
+function SaveButton() {
+  const store = useProgenStore();
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  const handleSave = useCallback(async () => {
+    setStatus("saving");
+    try {
+      // 1. マスタールールに保存
+      const scan = useScanPsdStore.getState();
+      const label = scan.workInfo.label || "";
+      if (label) {
+        const { writeMasterRule } = await import("../../hooks/useProgenTauri");
+        await writeMasterRule(label, {
+          proof: store.currentProofRules,
+          symbol: store.symbolRules,
+          options: {
+            ...store.options,
+            numberRuleBase: store.numberRules.base,
+            numberRulePersonCount: store.numberRules.personCount,
+            numberRuleThingCount: store.numberRules.thingCount,
+            numberRuleMonth: store.numberRules.month,
+            numberSubRulesEnabled: store.numberRules.subRulesEnabled,
+          },
+        });
+      }
+      // 2. 作品JSONにも保存（パスがあれば）
+      const jsonPath = store.currentJsonPath;
+      if (jsonPath) {
+        let json = store.currentLoadedJson || {};
+        json = {
+          ...json,
+          proofRules: {
+            proof: store.currentProofRules,
+            symbol: store.symbolRules,
+            options: {
+              ...store.options,
+              numberRuleBase: store.numberRules.base,
+              numberRulePersonCount: store.numberRules.personCount,
+              numberRuleThingCount: store.numberRules.thingCount,
+              numberRuleMonth: store.numberRules.month,
+              numberSubRulesEnabled: store.numberRules.subRulesEnabled,
+            },
+          },
+        };
+        const { writeJsonFile } = await import("../../hooks/useProgenTauri");
+        await writeJsonFile(jsonPath, json);
+        store.setCurrentLoadedJson(json);
+      }
+      setStatus("saved");
+      setTimeout(() => setStatus("idle"), 2000);
+    } catch (e) {
+      console.error("ProGen save failed:", e);
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 2000);
+    }
+  }, [store]);
+
+  // Ctrl+S で保存
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [handleSave]);
+
+  return (
+    <div className="flex-shrink-0 px-2 py-1.5 border-t border-border/30">
+      <button
+        onClick={handleSave}
+        disabled={status === "saving"}
+        className={`w-full px-2 py-1.5 text-[9px] font-medium rounded transition-colors ${
+          status === "saved" ? "bg-success/15 text-success"
+          : status === "error" ? "bg-error/15 text-error"
+          : "bg-accent/10 text-accent hover:bg-accent/20"
+        }`}
+      >
+        {status === "saving" ? "保存中..." : status === "saved" ? "✓ 保存しました" : status === "error" ? "保存エラー" : "ルールを保存"}
+      </button>
     </div>
   );
 }

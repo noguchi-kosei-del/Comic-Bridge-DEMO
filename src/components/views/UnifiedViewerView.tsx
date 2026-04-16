@@ -20,25 +20,24 @@ export function UnifiedViewerView() {
   const kenbanPathA = useViewStore((s) => s.kenbanPathA);
   const kenbanPathB = useViewStore((s) => s.kenbanPathB);
 
-  // 差分タブ移動時: ファイル読み込み + compareMode 自動判定
+  // 差分タブ移動時: A/B両方揃っている場合のみファイル読み込み + compareMode 自動判定
   useEffect(() => {
     if (activeSubMode !== "diff") return;
+    if (!kenbanPathA || !kenbanPathB) return;
 
     const setupDiffTab = async () => {
       const diffState = useDiffStore.getState();
       const getExt = (p: string) => p.substring(p.lastIndexOf(".") + 1).toLowerCase();
 
-      // ── ステップ1: ファイルが未ロードでパスがあれば、明示的に読み込む ──
       const loadPromises: Promise<void>[] = [];
-      if (kenbanPathA && diffState.folderA !== kenbanPathA) {
+      if (diffState.folderA !== kenbanPathA) {
         loadPromises.push(diffState.loadFolderSide(kenbanPathA, "A"));
       }
-      if (kenbanPathB && diffState.folderB !== kenbanPathB) {
+      if (diffState.folderB !== kenbanPathB) {
         loadPromises.push(diffState.loadFolderSide(kenbanPathB, "B"));
       }
       await Promise.all(loadPromises);
 
-      // ── ステップ2: ロード後の filesA/B から compareMode を判定 ──
       const after = useDiffStore.getState();
       const extA = after.filesA[0] ? getExt(after.filesA[0].filePath) : "";
       const extB = after.filesB[0] ? getExt(after.filesB[0].filePath) : "";
@@ -51,14 +50,15 @@ export function UnifiedViewerView() {
     setupDiffTab();
   }, [activeSubMode, kenbanPathA, kenbanPathB]);
 
-  // 分割タブ移動時: ファイル読み込み
+  // 分割タブ移動時: A/B両方揃っている場合のみファイル読み込み
   useEffect(() => {
     if (activeSubMode !== "parallel") return;
+    if (!kenbanPathA || !kenbanPathB) return;
     const ps = useParallelStore.getState();
-    if (kenbanPathA && ps.A.folder !== kenbanPathA) {
+    if (ps.A.folder !== kenbanPathA) {
       ps.loadFolderSide("A", kenbanPathA);
     }
-    if (kenbanPathB && ps.B.folder !== kenbanPathB) {
+    if (ps.B.folder !== kenbanPathB) {
       ps.loadFolderSide("B", kenbanPathB);
     }
   }, [activeSubMode, kenbanPathA, kenbanPathB]);

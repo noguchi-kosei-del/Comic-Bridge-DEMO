@@ -19,6 +19,13 @@ interface Props {
 export function ParallelViewerView({ externalPathA, externalPathB }: Props = {}) {
   const store = useParallelStore();
   const isFullscreen = useViewStore((s) => s.isViewerFullscreen);
+  // Escape で全画面解除
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") useViewStore.getState().setViewerFullscreen(false); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [isFullscreen]);
 
   // ── 外部パス自動読み込み（既に同じパスなら再読み込みしない）──
   useEffect(() => {
@@ -96,10 +103,7 @@ export function ParallelViewerView({ externalPathA, externalPathB }: Props = {})
       {!isFullscreen && (
         <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-border bg-bg-secondary">
           <span className="text-[10px] text-text-secondary font-medium">並列ビュー</span>
-
           <div className="w-px h-5 bg-border mx-1" />
-
-          {/* 同期モード切替 */}
           <div className="flex items-center gap-1">
             <button
               onClick={() => store.setSyncMode(!store.syncMode)}
@@ -112,16 +116,11 @@ export function ParallelViewerView({ externalPathA, externalPathB }: Props = {})
               <span className="text-[9px] text-text-muted">アクティブ: {store.activePanel}</span>
             )}
           </div>
-
           <div className="flex-1" />
-
-          {/* 全画面 */}
           <button
             onClick={() => useViewStore.getState().setViewerFullscreen(!isFullscreen)}
             className="px-2 py-1 text-[10px] text-text-secondary hover:text-text-primary transition-colors"
-          >
-            {isFullscreen ? "縮小" : "全画面"}
-          </button>
+          >全画面</button>
         </div>
       )}
 
@@ -245,7 +244,7 @@ function PanelView({ side, onSelectFolder, onSelectFile }: PanelProps) {
 
       {/* 画像エリア */}
       <div
-        className="flex-1 overflow-hidden relative bg-bg-tertiary/30 select-none"
+        className="flex-1 overflow-hidden relative bg-[#1a1a1e] select-none"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

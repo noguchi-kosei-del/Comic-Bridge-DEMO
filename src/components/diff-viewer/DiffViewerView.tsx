@@ -33,6 +33,13 @@ const VIEW_MODE_LABELS: Record<ViewMode, string> = {
 export function DiffViewerView({ externalPathA, externalPathB }: Props = {}) {
   const store = useDiffStore();
   const isFullscreen = useViewStore((s) => s.isViewerFullscreen);
+  // Escape で全画面解除
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") useViewStore.getState().setViewerFullscreen(false); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [isFullscreen]);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
 
@@ -346,8 +353,8 @@ export function DiffViewerView({ externalPathA, externalPathB }: Props = {}) {
 
       {/* ════ メインエリア ════ */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* ツールバー */}
-        <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 border-b border-border bg-bg-secondary">
+        {/* ツールバー — 全画面時は非表示 */}
+        {!isFullscreen && <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 border-b border-border bg-bg-secondary">
           {/* 表示モード切替 */}
           <div className="flex gap-0.5 bg-bg-tertiary rounded p-0.5">
             {(["A", "B", "diff"] as ViewMode[]).map((m) => (
@@ -395,12 +402,12 @@ export function DiffViewerView({ externalPathA, externalPathB }: Props = {}) {
             onClick={() => useViewStore.getState().setViewerFullscreen(!isFullscreen)}
             className="px-2 py-1 text-[10px] text-text-secondary hover:text-text-primary transition-colors"
           >{isFullscreen ? "縮小" : "全画面"}</button>
-        </div>
+        </div>}
 
         {/* イメージビューアー */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-hidden relative bg-bg-tertiary/30 select-none"
+          className="flex-1 overflow-hidden relative bg-[#1a1a1e] select-none"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -477,8 +484,8 @@ export function DiffViewerView({ externalPathA, externalPathB }: Props = {}) {
           )}
         </div>
 
-        {/* ステータスバー */}
-        <div className="flex-shrink-0 px-3 py-1 border-t border-border bg-bg-secondary text-[9px] text-text-muted flex items-center gap-3">
+        {/* ステータスバー — 全画面時は非表示 */}
+        {!isFullscreen && <div className="flex-shrink-0 px-3 py-1 border-t border-border bg-bg-secondary text-[9px] text-text-muted flex items-center gap-3">
           {currentPair?.fileA && <span>A: {currentPair.fileA.name}</span>}
           {currentPair?.fileB && <span>B: {currentPair.fileB.name}</span>}
           {currentPair?.diffCount !== undefined && <span>差分ピクセル: {currentPair.diffCount.toLocaleString()}</span>}
@@ -486,7 +493,7 @@ export function DiffViewerView({ externalPathA, externalPathB }: Props = {}) {
           {!pairValidity.valid && <span className="text-red-400">⚠ {pairValidity.reason}</span>}
           <div className="flex-1" />
           <span>↑↓: ペア / Space: 表示切替 / Ctrl+/-: ズーム</span>
-        </div>
+        </div>}
       </div>
     </div>
   );
