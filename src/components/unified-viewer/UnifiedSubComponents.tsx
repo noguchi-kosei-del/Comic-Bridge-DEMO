@@ -136,12 +136,6 @@ export function SortableBlockItem({
           : "hover:bg-bg-tertiary/60"
       }`}
       onClick={editing ? undefined : onClick}
-      onDoubleClick={() => {
-        if (!onEditBlock) return;
-        setEditText(block.lines.join("\n"));
-        setEditing(true);
-        setTimeout(() => editRef.current?.focus(), 0);
-      }}
     >
       <div
         className="flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing text-text-muted/30 hover:text-text-muted/60"
@@ -167,7 +161,7 @@ export function SortableBlockItem({
           </div>
         )}
         {editing ? (
-          <div>
+          <div onClick={(e) => e.stopPropagation()}>
             <textarea
               ref={editRef}
               value={editText}
@@ -183,7 +177,16 @@ export function SortableBlockItem({
             <span className="text-[8px] text-text-muted">Ctrl+Enter: 確定 / Esc: キャンセル</span>
           </div>
         ) : (
-          <div className={isDeleted ? "text-error/60 line-through" : isAdded ? "text-success" : "text-black"}>
+          <div
+            className={`${isDeleted ? "text-error/60 line-through" : isAdded ? "text-success" : "text-black"} ${onEditBlock ? "cursor-text" : ""}`}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              if (!onEditBlock) return;
+              setEditText(block.lines.join("\n"));
+              setEditing(true);
+              setTimeout(() => editRef.current?.focus(), 0);
+            }}
+          >
             {block.lines.join("\n") || <span className="text-text-muted/40 italic">（空）</span>}
           </div>
         )}

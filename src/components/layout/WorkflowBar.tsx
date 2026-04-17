@@ -6,6 +6,7 @@ import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { useProgenStore } from "../../store/progenStore";
 import { usePsdStore } from "../../store/psdStore";
 import { useWorkflowStore, WORKFLOWS, type Workflow, type WorkflowStep } from "../../store/workflowStore";
+import { useSpecStore } from "../../store";
 import { globalLoadFolder, globalLoadFiles } from "../../lib/psdLoaderRegistry";
 
 // ═══ ナビゲーション実行ヘルパー ═══
@@ -106,6 +107,13 @@ function executeStepNav(step: WorkflowStep) {
   // メイン画面（仕様チェック）に遷移する場合、PSDのみフィルタを自動適用
   if (step.nav === "specCheck") {
     usePsdStore.getState().setFileTypeFilter("psd");
+    // フォルダセットアップで選択したカラーモードを仕様チェックに反映
+    try {
+      const specId = localStorage.getItem("folderSetup_specId");
+      if (specId) {
+        useSpecStore.getState().selectSpecAndCheck(specId);
+      }
+    } catch { /* ignore */ }
   }
 
   // 統合ビューアーのタブ位置を自動設定
@@ -157,6 +165,7 @@ function executeStepNav(step: WorkflowStep) {
 export function WorkflowBar() {
   const [showPicker, setShowPicker] = useState(false);
   const [showAbortConfirm, setShowAbortConfirm] = useState(false);
+  const [showNextConfirm, setShowNextConfirm] = useState<{ title: string; message: string; type: "warning" | "success" | "save" | "complete" } | null>(null);
   const activeWorkflow = useWorkflowStore((s) => s.activeWorkflow);
   const currentStep = useWorkflowStore((s) => s.currentStep);
 
@@ -197,9 +206,65 @@ export function WorkflowBar() {
         {/* 進める / 完了ボタン */}
         <button
           onClick={() => {
-            // 最終項目の場合はWFを完了して終了
+            const currentStepDef = activeWorkflow.steps[currentStep];
+            // 最終項目の場合
             if (currentStep >= activeWorkflow.steps.length - 1) {
+              if (currentStepDef?.confirmOnNext === "wfComplete") {
+                setShowNextConfirm({ title: "完了", message: "ワークフローを終了しますか？", type: "complete" });
+                return;
+              }
               useWorkflowStore.getState().abortWorkflow();
+              return;
+            }
+            // confirmOnNext: 進む前にチェック確認
+            if (currentStepDef?.confirmOnNext === "specCheck") {
+              const specState = useSpecStore.getState();
+              const files = usePsdStore.getState().files;
+              let ngCount = 0;
+              let cautionCount = 0;
+              for (const f of files) {
+                const result = specState.checkResults.get(f.id);
+                if (result && !result.passed) ngCount++;
+                else if (!result && f.metadata) cautionCount++;
+              }
+              if (ngCount > 0 || cautionCount > 0) {
+                setShowNextConfirm({
+                  title: "⚠ 仕様チェックに問題があります",
+                  message: `NG: ${ngCount}件${cautionCount > 0 ? `、未チェック: ${cautionCount}件` : ""}。このまま次へ進みますか？`,
+                  type: "warning",
+                });
+                return;
+              }
+              setShowNextConfirm({
+                title: "✓ 仕様チェック完了",
+                message: `全${files.length}ファイルが合格しています。次の工程へ進みます。`,
+                type: "success",
+              });
+              return;
+            }
+            if (currentStepDef?.confirmOnNext === "textSave") {
+              const viewer = useUnifiedViewerStore.getState();
+              if (viewer.isDirty) {
+                setShowNextConfirm({
+                  title: "⚠ テキストが未保存です",
+                  message: "編集中のテキストが保存されていません。保存してから進みますか？",
+                  type: "save",
+                });
+                return;
+              }
+              setShowNextConfirm({
+                title: "✓ テキスト確認完了",
+                message: "テキストは保存済みです。次の工程へ進みます。",
+                type: "success",
+              });
+              return;
+            }
+            if (currentStepDef?.confirmOnNext === "wfComplete") {
+              setShowNextConfirm({
+                title: "完了",
+                message: "ワークフローを終了しますか？",
+                type: "complete",
+              });
               return;
             }
             useWorkflowStore.getState().nextStep();
@@ -251,6 +316,74 @@ export function WorkflowBar() {
               <div className="flex gap-2">
                 <button onClick={() => setShowAbortConfirm(false)} className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors">キャンセル</button>
                 <button onClick={() => { setShowAbortConfirm(false); useWorkflowStore.getState().abortWorkflow(); }} className="flex-1 px-3 py-2 text-xs font-medium text-white bg-error rounded-lg hover:bg-error/90 transition-colors">中止する</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 次へ進む確認ダイアログ */}
+        {showNextConfirm && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => setShowNextConfirm(null)}>
+            <div className="bg-bg-secondary border border-border rounded-2xl p-5 shadow-xl w-[340px] space-y-3" onClick={(e) => e.stopPropagation()}>
+              <p className={`text-sm font-medium text-center ${
+                showNextConfirm.type === "warning" || showNextConfirm.type === "save" ? "text-warning"
+                : showNextConfirm.type === "complete" ? "text-text-primary"
+                : "text-success"
+              }`}>
+                {showNextConfirm.title}
+              </p>
+              <p className="text-xs text-text-secondary text-center">{showNextConfirm.message}</p>
+              <div className="flex gap-2">
+                {showNextConfirm.type === "save" ? (
+                  <>
+                    <button onClick={() => setShowNextConfirm(null)} className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors">戻る</button>
+                    <button
+                      onClick={async () => {
+                        // テキスト保存してから進む
+                        const viewer = useUnifiedViewerStore.getState();
+                        if (viewer.textFilePath && viewer.textPages.length > 0) {
+                          const { serializeText } = await import("../../components/unified-viewer/utils");
+                          const content = serializeText(viewer.textHeader, viewer.textPages, viewer.fontPresets);
+                          await invoke("write_text_file", { filePath: viewer.textFilePath, content });
+                          viewer.setTextContent(content);
+                          viewer.setIsDirty(false);
+                        }
+                        setShowNextConfirm(null);
+                        useWorkflowStore.getState().nextStep();
+                        const nextIdx = currentStep + 1;
+                        const step = activeWorkflow.steps[nextIdx];
+                        if (step?.nav) executeStepNav(step);
+                      }}
+                      className="flex-1 px-3 py-2 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 transition-colors"
+                    >保存して進む</button>
+                  </>
+                ) : showNextConfirm.type === "complete" ? (
+                  <>
+                    <button onClick={() => setShowNextConfirm(null)} className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors">いいえ</button>
+                    <button
+                      onClick={() => { setShowNextConfirm(null); useWorkflowStore.getState().abortWorkflow(); }}
+                      className="flex-1 px-3 py-2 text-xs font-medium text-white bg-success rounded-lg hover:bg-success/90 transition-colors"
+                    >はい</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setShowNextConfirm(null)} className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors">
+                      {showNextConfirm.type === "warning" ? "修正に戻る" : "戻る"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNextConfirm(null);
+                        useWorkflowStore.getState().nextStep();
+                        const nextIdx = currentStep + 1;
+                        const step = activeWorkflow.steps[nextIdx];
+                        if (step?.nav) executeStepNav(step);
+                      }}
+                      className={`flex-1 px-3 py-2 text-xs font-medium text-white rounded-lg transition-colors ${
+                        showNextConfirm.type === "warning" ? "bg-warning hover:bg-warning/90" : "bg-accent hover:bg-accent/90"
+                      }`}
+                    >{showNextConfirm.type === "warning" ? "このまま進む" : "次へ進む"}</button>
+                  </>
+                )}
               </div>
             </div>
           </div>

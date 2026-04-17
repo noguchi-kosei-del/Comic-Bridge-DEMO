@@ -1421,12 +1421,8 @@ export function UnifiedViewer() {
       case "text":
         return (
           <div className="flex flex-col h-full">
-            {/* Mode toggle */}
+            {/* Toolbar */}
             <div className="flex-shrink-0 px-2 py-1 border-b border-border/30 flex items-center gap-1.5">
-              <div className="flex bg-bg-tertiary rounded overflow-hidden text-[10px]">
-                <button onClick={() => store.setEditMode("select")} className={`px-2 py-0.5 transition-colors ${store.editMode === "select" ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"}`}>選択</button>
-                <button onClick={() => store.setEditMode("edit")} className={`px-2 py-0.5 transition-colors ${store.editMode === "edit" ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"}`}>編集</button>
-              </div>
               {store.selectedBlockIds.size > 0 && (
                 <>
                   <button
@@ -1456,15 +1452,16 @@ export function UnifiedViewer() {
                 </>
               )}
               <div className="flex-1" />
-              {/* テキスト照合タブへ */}
-              {store.textContent.length > 0 && textLayers.length > 0 && (
+              {/* ブロック追加 */}
+              {store.textPages.length > 0 && (
                 <button
                   className="text-[10px] px-1.5 py-0.5 rounded bg-bg-tertiary text-text-muted hover:text-accent flex-shrink-0"
-                  onClick={() => store.setRightTab("diff")}
-                  title="テキスト照合タブを表示"
-                >
-                  照合
-                </button>
+                  onClick={() => {
+                    const pageNum = idx + 1;
+                    handleAddBlock(pageNum > 0 ? pageNum : 1);
+                  }}
+                  title="現在のページにブロック追加"
+                >+追加</button>
               )}
               {/* フォントJSON読み込み */}
               <button
@@ -1579,63 +1576,6 @@ export function UnifiedViewer() {
                     テキストを開く
                   </button>
                 </div>
-              ) : store.editMode === "edit" ? (
-                <div className="flex flex-col h-full">
-                  <textarea
-                    ref={textareaRef}
-                    className="flex-1 w-full p-3 text-sm font-mono bg-white text-black resize-none outline-none border-none"
-                    value={editBuffer ?? store.textContent}
-                    onChange={(e) => {
-                      const pos = e.target.selectionStart;
-                      setEditBuffer(e.target.value);
-                      setEditCursorPos(pos);
-                    }}
-                    spellCheck={false}
-                  />
-                  <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 border-t border-border/30 bg-bg-tertiary/30">
-                    {editBuffer !== null && editBuffer !== store.textContent && (
-                      <span className="text-[10px] text-warning">未確定の変更あり</span>
-                    )}
-                    <div className="flex-1" />
-                    <button
-                      onClick={() => {
-                        setEditBuffer(store.textContent);
-                        setEditCursorPos(null);
-                      }}
-                      className="px-3 py-1 text-[10px] text-text-muted hover:text-text-primary bg-bg-tertiary rounded transition-colors"
-                    >
-                      リセット
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (editBuffer === null) return;
-                        // ストア更新
-                        store.setTextContent(editBuffer);
-                        parseChunks(editBuffer);
-                        const { header, pages } = parseComicPotText(editBuffer);
-                        store.setTextHeader(header);
-                        store.setTextPages(pages);
-                        // 元ファイルに上書き保存（textFilePath がある場合）
-                        if (store.textFilePath) {
-                          try {
-                            await invoke("write_text_file", { filePath: store.textFilePath, content: editBuffer });
-                            store.setIsDirty(false);
-                          } catch {
-                            // 書き込み失敗時はダーティフラグを立てる
-                            store.setIsDirty(true);
-                          }
-                        } else {
-                          // ファイルパスがない場合はダーティマークのみ
-                          store.setIsDirty(true);
-                        }
-                      }}
-                      disabled={editBuffer === null || editBuffer === store.textContent}
-                      className="px-3 py-1 text-[10px] font-medium text-white bg-accent rounded disabled:opacity-30 transition-colors"
-                    >
-                      確定
-                    </button>
-                  </div>
-                </div>
               ) : (
                 <div className="p-2">
                   {store.textPages.length > 0 ? (
@@ -1649,7 +1589,7 @@ export function UnifiedViewer() {
                               isActivePage ? "text-accent font-medium" : "text-text-muted/60"
                             }`}
                             onClick={() => {
-                              if (pageSync) navigateToTextPage(page.pageNumber);
+                              navigateToTextPage(page.pageNumber);
                             }}
                           >
                             <span>&lt;&lt;{page.pageNumber}Page&gt;&gt;</span>

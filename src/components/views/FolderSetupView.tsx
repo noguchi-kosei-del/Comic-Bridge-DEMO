@@ -8,6 +8,7 @@ import { useProgenStore } from "../../store/progenStore";
 import { usePsdLoader } from "../../hooks/usePsdLoader";
 import { GENRE_LABELS } from "../../types/scanPsd";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
+import { useSpecStore } from "../../store";
 import { JsonFileBrowser } from "../scanPsd/JsonFileBrowser";
 
 const DEFAULT_COPY_DEST = "1_入稿";
@@ -82,6 +83,75 @@ interface AdditionalItem {
   isFolder: boolean;
 }
 
+// ═══ 追加コピーセクション（ステージング → コピー開始） ═══
+function AddCopySection({ checkedFolder, onRescan }: { checkedFolder: string; onRescan: () => Promise<void> }) {
+  const [staged, setStaged] = useState<{ type: "folder" | "file"; path: string; name: string }[]>([]);
+  const [copying, setCopying] = useState(false);
+
+  const addFolder = async () => {
+    const folder = await dialogOpen({ directory: true, title: "追加するフォルダを選択" });
+    if (!folder) return;
+    const name = (folder as string).replace(/\\/g, "/").split("/").pop() || "";
+    setStaged((p) => [...p, { type: "folder", path: folder as string, name }]);
+  };
+
+  const addFiles = async () => {
+    const files = await dialogOpen({ multiple: true, title: "追加するファイルを選択", filters: [{ name: "対応ファイル", extensions: ["psd", "psb", "jpg", "jpeg", "png", "tif", "tiff", "pdf", "txt"] }] });
+    if (!files) return;
+    const paths = Array.isArray(files) ? files : [files];
+    setStaged((p) => [...p, ...paths.map((f) => ({ type: "file" as const, path: f as string, name: (f as string).replace(/\\/g, "/").split("/").pop() || "" }))]);
+  };
+
+  const executeCopy = async () => {
+    if (staged.length === 0) return;
+    setCopying(true);
+    try {
+      for (const item of staged) {
+        if (item.type === "folder") {
+          await invoke("copy_folder", { source: item.path, destination: checkedFolder + "\\" + item.name });
+        } else {
+          await invoke("copy_file", { source: item.path, destination: checkedFolder + "\\" + item.name });
+        }
+      }
+      setStaged([]);
+      await onRescan();
+    } catch (e) {
+      console.error("追加コピーエラー:", e);
+    }
+    setCopying(false);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] text-text-muted">コピー先に追加:</span>
+        <button onClick={addFolder} className="px-2 py-0.5 text-[9px] rounded bg-bg-tertiary text-text-secondary hover:text-accent border border-border/50 transition-colors">📁 フォルダ</button>
+        <button onClick={addFiles} className="px-2 py-0.5 text-[9px] rounded bg-bg-tertiary text-text-secondary hover:text-accent border border-border/50 transition-colors">📄 ファイル</button>
+      </div>
+      {staged.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[9px] text-text-muted">追加予定 ({staged.length}件):</div>
+          <div className="max-h-24 overflow-auto space-y-0.5">
+            {staged.map((s, i) => (
+              <div key={i} className="flex items-center gap-1 text-[9px] px-2 py-0.5 bg-bg-tertiary rounded">
+                <span>{s.type === "folder" ? "📁" : "📄"}</span>
+                <span className="truncate flex-1 text-text-primary">{s.name}</span>
+                <button onClick={() => setStaged((p) => p.filter((_, j) => j !== i))} className="text-text-muted/40 hover:text-error">✕</button>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={executeCopy}
+            disabled={copying}
+            className="w-full py-1.5 text-[10px] font-medium text-white bg-accent rounded-lg hover:bg-accent/90 disabled:opacity-50 transition-colors"
+          >{copying ? "コピー中..." : `${staged.length}件をコピー開始`}</button>
+        </div>
+      )}
+      <div className="text-[8px] text-text-muted/50 truncate">コピー先: {checkedFolder}</div>
+    </div>
+  );
+}
+
 export function FolderSetupView() {
   const [sourcePath, setSourcePath] = useState("");
   // ソース種別: 単一メイン(default) or 複数メイン
@@ -117,6 +187,10 @@ export function FolderSetupView() {
     textCount: number;
     checkedFolder: string;
   } | null>(null);
+
+  const activeSpecId = useSpecStore((s) => s.activeSpecId);
+  const [selectedSpecId, setSelectedSpecId] = useState(() => activeSpecId || (() => { try { return localStorage.getItem("folderSetup_specId") || ""; } catch { return ""; } })());
+  const [showToast, setShowToast] = useState(false);
 
   // 設定
   // 新作時のタイトル入力（newJsonTitleと同期、新作モード時の番号フォルダ名として使用）
@@ -384,6 +458,9 @@ export function FolderSetupView() {
       if (scanError) warnings.push(`スキャンエラー: ${scanError}`);
       const warnMsg = warnings.length > 0 ? `  ⚠ ${warnings.join("、")}` : "";
       setStatus({ type: "success", message: `完了: ${copiedCount}ファイルをコピー（検出: PSD ${scanResult.psdCount}, PDF/画像 ${scanResult.pdfImageCount}, テキスト ${scanResult.textCount}）${warnMsg}` });
+      // トースト表示 → 5秒後に自動消去
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 5000);
 
       // ── テキスト有無で ProGen モードフラグを保存 ──
       // hasText=true → 整形 (formatting), hasText=false → 抽出 (extraction)
@@ -497,7 +574,7 @@ export function FolderSetupView() {
 
 
   return (
-    <div className="h-full flex flex-col bg-bg-primary overflow-auto">
+    <div className="h-full flex flex-col bg-bg-primary overflow-auto relative">
       <div className="max-w-[600px] mx-auto w-full p-6 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -818,66 +895,121 @@ export function FolderSetupView() {
           {processing ? "処理中..." : "フォルダ作成＋コピー実行"}
         </button>
 
-        {status.message && (
-          <div className={`p-3 rounded-xl text-xs ${status.type === "success" ? "bg-success/10 text-success border border-success/20" : status.type === "error" ? "bg-error/10 text-error border border-error/20" : "bg-bg-tertiary text-text-muted"}`}>
-            {status.message}
-          </div>
+        {/* ステータス: idle時のみ下部に表示（success/errorは上部アラートに移動済み） */}
+        {status.type === "idle" && status.message && (
+          <div className="p-3 rounded-xl text-xs bg-bg-tertiary text-text-muted">{status.message}</div>
         )}
+      </div>
 
-        {/* ── ファイル確認結果 ── */}
-        {fileCheck && (
-          <div className="bg-bg-secondary border border-border rounded-xl p-4 space-y-3">
-            <div className="text-[11px] font-medium text-text-primary">📋 コピー先のファイル確認</div>
+      {/* ═══ 完了トースト（オーバーレイ、5秒で自動消去） ═══ */}
+      {showToast && status.type === "success" && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[9990]">
+          <div className="px-5 py-3 rounded-xl bg-success/95 text-white shadow-2xl flex items-center gap-2 text-xs backdrop-blur-sm">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            <span>{status.message}</span>
+            <button onClick={() => setShowToast(false)} className="text-white/60 hover:text-white ml-2">✕</button>
+          </div>
+        </div>
+      )}
+      {status.type === "error" && status.message && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[9990]">
+          <div className="px-5 py-3 rounded-xl bg-error/95 text-white shadow-2xl flex items-center gap-2 text-xs backdrop-blur-sm">
+            <span>{status.message}</span>
+            <button onClick={() => setStatus({ type: "idle", message: "" })} className="text-white/60 hover:text-white ml-2">✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ ファイル確認オーバーレイ（フォーム上に重なって表示） ═══ */}
+      {fileCheck && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-[2px]" onClick={() => setFileCheck(null)}>
+          <div className="bg-bg-secondary border border-border rounded-2xl shadow-2xl w-[480px] p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="text-[12px] font-bold text-text-primary">📋 コピー先のファイル確認</div>
+              <button onClick={() => setFileCheck(null)} className="text-text-muted hover:text-text-primary text-lg">✕</button>
+            </div>
             <div className="grid grid-cols-3 gap-3">
-              {/* PSD */}
               <div className={`p-3 rounded-lg border text-center ${fileCheck.hasPsd ? "bg-success/5 border-success/20" : "bg-error/5 border-error/20"}`}>
                 <div className={`text-lg ${fileCheck.hasPsd ? "text-success" : "text-error"}`}>{fileCheck.hasPsd ? "✓" : "✕"}</div>
-                <div className="text-[10px] font-medium text-text-primary mt-1">PSD</div>
+                <div className="text-[10px] font-medium text-text-primary">PSD</div>
                 <div className="text-[9px] text-text-muted">{fileCheck.psdCount}件</div>
               </div>
-              {/* PDF/画像 */}
               <div className={`p-3 rounded-lg border text-center ${fileCheck.hasPdfOrImage ? "bg-success/5 border-success/20" : "bg-error/5 border-error/20"}`}>
                 <div className={`text-lg ${fileCheck.hasPdfOrImage ? "text-success" : "text-error"}`}>{fileCheck.hasPdfOrImage ? "✓" : "✕"}</div>
-                <div className="text-[10px] font-medium text-text-primary mt-1">PDF / 画像</div>
+                <div className="text-[10px] font-medium text-text-primary">PDF / 画像</div>
                 <div className="text-[9px] text-text-muted">{fileCheck.pdfImageCount}件</div>
               </div>
-              {/* テキスト */}
               <div className={`p-3 rounded-lg border text-center ${fileCheck.hasText ? "bg-blue-500/5 border-blue-500/20" : "bg-bg-tertiary border-border/50"}`}>
                 <div className={`text-lg ${fileCheck.hasText ? "text-blue-500" : "text-text-muted"}`}>{fileCheck.hasText ? "✓" : "—"}</div>
-                <div className="text-[10px] font-medium text-text-primary mt-1">テキスト</div>
+                <div className="text-[10px] font-medium text-text-primary">テキスト</div>
                 <div className="text-[9px] text-text-muted">{fileCheck.textCount}件</div>
               </div>
             </div>
-
-            {/* 警告 */}
-            {(!fileCheck.hasPsd || !fileCheck.hasPdfOrImage) && (
-              <div className="p-2.5 bg-warning/10 border border-warning/20 rounded-lg">
-                <div className="text-[10px] text-warning font-medium">⚠ 注意</div>
-                <div className="text-[10px] text-warning/80 mt-0.5">
-                  {!fileCheck.hasPsd && <div>PSDファイルが見つかりません。写植データが不足している可能性があります。</div>}
-                  {!fileCheck.hasPdfOrImage && <div>PDFまたは画像ファイルが見つかりません。原稿データが不足している可能性があります。</div>}
-                </div>
-              </div>
-            )}
-
-            {/* ProGenモード案内 */}
+            {/* 追加コピー */}
+            {(!fileCheck.hasPsd || !fileCheck.hasPdfOrImage) && <div className="text-[9px] text-warning">⚠ 不足データがあります</div>}
+            <AddCopySection checkedFolder={fileCheck.checkedFolder} onRescan={async () => {
+              const r = await invoke<string[]>("list_all_files", { folderPath: fileCheck.checkedFolder });
+              const psd = r.filter((f: string) => /\.(psd|psb)$/i.test(f)).length;
+              const img = r.filter((f: string) => /\.(jpg|jpeg|png|tif|tiff|bmp|gif|pdf)$/i.test(f)).length;
+              const txt = r.filter((f: string) => /\.txt$/i.test(f)).length;
+              setFileCheck({ hasPsd: psd > 0, hasPdfOrImage: img > 0, hasText: txt > 0, psdCount: psd, pdfImageCount: img, textCount: txt, checkedFolder: fileCheck.checkedFolder });
+              if (psd > 0) loadFolder(fileCheck.checkedFolder).catch(() => {});
+            }} />
+            {/* 作品情報JSON */}
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-text-muted flex-shrink-0">作品情報:</span>
+              {(() => {
+                const jp = useScanPsdStore.getState().currentJsonFilePath || useUnifiedViewerStore.getState().presetJsonPath;
+                return jp ? (
+                  <span className="text-[9px] text-accent truncate flex-1">{jp.replace(/\//g, "\\").split("\\").slice(-2).join("\\")}</span>
+                ) : (
+                  <span className="text-[9px] text-text-muted/50 flex-1">未読み込み</span>
+                );
+              })()}
+              <button
+                onClick={() => setShowJsonBrowser(true)}
+                className="px-2 py-0.5 text-[9px] rounded bg-bg-tertiary text-text-secondary hover:text-accent border border-border/50 transition-colors flex-shrink-0"
+              >選択</button>
+              <button
+                onClick={() => {
+                  // 新規作成: viewStoreのJSONブラウザ（preset mode）を開く
+                  import("../../store/viewStore").then(({ useViewStore }) => {
+                    useViewStore.getState().setJsonBrowserMode("preset");
+                  });
+                  setFileCheck(null);
+                }}
+                className="px-2 py-0.5 text-[9px] rounded bg-bg-tertiary text-text-secondary hover:text-accent border border-border/50 transition-colors flex-shrink-0"
+              >新規</button>
+            </div>
+            {/* カラーモード選択 */}
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-text-muted">カラーモード:</span>
+              {[{ id: "mono-spec", label: "モノクロ" }, { id: "color-spec", label: "カラー" }].map((spec) => (
+                <button
+                  key={spec.id}
+                  onClick={() => {
+                    setSelectedSpecId(spec.id);
+                    try { localStorage.setItem("folderSetup_specId", spec.id); } catch {}
+                    useSpecStore.getState().selectSpecAndCheck(spec.id);
+                  }}
+                  className={`px-2.5 py-1 text-[10px] rounded border transition-colors ${
+                    selectedSpecId === spec.id ? "bg-accent/15 text-accent border-accent/30 font-medium" : "bg-bg-tertiary text-text-secondary border-border/50 hover:text-text-primary"
+                  }`}
+                >{spec.label}</button>
+              ))}
+            </div>
+            {/* ProGenモード */}
             <div className="p-2.5 bg-accent/5 border border-accent/15 rounded-lg">
               <div className="text-[10px] text-accent font-medium">
-                {fileCheck.hasText
-                  ? "📝 テキストあり → ProGen「整形プロンプト」モードで処理"
-                  : "🔍 テキストなし → ProGen「抽出プロンプト」モードで処理"}
-              </div>
-              <div className="text-[9px] text-text-muted mt-0.5">
-                {fileCheck.hasText
-                  ? "テキストファイルが見つかったため、統一表記ルールを適用して整形します。"
-                  : "テキストファイルがないため、PDF/画像からセリフを抽出します。"}
+                {fileCheck.hasText ? "📝 テキストあり → ProGen「整形」" : "🔍 テキストなし → ProGen「抽出」"}
               </div>
             </div>
-
-            {/* WFの次工程ボタンで遷移するため、個別ボタンは不要 */}
+            <button onClick={() => setFileCheck(null)} className="w-full py-2 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 transition-colors">
+              確認完了
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 作品情報JSON ブラウザモーダル */}
       {showJsonBrowser && createPortal(
@@ -891,7 +1023,42 @@ export function FolderSetupView() {
               {jsonFolderPath ? (
                 <JsonFileBrowser
                   basePath={jsonFolderPath}
-                  onSelect={(filePath) => { setSelectedJsonPath(filePath); setShowJsonBrowser(false); }}
+                  onSelect={async (filePath) => {
+                    setSelectedJsonPath(filePath);
+                    setShowJsonBrowser(false);
+                    // JSONを実際に読み込んでストアに反映
+                    try {
+                      const content = await invoke<string>("read_text_file", { filePath });
+                      const data = JSON.parse(content);
+                      const scanStore = useScanPsdStore.getState();
+                      scanStore.setCurrentJsonFilePath(filePath);
+                      // workInfo更新
+                      if (data?.presetData?.workInfo || data?.workInfo) {
+                        const wi = data?.presetData?.workInfo || data?.workInfo;
+                        if (wi.genre) scanStore.setWorkInfo({ genre: wi.genre });
+                        if (wi.label) scanStore.setWorkInfo({ label: wi.label });
+                        if (wi.title) scanStore.setWorkInfo({ title: wi.title });
+                      }
+                      // フォントプリセット読み込み
+                      const presets: { font: string; name: string; subName?: string }[] = [];
+                      const presetsObj = data?.presetData?.presets ?? data?.presets ?? data?.presetSets ?? data;
+                      if (typeof presetsObj === "object" && presetsObj !== null && !Array.isArray(presetsObj)) {
+                        for (const [, arr] of Object.entries(presetsObj)) {
+                          if (!Array.isArray(arr)) continue;
+                          for (const p of arr as any[])
+                            if (p?.font) presets.push({ font: p.font, name: p.name || "", subName: p.subName || "" });
+                        }
+                      }
+                      if (presets.length > 0) {
+                        useUnifiedViewerStore.getState().setFontPresets(presets);
+                        useUnifiedViewerStore.getState().setPresetJsonPath(filePath);
+                      }
+                      // ProGenルール適用
+                      if (data?.proofRules) {
+                        useProgenStore.getState().applyJsonRules(data.proofRules);
+                      }
+                    } catch { /* ignore */ }
+                  }}
                   onCancel={() => setShowJsonBrowser(false)}
                   mode="open"
                 />

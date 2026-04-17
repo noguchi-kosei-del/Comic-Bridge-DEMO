@@ -458,6 +458,7 @@
 - **ZIP リリースステップ**: `copyDestFolder`の親フォルダ（1_入稿レベル）を`requestPrep_autoFolder` localStorage経由でRequestPrepViewに自動セット
 - **テキストチェックステップ**: copyDestFolder内のPDF/画像を自動検出してpsdStoreに読み込み。テキストタブを右端に自動配置、他タブ非表示
 - **中断確認ダイアログ**: 中断ボタン押下時にstate管理のモーダルで「中止しますか？」を表示（window.confirm非使用）
+- **進行確認ダイアログ（confirmOnNext, v3.7.3）**: ステップ進行時にチェック確認。`specCheck`=NG/注意→警告/全合格→OK。`textSave`=未保存→保存ボタン/保存済→OK。`wfComplete`=WF終了確認（はい/いいえ）
 - **viewerTabSetup**: ステップ定義にタブ位置自動設定を追加（`{ text: "far-right", files: null, ... }`）
 - **requestPrepMode**: ステップ定義にRequestPrepの初期モードを追加（"external"で外部校正タブに自動切替 + JSON workInfoからジャンル・レーベル自動セット）
 
@@ -505,6 +506,7 @@
 - **作品情報JSON**: 新規作成時はGENRE_LABELS（scanPsd.ts）による2段階ドロップダウン（ジャンル→レーベル）で選択。既存JSON選択は`JsonFileBrowser`モーダル（TopNavの作品情報ボタンと同じUI、scanPsdStore.jsonFolderPathをベースにしたツリー表示）
 - **モード自動連動**: 新作選択時は`jsonMode="new"`、続話選択時は`jsonMode="select"`を自動セット（続話は前巻JSONの再利用が多いため）
 - **create_directory / copy_folder Rustコマンド**: .keepファイル不使用
+- **コピー完了後オーバーレイ（v3.7.3）**: 完了トースト（5秒自動消去）+ ファイル確認モーダル（PSD/PDF・画像/テキスト検出結果、追加コピーのステージング方式、カラーモード選択→specStore共有、作品情報JSON選択/新規、ProGenモード案内）
 
 ### 24b. 依頼準備ツール
 - **RequestPrepView**: ツールメニューから起動。ファイル/フォルダをまとめてZIP圧縮
@@ -564,7 +566,7 @@
     - ◀▶で`logicalPage ± 1`するだけで前半分→後半分→次ファイル前半分と自動進行
     - PDFキャッシュキー: `f.pdfPage`を含める（`${path}#p${page}`）で同一PDF別ページを区別
   - **右パネル**: 同上の共通タブ
-  - **テキストタブ**: 選択/編集モード切替。**選択モード機能（v3.7.0: 写植確認から移植）**: DnDブロックリオーダー（SortableBlockItem、ドラッグハンドル+位置番号右端表示）、ダブルクリックインライン編集（Ctrl+Enter確定/Escキャンセル）、ページヘッダー「+」ブロック追加、「削除//」トグル（選択ブロック先頭行に//付与/解除）、追加/削除バッジ表示。**フォント割当ドロップダウン**（プリセットフォントから選択、割当後に次ブロック自動選択）+ 「+フォント」ボタン（JSONブラウザからプリセット読込）。DTPビューアー風フォント一覧（全ファイル集約、クリックでページ移動サイクル）。**handleSave（v3.7.0）**: 選択モードの変更はserializeTextで再構築して保存（ブロック移動・フォント指定・追加・削除がファイルに正しく反映）。textContent外部変更時にtextPagesを自動パース。Ctrl+S対応。ページ同期スクロールを行ベースに変更
+  - **テキストタブ（v3.7.3）**: 編集モード廃止、**ダブルクリックインライン編集に統一**（SortableBlockItemのテキスト部分をダブルクリック→textarea展開、Ctrl+Enter確定/Escキャンセル）。ツールバー: +追加ボタン（現在ページにブロック追加）+ +フォントボタン + 選択中は✕解除/削除//。DnDブロックリオーダー（ドラッグハンドル+位置番号右端表示）。フォント割当ドロップダウン。ページヘッダー「+」ブロック追加（各ページ末尾）。ページ番号クリックで常にビューアーが該当ページに移動（pageSync不問）。handleSave: serializeTextで再構築して保存。Ctrl+S対応
   - **テキスト照合タブ**: KENBAN版LCS文字レベルdiff移植。PSDレイヤー↔テキストブロックのリンクマッピング。差異ありのみ2カラム、一致はPSD/テキスト切替で1カラム。漫画読み順ソート。`normalizeTextForComparison` + `computeLineSetDiff` + `buildUnifiedDiff`。ファイル一覧に✓/⚠アイコン。`//`先頭ブロックは「テキスト削除確認」として黄色警告表示（照合対象から除外、差異としてカウントしない）。textPagesが空の場合はtextContent全体をフォールバック比較
   - **校正JSONタブ**: 正誤/提案/全て切替、カテゴリフィルタ、ページ連動
   - **キーボード**: ←→ページ送り、Ctrl±ズーム、Ctrl+0フィット、Ctrl+S保存、Pキーで現在のファイルをPhotoshop起動

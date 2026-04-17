@@ -13,6 +13,8 @@ export interface WorkflowStep {
   viewerTabSetup?: Partial<Record<string, string | null>>;
   /** RequestPrepView の初期モード */
   requestPrepMode?: string;
+  /** 次へ進む前にチェック確認ダイアログを表示 */
+  confirmOnNext?: "specCheck" | "textSave" | "wfComplete";
 }
 
 export interface Workflow {
@@ -31,12 +33,12 @@ export const WORKFLOWS: Workflow[] = [
     icon: "📦",
     steps: [
       { label: "完成原稿 読み込み", desc: "フォルダセットアップ → PSD自動読み込み", nav: "folderSetup" },
-      { label: "仕様を一括で修正", desc: "カラーモード・ビット深度・解像度・ガイド一括反映", nav: "specCheck" },
+      { label: "仕様を一括で修正", desc: "カラーモード・ビット深度・解像度・ガイド一括反映", nav: "specCheck", confirmOnNext: "specCheck" },
       { label: "ProGen テキスト整形・抽出", desc: "テキスト有無で自動分岐（整形/抽出）", nav: "progen", progenMode: "_auto" },
-      { label: "テキストチェック", desc: "画像/PDFとテキストを並べて確認", nav: "unifiedViewer", viewerTabSetup: { text: "far-right", files: null, layers: null, spec: null, proofread: null, diff: null } },
+      { label: "テキストチェック", desc: "画像/PDFとテキストを並べて確認", nav: "unifiedViewer", viewerTabSetup: { text: "far-right", files: null, layers: null, spec: null, proofread: null, diff: null }, confirmOnNext: "textSave" },
       { label: "校正プロンプト", desc: "正誤チェック・提案チェック", nav: "progen", progenMode: "_check" },
-      { label: "テキストエディタで修正", desc: "確定ボタンで自動保存", nav: "unifiedViewer" },
-      { label: "ZIP リリース", desc: "依頼準備", nav: "requestPrep" },
+      { label: "テキストエディタで修正", desc: "確定ボタンで自動保存", nav: "unifiedViewer", confirmOnNext: "textSave" },
+      { label: "ZIP リリース", desc: "依頼準備", nav: "requestPrep", confirmOnNext: "wfComplete" },
     ],
   },
   {
