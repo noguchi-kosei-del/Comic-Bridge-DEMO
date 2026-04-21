@@ -5,8 +5,15 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { useViewStore } from "./store/viewStore";
 import { useTypesettingCheckStore } from "./store/typesettingCheckStore";
 import type { ProofreadingCheckItem } from "./types/typesettingCheck";
+import { initProgenConfig } from "./lib/progenConfig";
 
 function App() {
+  // 起動時に ProGen 外部設定を同期（共有ドライブから最新を取得）
+  // バックグラウンド実行、失敗しても本体動作は継続
+  useEffect(() => {
+    initProgenConfig().catch((e) => console.warn("ProGen config init failed:", e));
+  }, []);
+
   // ProGenからのCLI引数経由で校正データJSONを自動ロード
   useEffect(() => {
     const unlistenPromise = listen<string>("open-proofreading-json", async (event) => {

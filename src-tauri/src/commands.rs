@@ -5814,3 +5814,204 @@ pub async fn get_file_times(file_paths: Vec<String>) -> Result<Vec<(String, u64,
     }
     Ok(results)
 }
+
+// ============================================
+// ProGen 外部設定の取得・キャッシュ
+// ============================================
+//
+// 共有ドライブ上の `Pro-Gen` フォルダから以下のファイルを取得し、
+// ユーザーのローカルキャッシュ (%APPDATA%/comic-bridge/progen-cache/) に保存する:
+//   - version.json     : { version, lastModified, files?: [...] }
+//   - config.json      : NGワード/カテゴリ/数字ルール 等の JSON データ
+//
+// 起動時 or 手動トリガーでバックグラウンド実行。失敗しても本体動作は継続。
+
+const PROGEN_REMOTE_BASE: &str =
+    "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/編集企画_C班(AT業務推進)/DTP制作部/Comic Bridge_統合版/Pro-Gen";
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProgenSyncResult {
+    pub success: bool,
+    /// キャッシュに書き込まれたファイル数
+    pub updated_files: u32,
+    /// スキップされたファイル数 (同じバージョン)
+    pub skipped_files: u32,
+    /// ローカルキャッシュのルートパス
+    pub cache_dir: String,
+    /// リモート version.json のバージョン
+    pub remote_version: Option<String>,
+    /// ローカルキャッシュの現在バージョン (更新後)
+    pub local_version: Option<String>,
+    /// エラーメッセージ (success=false 時)
+    pub error: Option<String>,
+}
+
+fn progen_cache_dir() -> Result<std::path::PathBuf, String> {
+    let base = dirs::data_dir().ok_or_else(|| "AppData dir not found".to_string())?;
+    let dir = base.join("comic-bridge").join("progen-cache");
+    if !dir.exists() {
+        fs::create_dir_all(&dir).map_err(|e| format!("Failed to create cache dir: {}", e))?;
+    }
+    Ok(dir)
+}
+
+/// ProGen 外部設定を共有ドライブから取得しローカルキャッシュに同期する
+///
+/// 戻り値は同期結果サマリー。共有ドライブが到達不能でも Err ではなく
+/// `ProgenSyncResult { success: false, error: ... }` を返して本体起動をブロックしない。
+#[tauri::command]
+pub async fn fetch_progen_config() -> Result<ProgenSyncResult, String> {
+    let cache_dir = match progen_cache_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            return Ok(ProgenSyncResult {
+                success: false,
+                updated_files: 0,
+                skipped_files: 0,
+                cache_dir: String::new(),
+                remote_version: None,
+                local_version: None,
+                error: Some(e),
+            });
+        }
+    };
+
+    let remote_base = Path::new(PROGEN_REMOTE_BASE);
+    let cache_dir_str = cache_dir.to_string_lossy().to_string();
+
+    // リモート version.json 読込
+    let remote_version_path = remote_base.join("version.json");
+    let remote_version_text = match fs::read_to_string(&remote_version_path) {
+        Ok(t) => t,
+        Err(e) => {
+            return Ok(ProgenSyncResult {
+                success: false,
+                updated_files: 0,
+                skipped_files: 0,
+                cache_dir: cache_dir_str,
+                remote_version: None,
+                local_version: read_local_version(&cache_dir),
+                error: Some(format!("Remote version.json unreadable: {}", e)),
+            });
+        }
+    };
+
+    let remote_json: serde_json::Value = match serde_json::from_str(&remote_version_text) {
+        Ok(v) => v,
+        Err(e) => {
+            return Ok(ProgenSyncResult {
+                success: false,
+                updated_files: 0,
+                skipped_files: 0,
+                cache_dir: cache_dir_str,
+                remote_version: None,
+                local_version: read_local_version(&cache_dir),
+                error: Some(format!("Remote version.json parse error: {}", e)),
+            });
+        }
+    };
+
+    let remote_version = remote_json
+        .get("version")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    // ローカル version 比較
+    let local_version = read_local_version(&cache_dir);
+    let needs_update = match (&local_version, &remote_version) {
+        (None, Some(_)) => true,
+        (Some(l), Some(r)) => compare_semver(r, l) > 0 || l != r,
+        _ => false,
+    };
+
+    // 同期対象ファイル: version.json の `files` 配列で明示、無ければデフォルト一覧
+    let default_files = vec!["config.json".to_string()];
+    let files: Vec<String> = remote_json
+        .get("files")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|e| e.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or(default_files);
+
+    let mut updated: u32 = 0;
+    let mut skipped: u32 = 0;
+
+    if needs_update {
+        // version.json 自体もコピー
+        if let Err(e) = fs::write(cache_dir.join("version.json"), &remote_version_text) {
+            return Ok(ProgenSyncResult {
+                success: false,
+                updated_files: 0,
+                skipped_files: 0,
+                cache_dir: cache_dir_str,
+                remote_version,
+                local_version: local_version.clone(),
+                error: Some(format!("Failed to write cache version.json: {}", e)),
+            });
+        }
+        // 各ファイルを同期
+        for rel in &files {
+            let src = remote_base.join(rel);
+            let dst = cache_dir.join(rel);
+            if let Some(parent) = dst.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            match fs::copy(&src, &dst) {
+                Ok(_) => updated += 1,
+                Err(e) => {
+                    eprintln!("ProGen sync skip {}: {}", rel, e);
+                }
+            }
+        }
+    } else {
+        skipped = files.len() as u32;
+    }
+
+    Ok(ProgenSyncResult {
+        success: true,
+        updated_files: updated,
+        skipped_files: skipped,
+        cache_dir: cache_dir_str,
+        remote_version: remote_version.clone(),
+        local_version: read_local_version(&cache_dir).or(remote_version),
+        error: None,
+    })
+}
+
+/// ProGen ローカルキャッシュの特定ファイルを読む
+/// 見つからない場合は None を返す（フロント側で埋め込みフォールバックを使用）
+#[tauri::command]
+pub async fn read_progen_cached_file(relative_path: String) -> Result<Option<String>, String> {
+    let cache_dir = progen_cache_dir()?;
+    let path = cache_dir.join(&relative_path);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read cached file: {}", e))?;
+    Ok(Some(content))
+}
+
+fn read_local_version(cache_dir: &Path) -> Option<String> {
+    let p = cache_dir.join("version.json");
+    let text = fs::read_to_string(&p).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    v.get("version").and_then(|s| s.as_str()).map(|s| s.to_string())
+}
+
+/// セマンティックバージョン比較: a > b で正、a < b で負、等しい時0
+fn compare_semver(a: &str, b: &str) -> i32 {
+    let pa: Vec<u32> = a.split('.').map(|s| s.parse().unwrap_or(0)).collect();
+    let pb: Vec<u32> = b.split('.').map(|s| s.parse().unwrap_or(0)).collect();
+    for i in 0..pa.len().max(pb.len()) {
+        let na = *pa.get(i).unwrap_or(&0);
+        let nb = *pb.get(i).unwrap_or(&0);
+        if na != nb {
+            return (na as i32) - (nb as i32);
+        }
+    }
+    0
+}

@@ -538,3 +538,51 @@ img {
 .animate-fs-splash {
   animation: fs-splash 0.5s ease-out forwards;
 }
+
+/* ===== Dark Mode（ダークモード反転）=====
+ * UI チロームは invert + hue-rotate で暗転させる一方、
+ * 画像・動画・Canvas・iframe はもう一度同じ値で反転して元の見た目に戻す。
+ * invert(1) × invert(1) = identity、hue-rotate(180deg) × hue-rotate(180deg) = 360° = 0°
+ * （数値が完全一致するため、CSS フィルタの合成が数学的に恒等変換になる）
+ *
+ * 従来は JS querySelectorAll で画像に individual に counter-filter を付与していたが、
+ * 後から動的ロードされた画像に反映されず、ビューアー画像が反転する問題があったため CSS 化。
+ */
+html.dark-mode-invert {
+  filter: invert(1) hue-rotate(180deg);
+  /* UA デフォルトの白背景が反転で黒になる */
+  background: white;
+}
+
+/* メディア要素を二重反転で元の表示に戻す */
+html.dark-mode-invert img,
+html.dark-mode-invert video,
+html.dark-mode-invert canvas,
+html.dark-mode-invert iframe,
+/* PDF.js が生成する canvas / div も含む（明示的に data-no-invert を付けたくない場合の保険） */
+html.dark-mode-invert [data-no-invert],
+/* object-fit 系のプレビュー画像（PSD preview 等） */
+html.dark-mode-invert picture,
+html.dark-mode-invert svg image {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* ダークモード切替時の再描画を滑らかに（オプション） */
+html.dark-mode-invert,
+html.dark-mode-invert img,
+html.dark-mode-invert video,
+html.dark-mode-invert canvas,
+html.dark-mode-invert iframe {
+  transition: filter 0.15s ease-out;
+}
+
+/* ビューアー背景 (#1a1a1e) は ダークモード反転後も「黒」に見える必要がある。
+ * html 全体に invert(1) hue-rotate(180deg) が掛かっているため、
+ * 入力値として invert 済みの色を指定すれば、html レベルの invert で相殺されて
+ * 元の #1a1a1e として表示される。
+ * #1a1a1e ≒ グレースケール → hue-rotate の影響はほぼなし、
+ * invert 相殺のためには pre-inverted 値 #e5e5e1 を入力すればよい。
+ */
+html.dark-mode-invert .bg-\[\#1a1a1e\] {
+  background-color: #e5e5e1 !important;
+}

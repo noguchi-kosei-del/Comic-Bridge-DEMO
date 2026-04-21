@@ -551,6 +551,95 @@
 - **FilePropertiesPanel**: 右プレビューパネル下部に折りたたみ可能なプロパティ表示
 - **表示項目**: ファイル名 / ドキュメント種類 / 作成日 / 修正日 / ファイルサイズ / 寸法(px/inch/cm) / 用紙サイズ / 解像度 / ビット数 / カラーモード / αチャンネル / ガイド / トンボ / レイヤー数 / チェック結果
 
+### 29. v3.8.1 改修 — ダークモード画像反転問題の修正
+
+**問題**: ダークモード有効時、UIだけでなく**ビューアー表示画像も色反転**していた。
+
+**原因**:
+- 従来実装 ([AppLayout.tsx](src/components/layout/AppLayout.tsx)) で `<html>` に `filter: invert(0.92) hue-rotate(180deg)` を適用
+- 打ち消し用に `querySelectorAll("img, video, canvas, iframe")` でその時点の要素に `filter: invert(1) hue-rotate(180deg)` を設定
+- **問題2つ**:
+  1. `invert(0.92)` と `invert(1)` の数値不一致 → 完全相殺されず色がわずかにズレる
+  2. `querySelectorAll` はワンショット → 後から動的ロードされた画像（ビューアー画像等）は対象外
+
+**修正** ([globals.css:542-593](src/styles/globals.css#L542), [AppLayout.tsx:34-54](src/components/layout/AppLayout.tsx#L34)):
+- JS側: インライン `filter` 設定を廃止。`<html>` に `dark-mode-invert` クラスを付けるだけに変更
+- CSS側: 数学的に完全一致する `invert(1) hue-rotate(180deg)` を2段階で適用
+  ```css
+  html.dark-mode-invert { filter: invert(1) hue-rotate(180deg); background: white; }
+  html.dark-mode-invert img,
+  html.dark-mode-invert video,
+  html.dark-mode-invert canvas,
+  html.dark-mode-invert iframe,
+  html.dark-mode-invert [data-no-invert],
+  html.dark-mode-invert picture,
+  html.dark-mode-invert svg image {
+    filter: invert(1) hue-rotate(180deg);
+  }
+  ```
+- **ビューアー背景 (`#1a1a1e`) は暗転後も黒を維持**: pre-inverted 値 `#e5e5e1` を上書きして html レベルの invert で相殺
+  ```css
+  html.dark-mode-invert .bg-\[\#1a1a1e\] {
+    background-color: #e5e5e1 !important;
+  }
+  ```
+
+**効果**:
+- `invert(1) × invert(1) = identity`、`hue-rotate(180°) × hue-rotate(180°) = 360° = 0°` で数学的に恒等変換
+- CSS セレクタによる適用なので、動的追加された画像・PDF.js canvas・後から挿入される img にも**自動適用**
+- `data-no-invert` 属性を付けた任意の要素は反転対象から除外可能（将来拡張用）
+- 切替時のチラツキを抑える `transition: filter 0.15s`
+
+### 28. ProGen 外部設定同期（⚠ **試運転中 — 未検証**）
+
+> **⚠ 重要: この機能は試運転段階です。**
+> 実運用での動作確認はまだ行われていません。共有ドライブへのアクセス挙動・同期タイミング・キャッシュ整合性などは後日の実地検証が必要です。
+> 不具合が見つかった場合は フォールバック（埋め込み既定値）で動作は継続する設計ですが、**この機能に依存した運用変更は動作確認完了まで控えてください**。
+
+**目的**: ProGen のプロンプト生成で使う一部データ（NGワード・数字ルール・カテゴリ名）をアプリ再ビルド無しで共有ドライブから更新できるようにする。
+
+**配置先（共有ドライブ）**:
+```
+G:\共有ドライブ\CLLENN\編集部フォルダ\編集企画部\編集企画_C班(AT業務推進)\DTP制作部\Comic Bridge_統合版\Pro-Gen\
+├── version.json       ← バージョン管理（SemVer）
+└── config.json        ← NGワード / 数字ルール / カテゴリ
+```
+
+**フロー**:
+1. アプリ起動時に [App.tsx](src/App.tsx) が `initProgenConfig()` を非同期呼出
+2. まずローカルキャッシュ (`%APPDATA%\comic-bridge\progen-cache\`) を読込 → 即時反映
+3. 続いて Rust コマンド `fetch_progen_config` で共有ドライブの `version.json` を確認
+4. SemVer 比較で新しければ `config.json` をキャッシュに上書き → 再読込
+
+**主要ファイル**:
+- [src/lib/progenConfig.ts](src/lib/progenConfig.ts) — ローダー + 埋め込みフォールバック
+- [src-tauri/src/commands.rs](src-tauri/src/commands.rs) — `fetch_progen_config` / `read_progen_cached_file` コマンド
+- [src/lib/progenPrompts.ts](src/lib/progenPrompts.ts) — `Proxy` 経由で `ngWordList`/`numberSubRules`/`categories` を動的参照化（既存コード変更最小）
+- [docs/progen-template/](docs/progen-template/) — 共有ドライブ配置用の初期テンプレート + 運用README
+
+**フォールバック階層**（信頼性確保）:
+1. リモート同期済みキャッシュ
+2. 既存ローカルキャッシュ
+3. 埋め込み既定値（ビルド時点のもの、[progenConfig.ts:DEFAULT_*](src/lib/progenConfig.ts)）
+
+**共有ドライブ切断時・JSON破損時も本体動作は継続**。フィールド単位でフォールバック。
+
+**更新手順（運用後）**:
+1. 共有ドライブの `config.json` を編集（NGワード追加・カテゴリ表示名変更など）
+2. `version.json` の `version` をインクリメント（例: `1.0.0` → `1.0.1`）
+3. 保存するだけ — 次回アプリ起動時に全ユーザー環境へ自動反映
+
+**変更してはいけない要素**:
+- `categories` のキー名（`basic`/`recommended` 等、コードから参照されている）
+- `numberSubRules` のオプション配列順序（既存の保存済みJSONデータとインデックスで紐づくため、並び替え・削除は既存データ破壊のリスクあり、**末尾追加のみ推奨**）
+
+**動作確認待ちの項目**:
+- [ ] 初回セットアップで G:\ にテンプレートを配置 → 起動 → キャッシュ作成確認
+- [ ] `config.json` の内容変更 + `version.json` インクリメント → 再起動 → 新内容反映確認
+- [ ] 共有ドライブ切断環境での起動 → キャッシュフォールバック動作確認
+- [ ] JSON壊れ・部分欠損時のフィールド別フォールバック確認
+- [ ] 実際のプロンプト生成結果に反映されるかの確認（ProGen 実行 → 生成XML内でNGワードが期待通りに扱われるか）
+
 ### 27. v3.8.0 新機能・改修
 
 **モノクロ2階調（Bitmap）PSD対応** ([commands.rs:2154-2290](src-tauri/src/commands.rs#L2154))

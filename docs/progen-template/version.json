@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0",
+  "lastModified": "2026-04-21T00:00:00",
+  "note": "初版 — アプリ埋め込み既定値と同一内容",
+  "files": ["config.json"]
+}

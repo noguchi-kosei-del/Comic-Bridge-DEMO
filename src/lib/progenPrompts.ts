@@ -34,69 +34,30 @@ export const escapeXml = escapeHtml;
 
 // ═══ 数字サブルール定義（旧版 progen-data.js 完全互換） ═══
 
-const numberSubRules = {
-  personCount: {
-    name: "人数",
-    options: [
-      "ひとり、ふたり、３人",
-      "ひとり、ふたり、三人",
-      "一人、二人、３人",
-      "一人、二人、三人",
-      "1人、2人、3人",
-    ],
-  },
-  thingCount: {
-    name: "戸数",
-    options: [
-      "ひとつ、ふたつ、３つ",
-      "ひとつ、ふたつ、三つ",
-      "1つ、2つ、3つ",
-      "一つ、二つ、三つ",
-    ],
-  },
-  month: {
-    name: "月",
-    options: [
-      "1カ月、2カ月",
-      "1か月、2か月",
-      "1ヶ月、2ヶ月",
-      "一か月、二か月",
-      "一ヶ月、二ヶ月",
-      "一カ月、二カ月",
-    ],
-  },
-};
+// ═══ 外部設定（NGワード / 数字ルール / カテゴリ）═══
+//
+// 共有ドライブ (G:\...\Pro-Gen\config.json) から読み込まれる動的データ。
+// アプリ起動時に initProgenConfig() が同期し、更新があれば ここで参照される。
+// 共有ドライブ到達不能時は progenConfig.ts の埋め込み既定値が使われる。
+import { getProgenConfig } from "./progenConfig";
 
-// ═══ NGワードリスト ═══
+const numberSubRules = new Proxy({} as any, {
+  get: (_t, prop) => (getProgenConfig().numberSubRules as any)[prop],
+});
 
-const ngWordList = [
-  { original: "ヴァギナ", replacement: "ヴァ〇ナ" },
-  { original: "クリトリス", replacement: "ク〇トリス" },
-  { original: "クリ", replacement: "ク〇" },
-  { original: "クンニ", replacement: "ク〇ニ" },
-  { original: "ザーメン", replacement: "ザ〇メン" },
-  { original: "スカトロ", replacement: "スカ〇ロ" },
-  { original: "スペルマ", replacement: "スペ〇マ" },
-  { original: "レイプ", replacement: "レ〇プ" },
-  { original: "ファック", replacement: "ファ〇ク" },
-  { original: "イラマチオ", replacement: "イラ〇チオ" },
-  { original: "マラ", replacement: "マ〇" },
-  { original: "カリ", replacement: "カ〇" },
-  { original: "ペニス", replacement: "ペ〇ス" },
-  { original: "ちんこ", replacement: "ち〇こ" },
-  { original: "チンコ", replacement: "チ〇コ" },
-  { original: "ちんぽ", replacement: "ち〇ぽ" },
-  { original: "チンポ", replacement: "チ〇ポ" },
-  { original: "ちんちん", replacement: "ち〇ちん" },
-  { original: "チンチン", replacement: "チ〇チン" },
-  { original: "ちん毛", replacement: "ち〇毛" },
-  { original: "チン毛", replacement: "チ〇毛" },
-  { original: "ヤリマン", replacement: "ヤリマ〇" },
-  { original: "まんこ", replacement: "ま〇こ" },
-  { original: "手マン", replacement: "手マ〇" },
-  { original: "マン筋", replacement: "マ〇筋" },
-  { original: "粗チン", replacement: "粗チ〇" },
-];
+const ngWordList = new Proxy([] as any[], {
+  get: (_t, prop) => {
+    const arr = getProgenConfig().ngWordList;
+    if (prop === "length") return arr.length;
+    if (prop === "forEach" || prop === "map" || prop === "filter" || prop === "reduce") {
+      return (arr as any)[prop].bind(arr);
+    }
+    // 数値インデックスアクセス対応
+    const n = typeof prop === "string" ? Number(prop) : NaN;
+    if (!Number.isNaN(n)) return arr[n];
+    return (arr as any)[prop];
+  },
+});
 
 // ═══ ProGen用の追加オプション型 ═══
 
@@ -186,15 +147,11 @@ interface CategoryDef {
   name: string;
 }
 
-const categories: Record<string, CategoryDef> = {
-  basic: { name: "基本的に表記変更されるもの" },
-  recommended: { name: "表記が推奨されるもの" },
-  auxiliary: { name: "補助動詞は基本ひらきます" },
-  difficult: { name: "難読文字は基本ひらきます" },
-  number: { name: "数字" },
-  pronoun: { name: "人称" },
-  character: { name: "人物名（ルビ用）" },
-};
+// categories は getProgenConfig() から動的取得（外部設定対応）
+// Proxyで配列メソッドを一部サポートしているが、Object.keys() 等は直接オブジェクトに対して呼ぶ必要がある
+function getCategories(): Record<string, CategoryDef> {
+  return getProgenConfig().categories as Record<string, CategoryDef>;
+}
 
 function buildProofRulesXml(
   proofRules: ProofRule[],
@@ -202,6 +159,7 @@ function buildProofRulesXml(
 ): string {
   let rulesXML = "";
 
+  const categories = getCategories();
   Object.keys(categories).forEach((catKey) => {
     const cat = categories[catKey];
     const rulesInCat = proofRules.filter((r) => r.category === catKey && r.active);

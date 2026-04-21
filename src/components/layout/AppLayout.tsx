@@ -31,25 +31,27 @@ export function AppLayout() {
   }, [fontSize]);
 
   // ダークモード + アクセントカラー
+  // ダークモードは HTML に dark-mode-invert クラスを付与し、CSS 側で
+  //   html.dark-mode-invert                        { filter: invert(1) hue-rotate(180deg); }
+  //   html.dark-mode-invert img, video, canvas, iframe,
+  //   html.dark-mode-invert [data-no-invert]       { filter: invert(1) hue-rotate(180deg); }
+  // と完全な数値一致（invert(1)×invert(1)=identity）で打ち消す。
+  // JS querySelectorAll では「後から追加される画像」が打ち消されない問題があったため、CSS 全面化。
   useEffect(() => {
     const root = document.documentElement;
-    let filter = "";
-    if (darkMode) filter += "invert(0.92) hue-rotate(180deg) ";
-    // アクセントカラーのhue-rotate計算（デフォルト #ff5a8a = hue≈345°）
+    if (darkMode) {
+      root.classList.add("dark-mode-invert");
+    } else {
+      root.classList.remove("dark-mode-invert");
+    }
+    // アクセントカラー
     if (accentColor && accentColor !== "#ff5a8a") {
-      // 色相差をCSS変数に保存（UI要素のみに適用するため）
       root.style.setProperty("--settings-accent", accentColor);
     } else {
       root.style.removeProperty("--settings-accent");
     }
-    root.style.filter = filter.trim() || "";
-    // ダークモード: 画像/動画/canvas/iframeは二重反転で元に戻す
-    const mediaSelector = "img, video, canvas, iframe";
-    const mediaFilter = darkMode ? "invert(1) hue-rotate(180deg)" : "";
-    // MutationObserverで動的に追加される要素にも適用
-    document.querySelectorAll(mediaSelector).forEach((el) => {
-      (el as HTMLElement).style.filter = mediaFilter;
-    });
+    // 旧方式で設定されていたインライン filter があれば除去（移行対応）
+    root.style.removeProperty("filter");
   }, [darkMode, accentColor]);
   const clearSelection = usePsdStore((state) => state.clearSelection);
   const selectAll = usePsdStore((state) => state.selectAll);
