@@ -523,6 +523,8 @@ export function useTiffProcessor() {
             finalWidth: r.finalWidth ?? undefined,
             finalHeight: r.finalHeight ?? undefined,
             dpi: r.dpi ?? undefined,
+            metricsKerningLayers: (r as any).metricsKerningLayers ?? undefined,
+            linkGroupIssues: (r as any).linkGroupIssues ?? undefined,
           };
           store.addResult(result);
         }

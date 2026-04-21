@@ -133,6 +133,25 @@ pub async fn invalidate_file_cache(file_path: String) {
             cache.remove(&key);
         }
     }
+
+    // ディスクキャッシュ（temp_dir の `manga_psd_preview_{name}_*.jpg` / `manga_pdf_preview_{name}_*.jpg`）も削除
+    // ビューアー表示バグ復旧用に完全に再生成させるため、既存 JPEG を消去して次回 API で再生成させる
+    let path = Path::new(&file_path);
+    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+        let temp_dir = std::env::temp_dir();
+        if let Ok(entries) = fs::read_dir(&temp_dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if (name_str.starts_with(&format!("manga_psd_preview_{}_", stem))
+                    || name_str.starts_with(&format!("manga_pdf_preview_{}_", stem)))
+                    && name_str.ends_with(".jpg")
+                {
+                    let _ = fs::remove_file(entry.path());
+                }
+            }
+        }
+    }
 }
 
 /// ファイルの更新日時をUNIXエポックからの秒数で取得
@@ -2153,15 +2172,21 @@ fn load_psd_composite(path: &Path) -> Result<DynamicImage, String> {
     // Depth
     file.read_exact(&mut buf2).map_err(|e| format!("PSD read error: {}", e))?;
     let depth = u16::from_be_bytes(buf2);
-    if depth != 8 {
+    // depth=1 (bitmap), depth=8 (standard) are supported
+    if depth != 8 && depth != 1 {
         return Err(format!("Unsupported bit depth: {}", depth));
     }
 
     // Color Mode
     file.read_exact(&mut buf2).map_err(|e| format!("PSD read error: {}", e))?;
     let color_mode = u16::from_be_bytes(buf2);
-    if color_mode != 3 && color_mode != 1 {
-        return Err(format!("Unsupported color mode: {} (RGB/Grayscale only)", color_mode));
+    // 0=Bitmap, 1=Grayscale, 3=RGB
+    if color_mode != 3 && color_mode != 1 && color_mode != 0 {
+        return Err(format!("Unsupported color mode: {} (Bitmap/Grayscale/RGB only)", color_mode));
+    }
+    // depth=1 is only valid for bitmap mode
+    if depth == 1 && color_mode != 0 {
+        return Err(format!("Invalid depth/color_mode combination: depth={}, color_mode={}", depth, color_mode));
     }
 
     // === Color Mode Data Section ===
@@ -2192,24 +2217,98 @@ fn load_psd_composite(path: &Path) -> Result<DynamicImage, String> {
 
     let pixels = (width as usize) * (height as usize);
     let num_channels = channels.min(4);
+    let is_bitmap = depth == 1 && color_mode == 0;
 
     match compression {
         0 => {
-            // Raw (uncompressed)
-            let mut channel_data = vec![vec![0u8; pixels]; num_channels];
-            for ch in 0..num_channels {
-                file.read_exact(&mut channel_data[ch]).map_err(|e| format!("Image data read error: {}", e))?;
+            if is_bitmap {
+                // Bitmap: 1 bit per pixel, packed, MSB first. row_bytes = ceil(width/8)
+                let row_bytes = ((width + 7) / 8) as usize;
+                let mut packed = vec![0u8; row_bytes * height as usize];
+                file.read_exact(&mut packed).map_err(|e| format!("Bitmap read error: {}", e))?;
+                let gray = unpack_bitmap_to_grayscale(&packed, width, height, row_bytes);
+                channels_to_rgba(vec![gray], width, height, 1)
+            } else {
+                // Raw (uncompressed)
+                let mut channel_data = vec![vec![0u8; pixels]; num_channels];
+                for ch in 0..num_channels {
+                    file.read_exact(&mut channel_data[ch]).map_err(|e| format!("Image data read error: {}", e))?;
+                }
+                channels_to_rgba(channel_data, width, height, color_mode)
             }
-            channels_to_rgba(channel_data, width, height, color_mode)
         }
         1 => {
-            // RLE compressed
-            decode_rle_image(&mut file, width, height, num_channels, color_mode, version)
+            if is_bitmap {
+                // RLE compressed bitmap
+                decode_rle_bitmap(&mut file, width, height, version)
+            } else {
+                // RLE compressed (8-bit)
+                decode_rle_image(&mut file, width, height, num_channels, color_mode, version)
+            }
         }
         _ => {
             Err(format!("Unsupported compression: {}", compression))
         }
     }
+}
+
+/// 1-bit bitmap (packed MSB) をグレースケール8bitバイト列に展開
+/// PSDビットマップ: 0=白, 1=黒
+fn unpack_bitmap_to_grayscale(packed: &[u8], width: u32, height: u32, row_bytes: usize) -> Vec<u8> {
+    let w = width as usize;
+    let h = height as usize;
+    let mut gray = vec![0u8; w * h];
+    for y in 0..h {
+        let row_offset = y * row_bytes;
+        for x in 0..w {
+            let byte_idx = row_offset + x / 8;
+            if byte_idx >= packed.len() { break; }
+            let bit_idx = 7 - (x % 8);
+            let bit = (packed[byte_idx] >> bit_idx) & 1;
+            gray[y * w + x] = if bit == 0 { 255 } else { 0 };
+        }
+    }
+    gray
+}
+
+/// RLE圧縮されたビットマップ画像をデコード
+fn decode_rle_bitmap<R: Read>(
+    file: &mut R,
+    width: u32,
+    height: u32,
+    version: u16,
+) -> Result<DynamicImage, String> {
+    let rows = height as usize;
+    let row_bytes = ((width + 7) / 8) as usize;
+
+    // Row lengths (bitmap has 1 channel only)
+    let mut row_lengths = vec![0u16; rows];
+    if version == 2 {
+        let mut buf4 = [0u8; 4];
+        for i in 0..rows {
+            file.read_exact(&mut buf4).map_err(|e| format!("Bitmap row length read error: {}", e))?;
+            row_lengths[i] = u32::from_be_bytes(buf4) as u16;
+        }
+    } else {
+        let mut buf2 = [0u8; 2];
+        for i in 0..rows {
+            file.read_exact(&mut buf2).map_err(|e| format!("Bitmap row length read error: {}", e))?;
+            row_lengths[i] = u16::from_be_bytes(buf2);
+        }
+    }
+
+    let mut packed = vec![0u8; row_bytes * rows];
+    for row in 0..rows {
+        let row_len = row_lengths[row] as usize;
+        let mut compressed = vec![0u8; row_len];
+        file.read_exact(&mut compressed).map_err(|e| format!("Bitmap RLE data read error: {}", e))?;
+        let row_start = row * row_bytes;
+        let row_data = &mut packed[row_start..row_start + row_bytes];
+        decode_packbits(&compressed, row_data);
+    }
+
+    let gray = unpack_bitmap_to_grayscale(&packed, width, height, row_bytes);
+    channels_to_rgba(vec![gray], width, height, 1)
 }
 
 /// RLE圧縮された画像データをデコード
@@ -3689,21 +3788,79 @@ pub async fn run_photoshop_replace(
     }
 }
 
-/// ファイルをデフォルトアプリで開く
+/// ファイルをデフォルトアプリで開く（URLの場合はデフォルトブラウザ）
+///
+/// `cmd /c start "" URL` は URL 内の `&` が cmd 解釈され失敗するケースがあるため、
+/// 複数手段で順に試す:
+///   1. open crate (ShellExecute)
+///   2. rundll32 url.dll,FileProtocolHandler (Windows URL専用API)
+///   3. powershell Start-Process (最終フォールバック)
 #[tauri::command]
 pub async fn open_with_default_app(file_path: String) -> Result<(), String> {
-    // URLの場合はファイル存在チェックをスキップ
-    if !file_path.starts_with("http://") && !file_path.starts_with("https://") {
-        let path = Path::new(&file_path);
-        if !path.exists() {
-            return Err(format!("File not found: {}", file_path));
+    let is_url = file_path.starts_with("http://") || file_path.starts_with("https://");
+    if is_url {
+        return open_url_with_fallbacks(&file_path);
+    }
+    // ファイルパス: 存在チェック後に open crate で起動
+    let path = Path::new(&file_path);
+    if !path.exists() {
+        return Err(format!("File not found: {}", file_path));
+    }
+    open::that(&file_path).map_err(|e| format!("Failed to open: {}", e))?;
+    Ok(())
+}
+
+/// URL をデフォルトブラウザで開く専用コマンド（Windows想定、複数フォールバック）
+#[tauri::command]
+pub async fn open_url_in_browser(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err("URL is empty".to_string());
+    }
+    // プロトコル省略時は https:// を補完
+    let full_url = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        trimmed.to_string()
+    } else {
+        format!("https://{}", trimmed)
+    };
+    open_url_with_fallbacks(&full_url)
+}
+
+/// Windows 用の URL オープン実装（複数手段を順に試す）
+fn open_url_with_fallbacks(url: &str) -> Result<(), String> {
+    let mut errors: Vec<String> = Vec::new();
+
+    // 1. open crate (内部で ShellExecuteW 等を呼ぶ)
+    match open::that(url) {
+        Ok(_) => return Ok(()),
+        Err(e) => errors.push(format!("open crate: {}", e)),
+    }
+
+    // 2. Windows: rundll32 url.dll,FileProtocolHandler（URL専用ハンドラ）
+    #[cfg(target_os = "windows")]
+    {
+        match std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", url])
+            .spawn()
+        {
+            Ok(_) => return Ok(()),
+            Err(e) => errors.push(format!("rundll32: {}", e)),
         }
     }
-    std::process::Command::new("cmd")
-        .args(["/c", "start", "", &file_path])
-        .spawn()
-        .map_err(|e| format!("Failed to open: {}", e))?;
-    Ok(())
+
+    // 3. Windows: powershell Start-Process（最終フォールバック）
+    #[cfg(target_os = "windows")]
+    {
+        match std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &format!("Start-Process '{}'", url.replace('\'', "''"))])
+            .spawn()
+        {
+            Ok(_) => return Ok(()),
+            Err(e) => errors.push(format!("powershell: {}", e)),
+        }
+    }
+
+    Err(format!("All methods failed: {}", errors.join(" | ")))
 }
 
 /// フォルダをエクスプローラーで開く（存在しない場合は最も近い親フォルダを開く）
@@ -4197,6 +4354,26 @@ pub async fn open_file_in_photoshop(file_path: String) -> Result<(), String> {
 // ============================================
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct LinkGroupMemberJson {
+    #[serde(rename = "layerName")]
+    pub layer_name: String,
+    #[serde(rename = "fontSize")]
+    pub font_size: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LinkGroupIssueJson {
+    #[serde(rename = "linkGroup")]
+    pub link_group: u32,
+    pub members: Vec<LinkGroupMemberJson>,
+    #[serde(rename = "maxSize")]
+    pub max_size: f64,
+    #[serde(rename = "minSize")]
+    pub min_size: f64,
+    pub ratio: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TiffConvertResult {
     #[serde(rename = "fileName")]
     pub file_name: String,
@@ -4211,6 +4388,12 @@ pub struct TiffConvertResult {
     #[serde(rename = "finalHeight")]
     pub final_height: Option<u32>,
     pub dpi: Option<u32>,
+    /// メトリクスカーニングが検出されたレイヤーパスのリスト (Photoshop解析結果)
+    #[serde(rename = "metricsKerningLayers", default)]
+    pub metrics_kerning_layers: Option<Vec<String>>,
+    /// リンクグループのフォントサイズ不整合 (Photoshop解析結果)
+    #[serde(rename = "linkGroupIssues", default)]
+    pub link_group_issues: Option<Vec<LinkGroupIssueJson>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

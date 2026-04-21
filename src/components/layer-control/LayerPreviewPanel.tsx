@@ -4,6 +4,8 @@ import { useLayerStore, PRESET_CONDITIONS } from "../../store/layerStore";
 import type { LayerActionMode, CustomVisibilityOp, CustomMoveOp } from "../../store/layerStore";
 import { useOpenFolder } from "../../hooks/useOpenFolder";
 import { invoke } from "@tauri-apps/api/core";
+import { useFontResolver, collectTextLayers } from "../../hooks/useFontResolver";
+import { FontBrowserDialog } from "../spec-checker/FontBrowserDialog";
 import {
   useHighResPreview,
   prefetchPreview,
@@ -1128,6 +1130,7 @@ export function LayerPreviewPanel({ onOpenInPhotoshop }: LayerPreviewPanelProps)
       {/* Content - Layers Mode */}
       {viewMode === "layers" && (
         <div className="flex-1 overflow-y-auto min-h-0">
+          <LayerDiagnosticsBar targetFiles={targetFiles} />
           {!isMulti ? (
             <div className="p-1.5">
               <SingleFileTree
@@ -2391,6 +2394,151 @@ function Badges({ layer }: { layer: LayerNode }) {
         <span className="text-[9px] px-0.5 rounded bg-bg-tertiary text-text-muted/60 flex-shrink-0">
           {layer.opacity}%
         </span>
+      )}
+    </>
+  );
+}
+
+// ============================================================
+// Layer Structure Diagnostics Bar
+// 未インストールフォント・共有フォルダ検索（FontBrowserDialog再利用）・カーニング/白フチ統計
+// ============================================================
+
+// 共有フォルダのベースパス（UI上では表示しない）
+const FONT_SEARCH_BASE_PATH = "G:/共有ドライブ/CLLENN/編集部フォルダ/編集企画部/編集企画_C班(AT業務推進)/DTP制作部/フォント";
+
+export function LayerDiagnosticsBar({ targetFiles }: { targetFiles: PsdFile[] }) {
+  const { fontInfo, missingFonts, fontNamesResolved, refreshFonts } = useFontResolver(targetFiles);
+  const [showMissingList, setShowMissingList] = useState(false);
+  const [showFontBrowser, setShowFontBrowser] = useState(false);
+
+  // 白フチサイズ集計 + カーニング(トラッキング)値集計
+  // メトリクスは読み込みだけでは正確に判定不能のため表示しない
+  const stats = useMemo(() => {
+    const strokeCounts = new Map<number, number>(); // size → count
+    const trackingCounts = new Map<number, number>(); // value → count
+    let totalTextLayers = 0;
+    for (const file of targetFiles) {
+      if (!file.metadata?.layerTree) continue;
+      const tls = collectTextLayers(file.metadata.layerTree);
+      totalTextLayers += tls.length;
+      for (const tl of tls) {
+        if (!tl.textInfo) continue;
+        const ti: any = tl.textInfo;
+        if (typeof ti.strokeSize === "number" && ti.strokeSize > 0) {
+          strokeCounts.set(ti.strokeSize, (strokeCounts.get(ti.strokeSize) || 0) + 1);
+        }
+        if (Array.isArray(ti.tracking)) {
+          for (const t of ti.tracking) {
+            if (typeof t === "number" && t !== 0) {
+              trackingCounts.set(t, (trackingCounts.get(t) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+    const strokeArr = [...strokeCounts.entries()].sort((a, b) => a[0] - b[0]);
+    const trackingArr = [...trackingCounts.entries()].sort((a, b) => a[0] - b[0]);
+    return { strokeArr, trackingArr, totalTextLayers };
+  }, [targetFiles]);
+
+  const missingArr = useMemo(() => [...missingFonts], [missingFonts]);
+  const hasMissing = missingArr.length > 0;
+
+  if (targetFiles.length === 0) return null;
+  if (!fontNamesResolved && stats.totalTextLayers === 0) return null;
+
+  const hasStroke = stats.strokeArr.length > 0;
+  const hasTracking = stats.trackingArr.length > 0;
+
+  return (
+    <>
+      <div className="flex-shrink-0 px-2 py-1.5 border-b border-border/40 bg-bg-secondary/60 space-y-1">
+        {/* 1行目: 未インストールのあり/なし + 件数バッジ + 共有フォルダ探すボタン */}
+        <div className="flex items-center gap-1.5 text-[10px] flex-wrap">
+          <span className="font-medium text-text-muted">診断:</span>
+
+          {/* 未インストールフォント */}
+          <span
+            className={`px-1.5 py-0.5 rounded border font-medium ${
+              hasMissing ? "bg-error/10 text-error border-error/20 cursor-pointer hover:bg-error/20" : "bg-success/10 text-success border-success/20"
+            }`}
+            onClick={() => { if (hasMissing) setShowMissingList(!showMissingList); }}
+            title={hasMissing ? `${missingArr.length}種 — クリックで展開` : undefined}
+          >
+            未インストールフォント: {hasMissing ? `あり (${missingArr.length}種)` : "なし"}
+          </span>
+
+          {hasMissing && (
+            <button
+              onClick={() => setShowFontBrowser(true)}
+              className="px-2 py-0.5 text-[10px] rounded bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25"
+              title="共有フォルダから探す"
+            >
+              🔍 共有フォルダから探す
+            </button>
+          )}
+        </div>
+
+        {/* 2行目: 白フチサイズ数値バッジ */}
+        <div className="flex items-start gap-1.5 text-[10px] flex-wrap">
+          <span className="text-text-muted flex-shrink-0">白フチ:</span>
+          {hasStroke ? (
+            <div className="flex flex-wrap gap-1 flex-1">
+              {stats.strokeArr.map(([size, count]) => (
+                <span key={size} className="px-1.5 py-0.5 rounded bg-accent-tertiary/10 text-accent-tertiary border border-accent-tertiary/20">
+                  {size}px <span className="opacity-60">×{count}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="px-1.5 py-0.5 rounded bg-success/10 text-success border border-success/20">なし</span>
+          )}
+        </div>
+
+        {/* 3行目: カーニング値（トラッキング数値のみ — メトリクスは読み込み時点では判定不能のため除外） */}
+        <div className="flex items-start gap-1.5 text-[10px] flex-wrap">
+          <span className="text-text-muted flex-shrink-0">カーニング値:</span>
+          {hasTracking ? (
+            <div className="flex flex-wrap gap-1 flex-1">
+              {stats.trackingArr.map(([val, count]) => (
+                <span key={val} className="px-1.5 py-0.5 rounded bg-warning/10 text-warning border border-warning/20">
+                  {val > 0 ? `+${val}` : val} <span className="opacity-60">×{count}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="px-1.5 py-0.5 rounded bg-success/10 text-success border border-success/20">なし (全て0)</span>
+          )}
+        </div>
+
+        {/* 未インストールフォント展開: フォント名のみ表示（検索はダイアログで行う） */}
+        {showMissingList && hasMissing && (
+          <div className="mt-1.5 p-1.5 bg-error/5 border border-error/15 rounded">
+            <div className="text-[9px] text-error font-medium mb-1">未インストールフォント ({missingArr.length}種)</div>
+            <div className="flex flex-wrap gap-1">
+              {missingArr.map((ps) => (
+                <span key={ps} className="text-[10px] px-1.5 py-0.5 rounded bg-bg-primary border border-error/20 text-text-primary" title={ps}>
+                  {fontInfo.getFontLabel(ps)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* フォントブラウザダイアログ（写植関連から再利用） */}
+      {showFontBrowser && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => setShowFontBrowser(false)}>
+          <div className="w-[560px] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+            <FontBrowserDialog
+              basePath={FONT_SEARCH_BASE_PATH}
+              missingFontNames={missingArr.map((ps) => fontInfo.getFontLabel(ps))}
+              onInstalled={() => { refreshFonts(); }}
+              onClose={() => setShowFontBrowser(false)}
+            />
+          </div>
+        </div>
       )}
     </>
   );

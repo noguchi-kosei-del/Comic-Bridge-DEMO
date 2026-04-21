@@ -139,9 +139,15 @@ export function DiffViewerView({ externalPathA, externalPathB }: Props = {}) {
         e.preventDefault();
         store.zoomOut();
       }
+      // P: 現在のペアのファイルをPhotoshopで開く
+      else if ((e.key === "p" || e.key === "P") && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        handleOpenInPhotoshop();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store]);
 
   // ── マウスドラッグでパン ──

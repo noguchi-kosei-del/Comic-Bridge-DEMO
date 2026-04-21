@@ -215,6 +215,10 @@ function extractLayerTree(children: Psd["children"], parentPath = "", dpi = 72):
         childAny.positionProtected ||
         childAny.compositeProtected ||
         undefined,
+      ...(typeof childAny.linkGroup === "number" ? { linkGroup: childAny.linkGroup } : {}),
+      ...(typeof childAny.linkGroupEnabled === "boolean"
+        ? { linkGroupEnabled: childAny.linkGroupEnabled }
+        : {}),
     };
 
     // レイヤーのバウンディングボックスを抽出（ag-psdはtop/left/right/bottomを直接持つ）
@@ -316,6 +320,24 @@ function extractLayerTree(children: Psd["children"], parentPath = "", dpi = 72):
       const isAllSharp = !antiAlias || aaLower.includes("sharp") || aaLower === "ansh";
       const hasMetricsKerning = kerningTypes.has("metrics");
 
+      // 白フチ(ストローク)サイズ検出: layer.effects.stroke[] の enabled === true のものを参照
+      // scan_psd.jsx の getLayerStrokeSize() と同等の判定を ag-psd 側で行う
+      let strokeSize: number | undefined;
+      const effectsAny = (childAny.effects || childAny.style) as any;
+      if (effectsAny && Array.isArray(effectsAny.stroke) && effectsAny.stroke.length > 0) {
+        for (const sfx of effectsAny.stroke) {
+          if (!sfx) continue;
+          if (sfx.enabled === false) continue; // 無効なストロークはスキップ
+          // size は UnitsValue ({ value, units: "Pixels"/"Points" }) または純 number
+          const sz = typeof sfx.size === "number" ? sfx.size
+            : (sfx.size && typeof sfx.size.value === "number" ? sfx.size.value : null);
+          if (sz != null && sz > 0) {
+            strokeSize = Math.round(sz * 10) / 10;
+            break; // 最初の有効ストロークを採用
+          }
+        }
+      }
+
       node.textInfo = {
         text: child.text.text || "",
         fonts: [...fonts],
@@ -325,6 +347,7 @@ function extractLayerTree(children: Psd["children"], parentPath = "", dpi = 72):
         isAllSharp,
         ...(kerningTypes.size > 0 ? { kerningTypes: [...kerningTypes] } : {}),
         hasMetricsKerning,
+        ...(strokeSize != null ? { strokeSize } : {}),
       };
     }
 

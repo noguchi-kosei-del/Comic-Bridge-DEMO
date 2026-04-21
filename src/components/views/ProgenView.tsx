@@ -6,6 +6,7 @@ import { useViewStore } from "../../store/viewStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { readJsonFile, getMasterLabelList, showSaveTextDialog, writeTextFile, showSaveJsonDialog, writeJsonFile } from "../../hooks/useProgenTauri";
+import { performPresetJsonSave } from "../../hooks/useScanPsdProcessor";
 import { ProgenRuleView } from "../progen/ProgenRuleView";
 // 注意: ProgenProofreadingView は意図的にインポートしていません（隔離済み）。
 // 校正モードは extraction 画面 + popup の 正誤/提案 ボタンで処理します。
@@ -89,10 +90,28 @@ function parseCheckText(text: string): { items: any[]; kind: "correctness" | "pr
 function ResultSaveModal() {
   const mode = useProgenStore((s) => s.resultSaveMode);
   const close = useProgenStore((s) => s.setResultSaveMode);
+  // テキスト保存用の単一 textarea（従来通り）
   const [pasteText, setPasteText] = useState("");
+  // JSON 保存用の2カ所 textarea（正誤/提案 両方同時）
+  const [pasteSimple, setPasteSimple] = useState("");
+  const [pasteVariation, setPasteVariation] = useState("");
   const [volume, setVolume] = useState("1");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [createdNewPreset, setCreatedNewPreset] = useState(false);
+
+  // 新規作成用の インラインフォーム（作品情報JSON未登録時）
+  // 「登録済み」= preset JSON が保存済み (currentJsonFilePath が存在)
+  // workInfo の label/title だけでは不十分 — 仮保存状態や手入力直後の可能性があるため
+  const existingLabel = useScanPsdStore((s) => s.workInfo.label);
+  const existingTitle = useScanPsdStore((s) => s.workInfo.title);
+  const existingGenre = useScanPsdStore((s) => s.workInfo.genre);
+  const currentJsonFilePath = useScanPsdStore((s) => s.currentJsonFilePath);
+  const isPresetRegistered = !!currentJsonFilePath && !!existingLabel && !!existingTitle;
+  const needsNewInfo = !isPresetRegistered;
+  const [newGenre, setNewGenre] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newTitle, setNewTitle] = useState("");
 
   if (!mode) return null;
 
@@ -102,8 +121,28 @@ function ResultSaveModal() {
     ? "Geminiの出力テキストを貼り付けてください..."
     : "GeminiのCSV/テーブル出力を貼り付けてください...";
 
+  // JSON保存時に使う実際のラベル・タイトル
+  const effectiveLabel = isPresetRegistered ? existingLabel : newLabel;
+  const effectiveTitle = isPresetRegistered ? existingTitle : newTitle;
+  // existingGenre は将来の表示用に保持（未使用警告抑止のため voidに）
+  void existingGenre;
+
+  // JSON保存モード時のテキスト合成（両欄の内容を合成）
+  const combinedJsonText = (() => {
+    const parts: string[] = [];
+    if (pasteSimple.trim()) parts.push(pasteSimple);
+    if (pasteVariation.trim()) parts.push(pasteVariation);
+    return parts.join("\n");
+  })();
+
+  const canSave = isText
+    ? pasteText.trim().length > 0
+    : (pasteSimple.trim().length > 0 || pasteVariation.trim().length > 0) &&
+      !!effectiveLabel &&
+      !!effectiveTitle;
+
   const handleSave = async () => {
-    if (!pasteText.trim()) return;
+    if (!canSave) return;
     setSaving(true);
     try {
       if (isText) {
@@ -155,29 +194,74 @@ function ResultSaveModal() {
           setSaved(true);
         }
       } else {
-        // JSON保存（校正チェックデータ）— CSV/テーブルを構造化JSONに変換
+        // JSON保存（校正チェックデータ）— 正誤/提案 両方の入力を個別パース
+        // 作品情報JSONが未登録の場合、まず作品情報JSONを新規作成してから校正JSONを保存する
+        if (needsNewInfo) {
+          if (!newLabel || !newTitle) {
+            console.error("レーベル・タイトルが未入力です");
+            setSaving(false);
+            return;
+          }
+          // scanPsdStore.workInfo に反映（performPresetJsonSave がこれを読み取る）
+          useScanPsdStore.getState().setWorkInfo({
+            genre: newGenre,
+            label: newLabel,
+            title: newTitle,
+          });
+          // 作品情報JSONを新規作成（空テンプレート + workInfo）
+          try {
+            const ok = await performPresetJsonSave();
+            if (!ok) {
+              console.error("作品情報JSONの保存に失敗しました");
+              alert("作品情報JSONの保存に失敗しました。JSONフォルダパス設定を確認してください。");
+              setSaving(false);
+              return;
+            }
+            setCreatedNewPreset(true);
+          } catch (e) {
+            console.error("performPresetJsonSave error:", e);
+            alert(`作品情報JSONの作成に失敗しました:\n${e}`);
+            setSaving(false);
+            return;
+          }
+        }
+
         let jsonData: any;
         let parsedItems: any[] = [];
-        try {
-          jsonData = JSON.parse(pasteText);
-          // 既にJSONの場合はそのまま使用
-        } catch {
-          // CSV/Markdownテーブルをパースして構造化JSONに変換
-          const { items } = parseCheckText(pasteText);
-          parsedItems = items;
+        // 正誤 と 提案 を個別にパースして checkKind を強制設定
+        const simpleItems: any[] = [];
+        const variationItems: any[] = [];
+        if (pasteSimple.trim()) {
+          const { items } = parseCheckText(pasteSimple);
+          for (const it of items) simpleItems.push({ ...it, checkKind: "correctness" });
+        }
+        if (pasteVariation.trim()) {
+          const { items } = parseCheckText(pasteVariation);
+          for (const it of items) variationItems.push({ ...it, checkKind: "proposal" });
+        }
+        parsedItems = [...simpleItems, ...variationItems];
+        // 両方空でJSON直貼りのケース（従来の combinedJsonText）にフォールバック
+        if (parsedItems.length === 0 && combinedJsonText.trim()) {
+          try {
+            jsonData = JSON.parse(combinedJsonText);
+          } catch {
+            const { items } = parseCheckText(combinedJsonText);
+            parsedItems = items;
+          }
+        }
+        if (!jsonData) {
           jsonData = {
             checks: {
-              simple: { items: items.filter((i: any) => i.checkKind === "correctness") },
-              variation: { items: items.filter((i: any) => i.checkKind === "proposal") },
+              simple: { items: simpleItems.length > 0 ? simpleItems : parsedItems.filter((i: any) => i.checkKind === "correctness") },
+              variation: { items: variationItems.length > 0 ? variationItems : parsedItems.filter((i: any) => i.checkKind === "proposal") },
             },
             volume: volume ? parseInt(volume, 10) || 1 : 1,
             savedAt: new Date().toISOString(),
           };
         }
         // 保存先: G:/共有ドライブ/.../写植・校正用テキストログ/{レーベル}/{タイトル}/校正チェックデータ/
-        const scan = useScanPsdStore.getState();
-        const label = scan.workInfo.label || "";
-        const titleStr = scan.workInfo.title || "";
+        const label = effectiveLabel;
+        const titleStr = effectiveTitle;
         let defaultPath = "";
         if (label && titleStr) {
           const safeLabel = label.replace(/[\\/:*?"<>|]/g, "_");
@@ -264,12 +348,21 @@ function ResultSaveModal() {
     setSaving(false);
   };
 
+  const handleClose = () => {
+    close(null);
+    setPasteText("");
+    setPasteSimple("");
+    setPasteVariation("");
+    setSaved(false);
+    setCreatedNewPreset(false);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { close(null); setPasteText(""); setSaved(false); }}>
-      <div className="bg-bg-primary rounded-xl shadow-2xl w-[600px] max-h-[70vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
+      <div className={`bg-bg-primary rounded-xl shadow-2xl ${isText ? "w-[600px]" : "w-[900px] max-w-[95vw]"} max-h-[85vh] flex flex-col overflow-hidden`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg-secondary">
           <h3 className="text-[11px] font-medium text-text-primary">{title}</h3>
-          <button onClick={() => { close(null); setPasteText(""); setSaved(false); }} className="text-text-muted hover:text-text-primary text-lg transition-colors">✕</button>
+          <button onClick={handleClose} className="text-text-muted hover:text-text-primary text-lg transition-colors">✕</button>
         </div>
 
         {saved ? (
@@ -281,33 +374,106 @@ function ResultSaveModal() {
             </div>
             <p className="text-xs text-text-primary font-medium">保存して読み込みました</p>
             <p className="text-[10px] text-text-muted mt-1">
-              {isText ? "テキストを統合ビューアーに読み込みました" : "校正JSONデータを読み込みました"}
+              {isText
+                ? "テキストを統合ビューアーに読み込みました"
+                : createdNewPreset
+                  ? "作品情報JSONを新規作成し、校正JSONを保存しました"
+                  : "校正JSONデータを読み込みました"}
             </p>
-            <button onClick={() => { close(null); setPasteText(""); setSaved(false); }} className="mt-4 px-6 py-1.5 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent-secondary transition-colors">
+            <button onClick={handleClose} className="mt-4 px-6 py-1.5 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent-secondary transition-colors">
               閉じる
             </button>
           </div>
         ) : (
           <>
-            <div className="p-4 flex-1 overflow-hidden flex flex-col gap-3">
+            <div className="p-4 flex-1 overflow-auto flex flex-col gap-3">
               <p className="text-[10px] text-text-muted">
                 {isText
                   ? "Geminiで生成されたテキストを貼り付けて保存してください。保存後、テキストは自動で読み込まれます。"
-                  : "Geminiで生成された校正結果を貼り付けてJSON保存してください。正誤/提案はヘッダーやカテゴリ名から自動判定されます。"}
+                  : "Geminiで生成された校正結果を 正誤チェック / 提案チェック それぞれの欄に貼り付けてJSON保存してください。"}
               </p>
-              {!isText && pasteText.trim() && (() => {
-                const { items, kind } = parseCheckText(pasteText);
-                const corCount = items.filter((i: any) => i.checkKind === "correctness").length;
-                const proCount = items.filter((i: any) => i.checkKind === "proposal").length;
-                return items.length > 0 ? (
-                  <div className="flex items-center gap-2 text-[9px]">
-                    <span className="text-text-muted">検出: {items.length}件</span>
-                    {corCount > 0 && <span className="px-1 py-px rounded bg-emerald-100 text-emerald-700">正誤 {corCount}</span>}
-                    {proCount > 0 && <span className="px-1 py-px rounded bg-orange-100 text-orange-700">提案 {proCount}</span>}
-                    <span className="text-text-muted/50">({kind === "correctness" ? "正誤チェック" : "提案チェック"}として保存)</span>
+
+              {/* JSON 新規作成時: 作品情報インライン入力（作品情報JSON新規追加と同じ UI） */}
+              {!isText && needsNewInfo && (
+                <div className="p-3 rounded-lg bg-warning/5 border border-warning/30 space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-warning flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z" />
+                    </svg>
+                    <div className="text-[10px] font-medium text-warning">作品情報JSONが未登録です — 先に作品情報を登録してから校正JSONを保存します</div>
                   </div>
-                ) : null;
-              })()}
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-[9px] text-text-muted block mb-0.5">ジャンル</label>
+                      <select
+                        value={newGenre}
+                        onChange={(e) => {
+                          setNewGenre(e.target.value);
+                          const labels = GENRE_LABELS[e.target.value];
+                          setNewLabel(labels?.[0] || "");
+                        }}
+                        className="w-full text-[10px] px-2 py-1.5 bg-bg-primary border border-border/50 rounded text-text-primary outline-none"
+                      >
+                        <option value="">選択...</option>
+                        {Object.keys(GENRE_LABELS).map((g) => (
+                          <option key={g} value={g}>{g}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[9px] text-text-muted block mb-0.5">レーベル</label>
+                      <select
+                        value={newLabel}
+                        onChange={(e) => setNewLabel(e.target.value)}
+                        disabled={!newGenre}
+                        className="w-full text-[10px] px-2 py-1.5 bg-bg-primary border border-border/50 rounded text-text-primary outline-none"
+                      >
+                        <option value="">選択...</option>
+                        {(GENRE_LABELS[newGenre] || []).map((l) => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[9px] text-text-muted block mb-0.5">タイトル</label>
+                      <input
+                        type="text"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        className="w-full text-[10px] px-2 py-1.5 bg-bg-primary border border-border/50 rounded text-text-primary outline-none"
+                        placeholder="作品名"
+                      />
+                    </div>
+                  </div>
+                  {effectiveLabel && effectiveTitle && (
+                    <div className="text-[9px] text-text-muted font-mono space-y-0.5">
+                      <div>作品情報JSON: JSONフォルダ/{effectiveLabel}/{effectiveTitle}.json</div>
+                      <div>校正JSON: 校正チェックデータ/{effectiveLabel}/{effectiveTitle}/{volume || "1"}巻.json</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!isText && !needsNewInfo && (
+                <div className="text-[9px] text-text-muted font-mono">
+                  保存先: 校正チェックデータ/{effectiveLabel}/{effectiveTitle}/{volume || "1"}巻.json
+                </div>
+              )}
+
+              {/* 検出件数プレビュー（JSONモード） */}
+              {!isText && (pasteSimple.trim() || pasteVariation.trim()) && (
+                <div className="flex items-center gap-2 text-[9px]">
+                  {pasteSimple.trim() && (() => {
+                    const { items } = parseCheckText(pasteSimple);
+                    return <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">正誤 {items.length}件</span>;
+                  })()}
+                  {pasteVariation.trim() && (() => {
+                    const { items } = parseCheckText(pasteVariation);
+                    return <span className="px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">提案 {items.length}件</span>;
+                  })()}
+                </div>
+              )}
+
               {!isText && (
                 <div className="flex items-center gap-2">
                   <label className="text-[10px] text-text-muted">巻数:</label>
@@ -321,24 +487,55 @@ function ResultSaveModal() {
                   <span className="text-[9px] text-text-muted">巻</span>
                 </div>
               )}
-              <textarea
-                value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
-                placeholder={placeholder}
-                className="flex-1 min-h-[200px] w-full px-3 py-2 text-[11px] font-mono bg-bg-tertiary border border-border/50 rounded-lg text-text-primary placeholder:text-text-muted/40 resize-none focus:outline-none focus:border-accent/50"
-                autoFocus
-              />
+
+              {/* テキストモード: 単一textarea / JSONモード: 2カラム */}
+              {isText ? (
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder={placeholder}
+                  className="flex-1 min-h-[200px] w-full px-3 py-2 text-[11px] font-mono bg-bg-tertiary border border-border/50 rounded-lg text-text-primary placeholder:text-text-muted/40 resize-none focus:outline-none focus:border-accent/50"
+                  autoFocus
+                />
+              ) : (
+                <div className="grid grid-cols-2 gap-3 flex-1 min-h-[320px]">
+                  <div className="flex flex-col">
+                    <label className="flex items-center gap-1.5 text-[10px] font-medium text-emerald-600 mb-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                      正誤チェック
+                    </label>
+                    <textarea
+                      value={pasteSimple}
+                      onChange={(e) => setPasteSimple(e.target.value)}
+                      placeholder="正誤チェックのCSV/Markdown表を貼り付け..."
+                      className="flex-1 min-h-[280px] w-full px-3 py-2 text-[11px] font-mono bg-bg-tertiary border border-emerald-500/30 rounded-lg text-text-primary placeholder:text-text-muted/40 resize-none focus:outline-none focus:border-emerald-500/60"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="flex items-center gap-1.5 text-[10px] font-medium text-orange-600 mb-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
+                      提案チェック
+                    </label>
+                    <textarea
+                      value={pasteVariation}
+                      onChange={(e) => setPasteVariation(e.target.value)}
+                      placeholder="提案チェックのCSV/Markdown表を貼り付け..."
+                      className="flex-1 min-h-[280px] w-full px-3 py-2 text-[11px] font-mono bg-bg-tertiary border border-orange-500/30 rounded-lg text-text-primary placeholder:text-text-muted/40 resize-none focus:outline-none focus:border-orange-500/60"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="px-4 py-3 border-t border-border flex gap-2">
               <button
                 onClick={handleSave}
-                disabled={!pasteText.trim() || saving}
+                disabled={!canSave || saving}
                 className="flex-1 py-2 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent-secondary disabled:opacity-40 transition-colors"
               >
                 {saving ? "保存中..." : isText ? "テキストとして保存" : "JSONとして保存"}
               </button>
               <button
-                onClick={() => { close(null); setPasteText(""); setSaved(false); }}
+                onClick={handleClose}
                 className="px-4 py-2 text-xs text-text-muted hover:text-text-primary transition-colors"
               >
                 キャンセル

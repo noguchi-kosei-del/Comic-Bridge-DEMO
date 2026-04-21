@@ -704,6 +704,7 @@ function TopNavToolMenu() {
             return (
               <button key={btn.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors" onClick={() => {
                 if (btn.id === "layers") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("layers"); }
+                else if (btn.id === "layerControl") { setActiveView("layers"); }
                 else if (btn.id === "specCheck") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("thumbnails"); }
                 else setActiveView(btn.id as any);
                 setHover(false);
@@ -758,6 +759,8 @@ function NavBarButtons() {
               if (btn.id === "layers") {
                 setActiveView("specCheck");
                 usePsdStore.getState().setSpecViewMode("layers");
+              } else if (btn.id === "layerControl") {
+                setActiveView("layers");
               } else if (btn.id === "specCheck") {
                 // ホーム（仕様チェック）に戻る時は常にサムネイル表示
                 setActiveView("specCheck");

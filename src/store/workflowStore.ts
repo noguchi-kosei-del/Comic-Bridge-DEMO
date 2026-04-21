@@ -47,6 +47,7 @@ export const WORKFLOWS: Workflow[] = [
     icon: "📝",
     steps: [
       { label: "初校データ 読み込み", desc: "問題を検出", nav: "specCheck", confirmOnNext: "specCheck" },
+      { label: "レイヤー構造確認", desc: "レイヤー階層・名称を確認", nav: "layers" },
       { label: "ビューアーで確認・修正", desc: "フォント・サイズ・白消し・AA・カーニング・フォント帳", nav: "unifiedViewer", viewerTabSetup: { diff: "far-right", files: null, layers: null, spec: null, text: null, proofread: null }, confirmOnNext: "textDiffThenExtract" },
       { label: "テキスト抽出", desc: "PSDからテキストを抽出", nav: "specCheck" },
       { label: "提案チェックプロンプト作成", desc: "ProGenで提案チェック生成", nav: "progen", progenMode: "_check_variation" },

@@ -5,6 +5,7 @@ import {
   collectTextLayers,
   useFontResolver,
 } from "../../hooks/useFontResolver";
+import { LayerDiagnosticsBar } from "../layer-control/LayerPreviewPanel";
 
 export function SpecLayerGrid() {
   const files = usePsdStore((s) => s.files);
@@ -56,6 +57,9 @@ export function SpecLayerGrid() {
           写植仕様のみ表示
         </label>
       </div>
+
+      {/* 診断バー: 未インストールフォント + 共有フォルダ検索 + 白フチ/カーニング統計 */}
+      <LayerDiagnosticsBar targetFiles={files} />
 
       {/* 全ファイル合計サマリー */}
       {totalSummary.totalTextLayers > 0 && (
@@ -193,19 +197,27 @@ function SpecLayerCard({
                       {fontInfo.isMissing(mainFont) && <span className="text-error ml-1">[未]</span>}
                     </div>
                   )}
-                  {/* シャープ以外/メトリクスのみエラー表示 */}
+                  {/* シャープ以外/メトリクス/白フチ/カーニング値 表示 */}
                   {(() => {
-                    const aa = tl.textInfo?.antiAlias;
-                    const sharp = tl.textInfo?.isAllSharp ?? (!aa || aa.toLowerCase().includes("sharp") || aa.toLowerCase() === "ansh");
-                    if (!sharp || tl.textInfo?.hasMetricsKerning) {
-                      return (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {!sharp && <span className="text-[9px] px-1 py-px rounded bg-error/10 text-error">{aa || "非シャープ"}</span>}
-                          {tl.textInfo?.hasMetricsKerning && <span className="text-[9px] px-1 py-px rounded bg-error/10 text-error">メトリクス</span>}
-                        </div>
-                      );
-                    }
-                    return null;
+                    const ti: any = tl.textInfo;
+                    const aa = ti?.antiAlias;
+                    const sharp = ti?.isAllSharp ?? (!aa || aa.toLowerCase().includes("sharp") || aa.toLowerCase() === "ansh");
+                    const stroke = (typeof ti?.strokeSize === "number" && ti.strokeSize > 0) ? ti.strokeSize : null;
+                    const tracking: number[] = Array.isArray(ti?.tracking) ? ti.tracking.filter((t: number) => t !== 0) : [];
+                    const hasAny = !sharp || ti?.hasMetricsKerning || stroke != null || tracking.length > 0;
+                    if (!hasAny) return null;
+                    return (
+                      <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                        {!sharp && <span className="text-[9px] px-1 py-px rounded bg-error/10 text-error">{aa || "非シャープ"}</span>}
+                        {ti?.hasMetricsKerning && <span className="text-[9px] px-1 py-px rounded bg-error/10 text-error">メトリクス</span>}
+                        {stroke != null && <span className="text-[9px] px-1 py-px rounded bg-accent-tertiary/10 text-accent-tertiary">白フチ {stroke}px</span>}
+                        {tracking.length > 0 && (
+                          <span className="text-[9px] px-1 py-px rounded bg-warning/10 text-warning">
+                            カーニング {tracking.map((t) => (t > 0 ? `+${t}` : t)).join(",")}
+                          </span>
+                        )}
+                      </div>
+                    );
                   })()}
                   {tl.textInfo?.text && (
                     <div className="text-text-muted/50 truncate">{tl.textInfo.text.replace(/\n/g, " ").substring(0, 40)}</div>

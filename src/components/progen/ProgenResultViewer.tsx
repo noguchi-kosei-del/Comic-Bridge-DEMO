@@ -156,22 +156,21 @@ export function ProgenResultViewer({ onBack, onGoToProofreading, onSaveCalibrati
   // --- 貼り付けモーダル ---
 
   const handleParse = useCallback(() => {
-    const store = useProgenStore.getState();
-    if (pasteType === "variation") {
-      const text = pasteTexts.variation;
-      if (!text.trim()) return;
-      const items = parseVariationCSV(text);
+    // 正誤・提案 両方を同時に処理（空欄はスキップ）
+    const updates: any = {};
+    if (pasteTexts.variation.trim()) {
+      const items = parseVariationCSV(pasteTexts.variation);
       const grouped = groupVariationByCategory(items);
-      store.currentVariationData = grouped;
-      useProgenStore.setState({ currentVariationData: grouped });
-    } else {
-      const text = pasteTexts.simple;
-      if (!text.trim()) return;
-      const items = parseSimpleCSV(text);
-      useProgenStore.setState({ currentSimpleData: items });
+      updates.currentVariationData = grouped;
     }
+    if (pasteTexts.simple.trim()) {
+      const items = parseSimpleCSV(pasteTexts.simple);
+      updates.currentSimpleData = items;
+    }
+    if (Object.keys(updates).length === 0) return; // 両方空なら閉じない
+    useProgenStore.setState(updates);
     setShowPasteModal(false);
-  }, [pasteType, pasteTexts]);
+  }, [pasteTexts]);
 
   // --- 保存 ---
 
@@ -805,8 +804,6 @@ function ParallelContent({
 // ═══ 貼り付けモーダル ═══
 
 function PasteModal({
-  pasteType,
-  setPasteType,
   pasteTexts,
   setPasteTexts,
   onParse,
@@ -822,12 +819,12 @@ function PasteModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="w-[560px] max-h-[80vh] flex flex-col bg-bg-secondary border border-border rounded-xl shadow-xl"
+        className="w-[900px] max-w-[95vw] max-h-[85vh] flex flex-col bg-bg-secondary border border-border rounded-xl shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* モーダルヘッダー */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <span className="text-xs font-bold text-text-primary">結果CSVを貼り付け</span>
+          <span className="text-xs font-bold text-text-primary">結果CSVを貼り付け（正誤・提案 両方同時）</span>
           <button
             onClick={onClose}
             className="text-text-muted hover:text-text-primary transition-colors"
@@ -838,64 +835,63 @@ function PasteModal({
           </button>
         </div>
 
-        {/* タブ切替 */}
-        <div className="flex gap-1 px-4 pt-3">
-          <button
-            onClick={() => setPasteType("variation")}
-            className={`px-3 py-1 text-[10px] rounded-md transition-colors ${
-              pasteType === "variation"
-                ? "bg-orange-500 text-white font-medium"
-                : "text-text-muted hover:text-text-secondary bg-bg-tertiary"
-            }`}
-          >
-            提案チェック
-          </button>
-          <button
-            onClick={() => setPasteType("simple")}
-            className={`px-3 py-1 text-[10px] rounded-md transition-colors ${
-              pasteType === "simple"
-                ? "bg-emerald-500 text-white font-medium"
-                : "text-text-muted hover:text-text-secondary bg-bg-tertiary"
-            }`}
-          >
-            正誤チェック
-          </button>
-        </div>
+        {/* 2カラム 貼り付け欄: 正誤チェック + 提案チェック */}
+        <div className="flex-1 overflow-auto p-4 grid grid-cols-2 gap-3">
+          {/* 正誤チェック */}
+          <div className="flex flex-col min-h-0">
+            <label className="flex items-center gap-1.5 text-[10px] font-medium text-emerald-600 mb-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+              正誤チェック
+              {pasteTexts.simple.trim() && (
+                <span className="text-text-muted text-[9px] font-normal">（入力あり）</span>
+              )}
+            </label>
+            <textarea
+              value={pasteTexts.simple}
+              onChange={(e) => setPasteTexts({ ...pasteTexts, simple: e.target.value })}
+              placeholder={"正誤チェックCSV/Markdown表を貼り付け\nページ, カテゴリ, セリフ, 指摘内容"}
+              className="flex-1 min-h-[320px] text-[10px] font-mono p-3 bg-bg-primary border border-emerald-500/30 rounded-lg text-text-primary outline-none focus:border-emerald-500/60 resize-none leading-relaxed"
+            />
+          </div>
 
-        {/* テキストエリア */}
-        <div className="flex-1 overflow-auto px-4 py-3">
-          <textarea
-            value={pasteType === "variation" ? pasteTexts.variation : pasteTexts.simple}
-            onChange={(e) =>
-              setPasteTexts(
-                pasteType === "variation"
-                  ? { ...pasteTexts, variation: e.target.value }
-                  : { ...pasteTexts, simple: e.target.value }
-              )
-            }
-            placeholder={
-              pasteType === "variation"
-                ? "提案チェックCSVを貼り付け...\nカテゴリ, ページ, セリフ, 指摘内容"
-                : "正誤チェックCSVを貼り付け...\nページ, カテゴリ, セリフ, 指摘内容"
-            }
-            className="w-full h-[300px] text-[10px] font-mono p-3 bg-bg-primary border border-border/50 rounded-lg text-text-primary outline-none focus:border-accent/50 resize-none leading-relaxed"
-          />
+          {/* 提案チェック */}
+          <div className="flex flex-col min-h-0">
+            <label className="flex items-center gap-1.5 text-[10px] font-medium text-orange-600 mb-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
+              提案チェック
+              {pasteTexts.variation.trim() && (
+                <span className="text-text-muted text-[9px] font-normal">（入力あり）</span>
+              )}
+            </label>
+            <textarea
+              value={pasteTexts.variation}
+              onChange={(e) => setPasteTexts({ ...pasteTexts, variation: e.target.value })}
+              placeholder={"提案チェックCSV/Markdown表を貼り付け\nカテゴリ, ページ, セリフ, 指摘内容"}
+              className="flex-1 min-h-[320px] text-[10px] font-mono p-3 bg-bg-primary border border-orange-500/30 rounded-lg text-text-primary outline-none focus:border-orange-500/60 resize-none leading-relaxed"
+            />
+          </div>
         </div>
 
         {/* アクション */}
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-[10px] text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-primary transition-colors"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={onParse}
-            className="px-4 py-1.5 text-[10px] font-medium text-white bg-accent hover:bg-accent/90 rounded-lg transition-colors"
-          >
-            解析して表示
-          </button>
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border">
+          <span className="text-[10px] text-text-muted">
+            片方だけでも解析可能（空欄はスキップ）
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-[10px] text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-primary transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={onParse}
+              disabled={!pasteTexts.simple.trim() && !pasteTexts.variation.trim()}
+              className="px-4 py-1.5 text-[10px] font-medium text-white bg-accent hover:bg-accent/90 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              解析して表示
+            </button>
+          </div>
         </div>
       </div>
     </div>

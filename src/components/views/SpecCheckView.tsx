@@ -1902,7 +1902,7 @@ function FolderBreadcrumbTree({ currentPath, onNavigate }: { currentPath: string
             const fullPath = parts.slice(0, i + 1).join("\\");
             const isLast = i === parts.length - 1;
             return (
-              <div key={i} style={{ paddingLeft: `${i * 12}px` }}>
+              <div key={i} style={{ paddingLeft: `${i * 6}px` }}>
                 <button
                   onClick={() => !isLast && onNavigate(fullPath)}
                   className={`flex items-center gap-1 text-[10px] py-0.5 rounded transition-colors ${
@@ -1921,7 +1921,7 @@ function FolderBreadcrumbTree({ currentPath, onNavigate }: { currentPath: string
           {subFolders.map((sub) => {
             const subName = sub.split("\\").pop() || sub;
             return (
-            <div key={sub} style={{ paddingLeft: `${parts.length * 12}px` }}>
+            <div key={sub} style={{ paddingLeft: `${parts.length * 6}px` }}>
               <button
                 onClick={() => onNavigate(sub)}
                 className="flex items-center gap-1 text-[10px] py-0.5 rounded text-text-muted hover:text-text-primary hover:bg-bg-tertiary cursor-pointer transition-colors"

@@ -1026,32 +1026,38 @@ export function FolderSetupView() {
             {/* 確認完了 / WF次へ進む */}
             {(() => {
               const isWf = !!useWorkflowStore.getState().activeWorkflow;
-              const canProceed = selectedSpecId && fileCheck.hasPsd && fileCheck.hasPdfOrImage;
+              const canProceed = selectedSpecId && fileCheck.hasPsd;
               return isWf ? (
-                <button
-                  onClick={() => {
-                    if (!canProceed) return;
-                    setFileCheck(null);
-                    // WF次のステップへ自動進行
-                    const wfs = useWorkflowStore.getState();
-                    if (wfs.activeWorkflow && wfs.currentStep < wfs.activeWorkflow.steps.length - 1) {
-                      wfs.nextStep();
-                      const nextStep = wfs.activeWorkflow.steps[wfs.currentStep + 1];
-                      if (nextStep?.nav) {
-                        import("../../store/viewStore").then(({ useViewStore }) => {
-                          useViewStore.getState().setActiveView(nextStep.nav as any);
-                        });
+                <>
+                  {!fileCheck.hasPdfOrImage && (
+                    <div className="px-2.5 py-1.5 rounded-lg bg-warning/10 border border-warning/30 text-[9px] text-warning">
+                      ⚠ 画像/PDFが見つかりませんが、このまま進めます
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (!canProceed) return;
+                      setFileCheck(null);
+                      // WF次のステップへ自動進行
+                      const wfs = useWorkflowStore.getState();
+                      if (wfs.activeWorkflow && wfs.currentStep < wfs.activeWorkflow.steps.length - 1) {
+                        wfs.nextStep();
+                        const nextStep = wfs.activeWorkflow.steps[wfs.currentStep + 1];
+                        if (nextStep?.nav) {
+                          import("../../store/viewStore").then(({ useViewStore }) => {
+                            useViewStore.getState().setActiveView(nextStep.nav as any);
+                          });
+                        }
                       }
-                    }
-                  }}
-                  disabled={!canProceed}
-                  className="w-full py-2.5 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  {!selectedSpecId ? "カラーモードを選択してください"
-                    : !fileCheck.hasPsd ? "PSDが不足しています"
-                    : !fileCheck.hasPdfOrImage ? "PDF/画像が不足しています"
-                    : "確認完了 → 次の工程へ"}
-                </button>
+                    }}
+                    disabled={!canProceed}
+                    className="w-full py-2.5 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {!selectedSpecId ? "カラーモードを選択してください"
+                      : !fileCheck.hasPsd ? "PSDが不足しています"
+                      : "確認完了 → 次の工程へ"}
+                  </button>
+                </>
               ) : (
                 <button
                   onClick={() => { if (selectedSpecId) setFileCheck(null); }}

@@ -551,6 +551,78 @@
 - **FilePropertiesPanel**: 右プレビューパネル下部に折りたたみ可能なプロパティ表示
 - **表示項目**: ファイル名 / ドキュメント種類 / 作成日 / 修正日 / ファイルサイズ / 寸法(px/inch/cm) / 用紙サイズ / 解像度 / ビット数 / カラーモード / αチャンネル / ガイド / トンボ / レイヤー数 / チェック結果
 
+### 27. v3.8.0 新機能・改修
+
+**モノクロ2階調（Bitmap）PSD対応** ([commands.rs:2154-2290](src-tauri/src/commands.rs#L2154))
+- `load_psd_composite` に depth=1 / color_mode=0 (Bitmap) を追加
+- `unpack_bitmap_to_grayscale()` / `decode_rle_bitmap()` を新設（PackBits展開+MSBアンパック）
+- 従来 psd crate フォールバックで失敗していた2階調PSDが高速パスで処理される
+- 画像エリアの拡大表示が2階調で破綻する問題を解消
+
+**統合ビューアー リロードボタン強化** ([commands.rs:122-152](src-tauri/src/commands.rs#L122))
+- `invalidate_file_cache` がメモリキャッシュだけでなく、ディスク上の JPEG キャッシュ (`manga_psd_preview_*.jpg` / `manga_pdf_preview_*.jpg`) も削除するように拡張
+- これによりビューアー右上のリロードボタンで完全再生成されるようになった（古い画像が残る問題を解消）
+
+**TIFF化 2大プリフライトチェック**（Photoshop ベース）
+- **メトリクスカーニング検出**: `tiff_convert.jsx` の `detectMetricsKerningLayers()` / `hasMetricsKerning()`。ActionManager で `textKey > textStyleRange > textStyle > autoKern` を走査し `metricsKern` を検出 → `TiffResultDialog` に警告表示
+- **リンクグループ フォントサイズ検証**: `detectLinkGroupFontSizeIssues()`。各テキストレイヤーの `linkedLayerIDs` を直接読み、Union-Find でグループ構築 → 「同一サイズ」または「きっかり1:2」以外を通知（誤差ゼロ 0.001pt のみ許容）
+- 結果は `TiffConvertResult.metrics_kerning_layers` / `link_group_issues` として Rust → フロントに連携、`TiffResultDialog` で詳細展開可能
+
+**レイヤー構造 診断バー（LayerDiagnosticsBar）**
+- **設置場所**: SpecLayerGrid（仕様チェック：レイヤー構造タブ）と LayerPreviewPanel 両方
+- **未インストールフォント**: あり/なし バッジ + クリックで展開（フォント名一覧） + 「🔍 共有フォルダから探す」ボタン
+- **共有フォルダ検索**: `FontBrowserDialog`（写植関連から再利用）をモーダル表示。パンくずナビ + 検索 + チェックボックス複数選択 + 一括インストール + 自動フォント再解決
+- **検索フォルダアドレスは UI 非表示**: `FONT_SEARCH_BASE_PATH` 定数で内部保持のみ
+- **白フチサイズ数値バッジ**: `{size}px ×{count}` 形式（ag-psd の `layer.effects.stroke[]` から抽出）
+- **カーニング値（トラッキング）バッジ**: `+25 ×N` / `-50 ×N` 形式（textInfo.tracking から、0以外のみ）。メトリクスは読み込み時点では判定不能のため除外
+
+**parser.ts 白フチ・リンクグループ抽出強化** ([parser.ts:218-232, 323-341](src/lib/psd/parser.ts))
+- LayerNode に `linkGroup?` / `linkGroupEnabled?` を追加（ag-psd の同名プロパティから抽出）
+- TextInfo に `strokeSize?` を追加（`layer.effects.stroke[]` の最初の enabled エントリから `size` を取得、UnitsValue/number 両対応）
+
+**統合ビューアー / SpecLayerGrid テキスト行バッジ**
+- 各テキストレイヤー行に 白フチ / カーニング値 バッジを直接表示
+- 統合ビューアー写植仕様タブ ([UnifiedViewer.tsx:1421-1441](src/components/unified-viewer/UnifiedViewer.tsx#L1421)) と SpecLayerGrid カード ([SpecLayerGrid.tsx:196-218](src/components/spec-checker/SpecLayerGrid.tsx#L196)) の両方
+- 既存の「非シャープ」「メトリクス」バッジと並列表示
+
+**使用フォント一覧を 写植仕様タブに統合** ([UnifiedViewer.tsx:1323-1372](src/components/unified-viewer/UnifiedViewer.tsx#L1323))
+- テキストタブの単一ファイル版フォント一覧を削除
+- 写植仕様タブに 全ファイル版 `allFilesFontMap` ベースの一覧を配置（N種/全Nファイル、ファイル数バッジ、クリックで対象ページ巡回）
+
+**ProGen 結果保存モーダル 刷新** ([ProgenView.tsx ResultSaveModal](src/components/views/ProgenView.tsx#L89))
+- JSONモードで 2カラム貼り付け（正誤 + 提案 同時入力、各欄緑/橙の色分け）
+- 各欄個別パース → `checkKind` を「正誤=correctness」「提案=proposal」で強制設定
+- **作品情報JSON未登録時のガード**: `currentJsonFilePath` が空 or `label/title` 未設定なら、モーダル内に ジャンル/レーベル/タイトル インラインフォームを表示
+- 保存時は まず `performPresetJsonSave()` で作品情報JSON新規作成 → 次に校正JSON保存（順序厳守）
+- 保存先プレビュー2行表示（作品情報JSON + 校正JSON）、完了メッセージも新規作成時は「作品情報JSONを新規作成し、校正JSONを保存しました」
+
+**Scan PSD 作品情報 Notion ページ** ([scanPsd.ts:16, WorkInfoTab.tsx, WorkflowBar.tsx](src/types/scanPsd.ts#L16))
+- `ScanWorkInfo.notionPage?` フィールド追加、WorkInfoTab にインライン入力＋「開く」ボタン
+- **WF完了時**: WorkflowBar + RequestPrepView の「はい」ボタンで `open_url_in_browser` 経由で自動起動
+- **URL オープン 3段フォールバック** ([commands.rs:open_url_in_browser](src-tauri/src/commands.rs)): ① open crate (ShellExecute) ② rundll32 url.dll,FileProtocolHandler ③ powershell Start-Process。URL 内 `&` による cmd escape 問題を回避
+
+**差分/分割ビューアー Photoshop起動**
+- 分割ビューアー各パネルに「Ps」ボタン + Pキーショートカット ([ParallelViewerView.tsx:226](src/components/parallel-viewer/ParallelViewerView.tsx#L226))
+- 差分ビューアーも Pキーショートカット追加（既存Psボタンに加え）([DiffViewerView.tsx:145](src/components/diff-viewer/DiffViewerView.tsx#L145))
+
+**レイヤー制御タブ 復元** ([settingsStore.ts:15](src/store/settingsStore.ts#L15))
+- ALL_NAV_BUTTONS に `{ id: "layerControl", label: "レイヤー制御" }` 追加
+- デフォルトツールメニューに追加、既存ユーザーへのマイグレーション関数 `migrateToolMenu` で自動追加
+- TopNav 両ハンドラに `layerControl → setActiveView("layers")` 分岐
+
+**初校確認WF 改修** ([workflowStore.ts:50](src/store/workflowStore.ts#L50))
+- 「レイヤー構造確認」ステップを追加（初校データ読み込み → レイヤー構造確認 → ビューアーで確認・修正）
+- WFステップ進行時に `resolve_font_names` で未インストールフォント検知 → 警告ダイアログ（ステップごとに1回のみ）
+- ProofLoadOverlay: 「→検A」「→検B」表記削除、画像必須を解除（任意化）
+
+**FolderSetup 画像/PDFブロック解除** ([FolderSetupView.tsx:1029](src/components/views/FolderSetupView.tsx#L1029))
+- 画像/PDFがない場合も進行可能（警告バナーのみ表示）
+- `canProceed = selectedSpecId && fileCheck.hasPsd` （PDF/画像要件を撤廃）
+
+**ホーム フォルダ階層 傾き半減** ([SpecCheckView.tsx:1905,1924](src/components/views/SpecCheckView.tsx#L1905))
+- 親階層 & サブフォルダの `paddingLeft` を `i * 12px` → `i * 6px` に変更
+- 深い階層での水平オフセットが半減、傾きが緩やかに
+
 ### 22. 統合ビューアータブ（UnifiedViewerView）
 - **3サブタブ構成**: 統合ビューアー / 差分モード / 分割ビューアー
 - **統合ビューアー（UnifiedViewer）**: 2カラムレイアウト（左パネル廃止）

@@ -1045,7 +1045,7 @@ export function UnifiedViewer() {
     return map;
   }, [files]);
 
-  // Track click index per font for cycling through pages
+  // クリックごとに対象ファイルを巡回するためのインデックス（フォントボタン → ページ移動用）
   const fontClickIdx = useRef(new Map<string, number>());
 
   // Per-file text diff status: Map<fileIndex, "match" | "diff" | "no-text">
@@ -1324,11 +1324,13 @@ export function UnifiedViewer() {
       case "spec":
         return (
           <div className="select-none">
-            {postScriptNames.length > 0 && (
-              <div className="px-2 py-1.5 border-b border-border/30">
-                <div className="flex items-center gap-1 mb-1">
-                  <span className="text-[10px] text-text-muted flex-1">使用フォント ({postScriptNames.length}種)</span>
-                  {/* スクショボタン: キャプチャモード切替 */}
+            {(postScriptNames.length > 0 || allFilesFontMap.size > 0) && (
+              <div className="px-2 py-1.5 border-b border-border/30 space-y-1.5">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-text-muted flex-1">
+                    使用フォント ({allFilesFontMap.size}種 / 全{files.length}ファイル)
+                  </span>
+                  {/* スクショボタン */}
                   {activeFontFilter && (
                     <button
                       onClick={() => setCaptureMode(!captureMode)}
@@ -1346,20 +1348,39 @@ export function UnifiedViewer() {
                   )}
                   {captureStatus && <span className="text-[9px] text-success">{captureStatus}</span>}
                 </div>
+                {/* 全ファイル使用フォント — クリックで対象ページ移動 */}
                 <div className="flex flex-wrap gap-1">
-                  {postScriptNames.map((ps) => (
-                    <button
-                      key={ps}
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full text-white transition-opacity ${
-                        activeFontFilter === ps ? "ring-1 ring-white/50" : activeFontFilter ? "opacity-30" : ""
-                      }`}
-                      style={{ backgroundColor: getFontColor(ps) }}
-                      onClick={() => setActiveFontFilter(activeFontFilter === ps ? null : ps)}
-                      title={getFontLabel(ps)}
-                    >
-                      {getFontLabel(ps).substring(0, 12)}
-                    </button>
-                  ))}
+                  {[...allFilesFontMap.entries()].map(([ps, fileIdxs]) => {
+                    const isActive = activeFontFilter === ps;
+                    const isCurrent = fileIdxs.includes(idx);
+                    return (
+                      <button
+                        key={ps}
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full text-white transition-all ${
+                          isActive ? "ring-1 ring-white/60 scale-105" : activeFontFilter ? "opacity-30" : ""
+                        } ${isCurrent ? "" : "opacity-70"}`}
+                        style={{ backgroundColor: getFontColor(ps) }}
+                        onClick={() => {
+                          if (isActive) {
+                            // 同じフォントの次のページへ巡回
+                            const prev = fontClickIdx.current.get(ps) ?? -1;
+                            const next = (prev + 1) % fileIdxs.length;
+                            fontClickIdx.current.set(ps, next);
+                            store.setCurrentFileIndex(fileIdxs[next]);
+                          } else {
+                            setActiveFontFilter(ps);
+                            fontClickIdx.current.set(ps, fileIdxs.indexOf(idx) >= 0 ? fileIdxs.indexOf(idx) : 0);
+                            if (!fileIdxs.includes(idx)) store.setCurrentFileIndex(fileIdxs[0]);
+                          }
+                        }}
+                        onDoubleClick={() => setActiveFontFilter(null)}
+                        title={`${getFontLabel(ps)}\n${fileIdxs.length}ファイルで使用 (p.${fileIdxs.map((i) => i + 1).join(",")})\nクリック: ページ移動 / ダブルクリック: フィルタ解除`}
+                      >
+                        {getFontLabel(ps).substring(0, 12)}
+                        <span className="ml-0.5 opacity-60 text-[9px]">({fileIdxs.length})</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1397,6 +1418,27 @@ export function UnifiedViewer() {
                             {tl.textInfo.fontSizes.length > 0 && (
                               <span className="text-[10px] text-text-muted">{tl.textInfo.fontSizes.join("/")}pt</span>
                             )}
+                            {/* 白フチ / カーニング値バッジ */}
+                            {(() => {
+                              const ti: any = tl.textInfo;
+                              const stroke = (typeof ti?.strokeSize === "number" && ti.strokeSize > 0) ? ti.strokeSize : null;
+                              const tracking: number[] = Array.isArray(ti?.tracking) ? ti.tracking.filter((t: number) => t !== 0) : [];
+                              if (stroke == null && tracking.length === 0) return null;
+                              return (
+                                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                  {stroke != null && (
+                                    <span className="text-[9px] px-1 py-px rounded bg-accent-tertiary/10 text-accent-tertiary">
+                                      白フチ {stroke}px
+                                    </span>
+                                  )}
+                                  {tracking.length > 0 && (
+                                    <span className="text-[9px] px-1 py-px rounded bg-warning/10 text-warning">
+                                      カーニング {tracking.map((t) => (t > 0 ? `+${t}` : t)).join(",")}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             {tl.textInfo.text && (
                               <div className="text-[10px] text-text-muted/60 truncate mt-0.5">
                                 {tl.textInfo.text.replace(/\n/g, " ").substring(0, 30)}
@@ -1472,48 +1514,9 @@ export function UnifiedViewer() {
                 {store.fontPresets.length > 0 ? "フォント変更" : "+フォント"}
               </button>
             </div>
-            {/* フォント情報 — 全ファイル使用フォント + JSONプリセット(ドロップダウン) */}
-            {(allFilesFontMap.size > 0 || store.fontPresets.length > 0) && (
+            {/* フォント情報 — JSONプリセット(ドロップダウン) のみ（使用フォント一覧は写植仕様タブへ移動） */}
+            {store.fontPresets.length > 0 && (
               <div className="flex-shrink-0 px-2 py-1.5 border-b border-border/30 space-y-1.5">
-                {/* 全ファイル使用フォント — クリックで対象ページ移動 */}
-                {allFilesFontMap.size > 0 && (
-                  <div>
-                    <div className="text-[9px] text-text-muted/60 mb-0.5">使用フォント ({allFilesFontMap.size}種 / 全{files.length}ファイル)</div>
-                    <div className="flex flex-wrap gap-1">
-                      {[...allFilesFontMap.entries()].map(([ps, fileIdxs]) => {
-                        const isActive = activeFontFilter === ps;
-                        const isCurrent = fileIdxs.includes(idx);
-                        return (
-                          <button
-                            key={ps}
-                            className={`text-[10px] px-1.5 py-0.5 rounded-full text-white transition-all ${
-                              isActive ? "ring-1 ring-white/60 scale-105" : activeFontFilter ? "opacity-30" : ""
-                            } ${isCurrent ? "" : "opacity-70"}`}
-                            style={{ backgroundColor: getFontColor(ps) }}
-                            onClick={() => {
-                              if (isActive) {
-                                // Cycle through pages containing this font
-                                const prev = fontClickIdx.current.get(ps) ?? -1;
-                                const next = (prev + 1) % fileIdxs.length;
-                                fontClickIdx.current.set(ps, next);
-                                store.setCurrentFileIndex(fileIdxs[next]);
-                              } else {
-                                setActiveFontFilter(ps);
-                                fontClickIdx.current.set(ps, fileIdxs.indexOf(idx) >= 0 ? fileIdxs.indexOf(idx) : 0);
-                                if (!fileIdxs.includes(idx)) store.setCurrentFileIndex(fileIdxs[0]);
-                              }
-                            }}
-                            onDoubleClick={() => setActiveFontFilter(null)}
-                            title={`${getFontLabel(ps)}\n${fileIdxs.length}ファイルで使用 (p.${fileIdxs.map((i) => i + 1).join(",")})\nクリック: ページ移動 / ダブルクリック: フィルタ解除`}
-                          >
-                            {getFontLabel(ps)}
-                            <span className="ml-0.5 opacity-60 text-[9px]">({fileIdxs.length})</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
                 {/* プリセットフォント — ドロップダウンで割当 */}
                 {store.fontPresets.length > 0 && (
                   <div className="flex items-center gap-1.5">

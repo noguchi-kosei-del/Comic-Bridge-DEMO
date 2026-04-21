@@ -14,6 +14,8 @@ export interface ScanWorkInfo {
   volume: number;
   storagePath: string;
   notes: string;
+  /** NotionページURL（WF完了時にブラウザで開く） */
+  notionPage?: string;
 }
 
 // --- フォント ---
@@ -231,6 +233,7 @@ export const DEFAULT_WORK_INFO: ScanWorkInfo = {
   volume: 1,
   storagePath: "",
   notes: "",
+  notionPage: "",
 };
 
 export const TAB_LABELS = [

@@ -77,6 +77,7 @@ pub fn run() {
             commands::detect_psd_folders,
             commands::list_all_files,
             commands::open_with_default_app,
+            commands::open_url_in_browser,
             commands::parse_psd_metadata_batch,
             commands::run_photoshop_custom_operations,
             commands::start_file_watcher,

@@ -119,6 +119,10 @@ export interface LayerNode {
   textInfo?: TextInfo;
   children?: LayerNode[];
   bounds?: LayerBounds;
+  /** Photoshopレイヤーリンクグループ番号（同一値を持つレイヤーがリンク済み） */
+  linkGroup?: number;
+  /** リンクグループが有効か（false=一時解除） */
+  linkGroupEnabled?: boolean;
 }
 
 // Specification Types

@@ -12,6 +12,7 @@ export const ALL_NAV_BUTTONS: NavButton[] = [
   { id: "unifiedViewer", label: "ビューアー" },
   { id: "scanPsd", label: "スキャナー" },
   { id: "layers", label: "レイヤー構造" },
+  { id: "layerControl", label: "レイヤー制御" },
   { id: "replace", label: "差替え" },
   { id: "compose", label: "合成" },
   { id: "tiff", label: "TIFF化" },
@@ -63,13 +64,21 @@ function saveSettings(state: Partial<AppSettings>) {
 
 const saved = loadSettings();
 
+// Migration: 既存ユーザーの toolMenuButtons に layerControl を追加（未登録の場合のみ）
+function migrateToolMenu(existing: string[] | undefined): string[] {
+  if (!existing) return ["layerControl", "replace", "compose", "tiff", "split", "folderSetup", "requestPrep"];
+  if (existing.includes("layerControl")) return existing;
+  // 先頭に追加
+  return ["layerControl", ...existing];
+}
+
 export const useSettingsStore = create<AppSettings>((set, get) => ({
   fontSize: saved.fontSize || "medium",
   accentColor: saved.accentColor || "#7c5cff",
   darkMode: saved.darkMode ?? false,
   defaultFolderPath: saved.defaultFolderPath || "",
   navBarButtons: saved.navBarButtons || ["specCheck", "unifiedViewer", "scanPsd", "layers"],
-  toolMenuButtons: saved.toolMenuButtons || ["replace", "compose", "tiff", "split", "folderSetup", "requestPrep"],
+  toolMenuButtons: migrateToolMenu(saved.toolMenuButtons),
 
   setFontSize: (fontSize) => { set({ fontSize }); saveSettings({ ...get(), fontSize }); },
   setAccentColor: (accentColor) => { set({ accentColor }); saveSettings({ ...get(), accentColor }); },

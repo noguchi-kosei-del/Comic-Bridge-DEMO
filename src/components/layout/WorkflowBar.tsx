@@ -168,6 +168,8 @@ export function WorkflowBar() {
   const [showAbortConfirm, setShowAbortConfirm] = useState(false);
   const [showNextConfirm, setShowNextConfirm] = useState<{ title: string; message: string; type: "warning" | "success" | "save" | "complete" } | null>(null);
   const [showProofLoadOverlay, setShowProofLoadOverlay] = useState(false);
+  const [showFontWarn, setShowFontWarn] = useState<{ missing: string[] } | null>(null);
+  const [fontCheckedForStep, setFontCheckedForStep] = useState<number>(-1);
   const activeWorkflow = useWorkflowStore((s) => s.activeWorkflow);
   const currentStep = useWorkflowStore((s) => s.currentStep);
 
@@ -212,8 +214,37 @@ export function WorkflowBar() {
 
         {/* 進める / 完了ボタン */}
         <button
-          onClick={() => {
+          onClick={async () => {
             const currentStepDef = activeWorkflow.steps[currentStep];
+            // 未インストールフォント検出（1ステップにつき1回のみ）
+            if (fontCheckedForStep !== currentStep) {
+              try {
+                const psdFiles = usePsdStore.getState().files;
+                const fontSet = new Set<string>();
+                const collectFonts = (nodes: any[]) => {
+                  for (const n of nodes) {
+                    if (n.type === "text" && n.visible && n.textInfo?.fonts) {
+                      for (const f of n.textInfo.fonts) fontSet.add(f);
+                    }
+                    if (n.children) collectFonts(n.children);
+                  }
+                };
+                for (const f of psdFiles) {
+                  if (f.metadata?.layerTree) collectFonts(f.metadata.layerTree);
+                }
+                if (fontSet.size > 0) {
+                  const names = Array.from(fontSet);
+                  const resolved = await invoke<Record<string, any>>("resolve_font_names", { postscriptNames: names }).catch(() => ({} as Record<string, any>));
+                  const missing = names.filter((ps) => !(ps in resolved));
+                  if (missing.length > 0) {
+                    setFontCheckedForStep(currentStep);
+                    setShowFontWarn({ missing });
+                    return;
+                  }
+                }
+                setFontCheckedForStep(currentStep);
+              } catch { setFontCheckedForStep(currentStep); }
+            }
             // 最終項目の場合
             if (currentStep >= activeWorkflow.steps.length - 1) {
               if (currentStepDef?.confirmOnNext === "wfComplete") {
@@ -423,7 +454,20 @@ export function WorkflowBar() {
                   <>
                     <button onClick={() => setShowNextConfirm(null)} className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors">いいえ</button>
                     <button
-                      onClick={() => { setShowNextConfirm(null); useWorkflowStore.getState().abortWorkflow(); }}
+                      onClick={async () => {
+                        setShowNextConfirm(null);
+                        // Notionページが設定されていればデフォルトブラウザで開く
+                        const raw = useScanPsdStore.getState().workInfo.notionPage?.trim() || "";
+                        if (raw) {
+                          try {
+                            await invoke("open_url_in_browser", { url: raw });
+                          } catch (e) {
+                            console.error("Failed to open Notion URL:", e);
+                            alert(`Notionページをブラウザで開けませんでした:\n${raw}\n\n${e}`);
+                          }
+                        }
+                        useWorkflowStore.getState().abortWorkflow();
+                      }}
                       className="flex-1 px-3 py-2 text-xs font-medium text-white bg-success rounded-lg hover:bg-success/90 transition-colors"
                     >はい</button>
                   </>
@@ -511,6 +555,28 @@ export function WorkflowBar() {
                     >{showNextConfirm.type === "warning" ? "このまま進む" : "次へ進む"}</button>
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 未インストールフォント警告ダイアログ */}
+        {showFontWarn && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => setShowFontWarn(null)}>
+            <div className="bg-bg-secondary border border-border rounded-2xl p-5 shadow-xl w-[420px] space-y-3" onClick={(e) => e.stopPropagation()}>
+              <p className="text-sm font-medium text-center text-warning">⚠ 未インストールのフォントがあります</p>
+              <p className="text-xs text-text-secondary text-center">以下のフォントがシステムに見つかりません。このまま進めますか？</p>
+              <div className="max-h-40 overflow-y-auto bg-bg-tertiary rounded-lg p-2 border border-border/50">
+                <ul className="text-[10px] text-text-primary space-y-0.5">
+                  {showFontWarn.missing.map((f) => <li key={f} className="truncate">• {f}</li>)}
+                </ul>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowFontWarn(null)} className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors">戻る</button>
+                <button
+                  onClick={() => { setShowFontWarn(null); }}
+                  className="flex-1 px-3 py-2 text-xs font-medium text-white bg-warning rounded-lg hover:bg-warning/90 transition-colors"
+                >このまま進む</button>
               </div>
             </div>
           </div>
@@ -672,7 +738,7 @@ function ProofLoadOverlay({ onClose, onProceed }: { onClose: () => void; onProce
 
   const hasPsd = (!!psdPath && !psdPath.startsWith("(ZIP:")) || !!pendingZipPath;
   const hasImage = !!imagePath;
-  const canProceed = (!!psdPath && !psdPath.startsWith("(ZIP:")) && hasImage && !!selectedSpecId;
+  const canProceed = (!!psdPath && !psdPath.startsWith("(ZIP:")) && !!selectedSpecId;
 
   const pickFolder = async (title: string): Promise<string> => {
     const p = await tauriDialogOpen({ directory: true, title });
@@ -771,11 +837,11 @@ function ProofLoadOverlay({ onClose, onProceed }: { onClose: () => void; onProce
 
         {/* データ選択 */}
         <div className="space-y-2">
-          {/* PSD → 検A */}
+          {/* PSD */}
           <div className={`p-2.5 rounded-lg border ${hasPsd ? "bg-success/5 border-success/20" : "bg-bg-tertiary border-border/50"}`}>
             <div className="flex items-center gap-2">
               <span className={`text-base ${hasPsd ? "text-success" : "text-text-muted"}`}>{hasPsd ? "✓" : "○"}</span>
-              <span className="text-[10px] font-medium text-text-primary flex-1">PSD → 検A</span>
+              <span className="text-[10px] font-medium text-text-primary flex-1">PSD</span>
               <button onClick={async () => { const p = await pickFolder("PSDフォルダ"); if (p) setPsdPath(p); }}
                 className="px-2 py-0.5 text-[9px] rounded bg-bg-primary text-text-secondary hover:text-accent border border-border/50">フォルダ</button>
               <button onClick={async () => {
@@ -817,11 +883,11 @@ function ProofLoadOverlay({ onClose, onProceed }: { onClose: () => void; onProce
             </div>
             {hasPsd && <div className="text-[8px] text-text-muted truncate mt-1 ml-6">{pendingZipPath ? `ZIP: ${pendingZipPath.replace(/\\/g, "/").split("/").pop()} (画像/PDF選択後に解凍)` : shortPath(psdPath)}</div>}
           </div>
-          {/* 画像/PDF → 検B */}
+          {/* 画像/PDF */}
           <div className={`p-2.5 rounded-lg border ${hasImage ? "bg-success/5 border-success/20" : "bg-bg-tertiary border-border/50"}`}>
             <div className="flex items-center gap-2">
               <span className={`text-base ${hasImage ? "text-success" : "text-text-muted"}`}>{hasImage ? "✓" : "○"}</span>
-              <span className="text-[10px] font-medium text-text-primary flex-1">画像/PDF → 検B</span>
+              <span className="text-[10px] font-medium text-text-primary flex-1">画像/PDF <span className="text-text-muted">(任意)</span></span>
               <button onClick={async () => {
                 const p = await pickFolder("画像/PDFフォルダ");
                 if (!p) return;
@@ -901,7 +967,7 @@ function ProofLoadOverlay({ onClose, onProceed }: { onClose: () => void; onProce
           <button onClick={onClose} className="flex-1 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors">戻る</button>
           <button onClick={handleProceed} disabled={!canProceed}
             className="flex-1 py-2 text-xs font-medium text-white bg-accent rounded-lg hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-            {!hasPsd ? "PSDを選択してください" : !hasImage ? "画像/PDFを選択してください" : !selectedSpecId ? "カラーモードを選択" : "確認完了 → 次の工程へ"}
+            {!hasPsd ? "PSDを選択してください" : !selectedSpecId ? "カラーモードを選択" : "確認完了 → 次の工程へ"}
           </button>
         </div>
       </div>

@@ -454,6 +454,16 @@ export function RequestPrepView() {
               <button onClick={() => setShowWfComplete(false)} className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors">いいえ</button>
               <button onClick={async () => {
                 setShowWfComplete(false);
+                // Notionページが設定されていればデフォルトブラウザで開く
+                const raw = useScanPsdStore.getState().workInfo.notionPage?.trim() || "";
+                if (raw) {
+                  try {
+                    await invoke("open_url_in_browser", { url: raw });
+                  } catch (e) {
+                    console.error("Failed to open Notion URL:", e);
+                    alert(`Notionページをブラウザで開けませんでした:\n${raw}\n\n${e}`);
+                  }
+                }
                 const { useWorkflowStore } = await import("../../store/workflowStore");
                 useWorkflowStore.getState().abortWorkflow();
               }} className="flex-1 px-3 py-2 text-xs font-medium text-white bg-success rounded-lg hover:bg-success/90 transition-colors">はい</button>

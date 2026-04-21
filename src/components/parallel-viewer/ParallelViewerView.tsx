@@ -8,6 +8,7 @@
  */
 import { useEffect, useCallback, useRef } from "react";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { useParallelStore } from "../../store/parallelStore";
 import { useViewStore } from "../../store/viewStore";
 
@@ -66,6 +67,16 @@ export function ParallelViewerView({ externalPathA, externalPathB }: Props = {})
         if (!e.ctrlKey && !e.metaKey) {
           e.preventDefault();
           store.setSyncMode(!store.syncMode);
+        }
+      } else if (e.key === "p" || e.key === "P") {
+        if (!e.ctrlKey && !e.metaKey) {
+          e.preventDefault();
+          const active = store.activePanel;
+          const panel = store[active];
+          const file = panel.files[panel.index];
+          if (file?.filePath) {
+            invoke("kenban_open_file_in_photoshop", { path: file.filePath }).catch(console.error);
+          }
         }
       }
     };
@@ -190,6 +201,15 @@ function PanelView({ side, onSelectFolder, onSelectFile }: PanelProps) {
     await store.expandPdfPages(side, file.filePath);
   }, [store, side, file]);
 
+  const handleOpenInPhotoshop = useCallback(async () => {
+    if (!file?.filePath) return;
+    try {
+      await invoke("kenban_open_file_in_photoshop", { path: file.filePath });
+    } catch (e) {
+      console.error("Photoshop open error:", e);
+    }
+  }, [file]);
+
   const sideColor = side === "A" ? "text-blue-400" : "text-orange-400";
 
   return (
@@ -220,6 +240,16 @@ function PanelView({ side, onSelectFolder, onSelectFile }: PanelProps) {
             title="PDFを単ページ化"
           >
             単ページ化
+          </button>
+        )}
+
+        {file && (
+          <button
+            onClick={handleOpenInPhotoshop}
+            className="px-1.5 py-0.5 text-[9px] text-text-muted hover:text-text-primary bg-bg-tertiary rounded transition-colors"
+            title="Photoshopで開く (P)"
+          >
+            Ps
           </button>
         )}
 

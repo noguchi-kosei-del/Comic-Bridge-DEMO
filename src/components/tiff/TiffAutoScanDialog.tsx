@@ -235,6 +235,7 @@ export function TiffAutoScanDialog({
             </span>
           </div>
 
+
           {/* JSON登録トグル */}
           <div className="bg-bg-tertiary rounded-xl p-3 space-y-3">
             <label className="flex items-center gap-2.5 cursor-pointer">

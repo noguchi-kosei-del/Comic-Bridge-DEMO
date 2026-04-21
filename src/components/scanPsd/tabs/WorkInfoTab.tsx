@@ -175,6 +175,25 @@ export function WorkInfoTab() {
       <Section title="その他" accent="#9090a0">
         <div className="space-y-2">
           <div>
+            <Label>Notionページ</Label>
+            <div className="flex gap-1">
+              <Input
+                value={workInfo.notionPage || ""}
+                onChange={(v) => setWorkInfo({ notionPage: v })}
+                placeholder="https://notion.so/... （WF完了時にブラウザで開く）"
+              />
+              {workInfo.notionPage && (
+                <button
+                  onClick={() => invoke("open_with_default_app", { filePath: workInfo.notionPage }).catch(console.error)}
+                  className="px-2 text-[10px] text-accent hover:text-accent-hover bg-accent/10 rounded-lg border border-accent/30 flex-shrink-0"
+                  title="ブラウザで開く"
+                >
+                  開く
+                </button>
+              )}
+            </div>
+          </div>
+          <div>
             <Label>保存パス</Label>
             <Input
               value={workInfo.storagePath}
