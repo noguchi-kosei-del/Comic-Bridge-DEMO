@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Comic-Bridge DEMO",
-  "version": "3.8.1",
+  "version": "1.0.0",
   "identifier": "com.comic-bridge-integrated.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -59,9 +59,9 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/yamamoto-ryusei-ux/COMIC-Bridge-integrated/releases/latest/download/latest.json"
+        "https://github.com/noguchi-kosei-del/Comic-Bridge-DEMO/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDA5OThEQ0U5MDA4OUVFRTMKUldUajdva0E2ZHlZQ2FydWVSSjlhSVcrTlY3RXdmbWk2MlFjM2s2b0NxT0w3L0JwclhUL0NBWHIK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY2MkI0MUY3NzBCMDA5QTMKUldTakNiQnc5MEVyOWtWYmhDaEgvRWkzZUMyM1lIaTllamV6TTEwVmczUWRmN2JtZ1U1WUtGSGcK"
     }
   }
 }
