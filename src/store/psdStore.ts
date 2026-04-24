@@ -25,7 +25,6 @@ interface PsdStore {
   psdOnlyFilter: boolean; // 互換用（fileTypeFilterで管理）
   fileTypeFilter: "all" | "psd" | "pdf" | "image" | "text";
   pdfDisplayMode: "page" | "file"; // page=ページごと展開, file=ファイル単位
-  contentLocked: boolean; // 中央画面ロック（アドレス変更時にファイルリストを保持）
   refreshCounter: number; // folderContents再取得用トリガー
   /** ファイル操作Undoスタック */
   fileOpsUndoStack: FileOpsUndoEntry[];
@@ -59,7 +58,6 @@ interface PsdStore {
   setPsdOnlyFilter: (v: boolean) => void;
   setFileTypeFilter: (v: "all" | "psd" | "pdf" | "image" | "text") => void;
   setPdfDisplayMode: (mode: "page" | "file") => void;
-  setContentLocked: (locked: boolean) => void;
   triggerRefresh: () => void;
   pushFileOpsUndo: (op: FileOpsUndoEntry) => void;
   popFileOpsUndo: () => FileOpsUndoEntry | undefined;
@@ -85,7 +83,6 @@ export const usePsdStore = create<PsdStore>((set, get) => ({
   psdOnlyFilter: false,
   fileTypeFilter: "all" as const,
   pdfDisplayMode: "file",
-  contentLocked: false,
   refreshCounter: 0,
   fileOpsUndoStack: [],
 
@@ -186,7 +183,6 @@ export const usePsdStore = create<PsdStore>((set, get) => ({
   setPsdOnlyFilter: (psdOnlyFilter) => set({ psdOnlyFilter, fileTypeFilter: psdOnlyFilter ? "psd" : "all" }),
   setFileTypeFilter: (fileTypeFilter) => set({ fileTypeFilter, psdOnlyFilter: fileTypeFilter === "psd" }),
   setPdfDisplayMode: (pdfDisplayMode) => set({ pdfDisplayMode }),
-  setContentLocked: (contentLocked) => set({ contentLocked }),
   triggerRefresh: () => set((s) => ({ refreshCounter: s.refreshCounter + 1 })),
   pushFileOpsUndo: (op) => set((s) => ({ fileOpsUndoStack: [...s.fileOpsUndoStack.slice(-9), op] })),
   popFileOpsUndo: () => {

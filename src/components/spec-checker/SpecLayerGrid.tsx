@@ -1,17 +1,17 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { usePsdStore } from "../../store/psdStore";
-import { LayerTree } from "../metadata/LayerTree";
 import {
   collectTextLayers,
   useFontResolver,
 } from "../../hooks/useFontResolver";
 import { LayerDiagnosticsBar } from "../layer-control/LayerPreviewPanel";
 
-export function SpecLayerGrid() {
+export type LayerLayoutMode = "grid" | "list";
+
+export function SpecLayerGrid({ layoutMode = "grid" }: { layoutMode?: LayerLayoutMode } = {}) {
   const files = usePsdStore((s) => s.files);
   const activeFileId = usePsdStore((s) => s.activeFileId);
   const selectFile = usePsdStore((s) => s.selectFile);
-  const [textOnly, setTextOnly] = useState(false);
   const { fontInfo } = useFontResolver(files);
 
   // 全ファイル合計サマリー
@@ -45,19 +45,6 @@ export function SpecLayerGrid() {
 
   return (
     <div className="h-full overflow-auto select-none">
-      {/* Controls */}
-      <div className="sticky top-0 z-10 bg-bg-primary/95 backdrop-blur-sm px-4 py-2 border-b border-border/30 flex items-center gap-3">
-        <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-text-secondary hover:text-text-primary">
-          <input
-            type="checkbox"
-            checked={textOnly}
-            onChange={(e) => setTextOnly(e.target.checked)}
-            className="rounded border-border accent-accent w-3.5 h-3.5"
-          />
-          写植仕様のみ表示
-        </label>
-      </div>
-
       {/* 診断バー: 未インストールフォント + 共有フォルダ検索 + 白フチ/カーニング統計 */}
       <LayerDiagnosticsBar targetFiles={files} />
 
@@ -112,29 +99,48 @@ export function SpecLayerGrid() {
         </div>
       )}
 
-      <div
-        className="grid gap-3 p-4"
-        style={{
-          gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-        }}
-      >
-        {files.map((file) => {
-          const textLayers = file.metadata?.layerTree
-            ? collectTextLayers(file.metadata.layerTree)
-            : [];
-          return (
-            <SpecLayerCard
-              key={file.id}
-              file={file}
-              textLayers={textLayers}
-              isActive={activeFileId === file.id}
-              textOnly={textOnly}
-              fontInfo={fontInfo}
-              onSelect={() => selectFile(file.id)}
-            />
-          );
-        })}
-      </div>
+      {layoutMode === "grid" ? (
+        <div
+          className="grid gap-3 p-4"
+          style={{
+            gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+          }}
+        >
+          {files.map((file) => {
+            const textLayers = file.metadata?.layerTree
+              ? collectTextLayers(file.metadata.layerTree)
+              : [];
+            return (
+              <SpecLayerCard
+                key={file.id}
+                file={file}
+                textLayers={textLayers}
+                isActive={activeFileId === file.id}
+                fontInfo={fontInfo}
+                onSelect={() => selectFile(file.id)}
+              />
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1 p-2">
+          {files.map((file) => {
+            const textLayers = file.metadata?.layerTree
+              ? collectTextLayers(file.metadata.layerTree)
+              : [];
+            return (
+              <SpecLayerRow
+                key={file.id}
+                file={file}
+                textLayers={textLayers}
+                isActive={activeFileId === file.id}
+                fontInfo={fontInfo}
+                onSelect={() => selectFile(file.id)}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -144,14 +150,12 @@ function SpecLayerCard({
   file,
   textLayers,
   isActive,
-  textOnly,
   fontInfo,
   onSelect,
 }: {
   file: any;
   textLayers: any[];
   isActive: boolean;
-  textOnly: boolean;
   fontInfo: any;
   onSelect: () => void;
 }) {
@@ -227,19 +231,66 @@ function SpecLayerCard({
             );
           })}
         </div>
-      ) : textOnly ? (
+      ) : (
         <div className="flex items-center justify-center py-4 text-[10px] text-text-muted">テキストレイヤーなし</div>
-      ) : null}
+      )}
+    </div>
+  );
+}
 
-      {/* Layer Tree (hidden when textOnly) */}
-      {!textOnly && (
-        <div className="p-1.5">
-          {file.metadata?.layerTree?.length ? (
-            <LayerTree layers={file.metadata.layerTree} />
-          ) : (
-            <div className="flex items-center justify-center py-4 text-[10px] text-text-muted">レイヤー情報なし</div>
-          )}
-        </div>
+/** リスト表示用の 1 行 */
+function SpecLayerRow({
+  file,
+  textLayers,
+  isActive,
+  fontInfo,
+  onSelect,
+}: {
+  file: any;
+  textLayers: any[];
+  isActive: boolean;
+  fontInfo: any;
+  onSelect: () => void;
+}) {
+  const mainFont = textLayers[0]?.textInfo?.fonts?.[0];
+  const fontLabel = mainFont ? fontInfo.getFontLabel(mainFont) : null;
+  const fontColor = mainFont ? fontInfo.getFontColor(mainFont) : "#888";
+  const sizes = useMemo(() => {
+    const s = new Set<number>();
+    for (const tl of textLayers) for (const n of tl.textInfo?.fontSizes ?? []) s.add(n);
+    return [...s].sort((a, b) => a - b);
+  }, [textLayers]);
+
+  return (
+    <div
+      className={`border rounded-lg cursor-pointer transition-all px-3 py-2 flex items-center gap-3 text-[11px] ${
+        isActive
+          ? "border-accent ring-1 ring-accent/30 bg-accent/5"
+          : "border-border bg-bg-secondary/50 hover:bg-bg-secondary/80 hover:border-border-strong/50"
+      }`}
+      onClick={(e) => { if (!e.shiftKey && !e.ctrlKey && !e.metaKey) onSelect(); }}
+    >
+      <span className={`font-medium truncate flex-1 ${isActive ? "text-accent" : "text-text-primary"}`}>
+        {file.fileName.replace(/\.(psd|psb)$/i, "")}
+      </span>
+      <span className="text-[10px] text-text-muted flex-shrink-0 tabular-nums">
+        {file.metadata?.layerCount ?? 0}L
+      </span>
+      {textLayers.length > 0 ? (
+        <span className="text-[10px] text-accent/70 flex-shrink-0 tabular-nums">{textLayers.length}T</span>
+      ) : (
+        <span className="text-[10px] text-text-muted/40 flex-shrink-0">テキストなし</span>
+      )}
+      {fontLabel && (
+        <span className="text-[10px] truncate max-w-[200px]" style={{ color: fontColor }}>
+          {fontLabel}
+          {fontInfo.isMissing(mainFont) && <span className="text-error ml-1">[未]</span>}
+        </span>
+      )}
+      {sizes.length > 0 && (
+        <span className="text-[10px] text-text-muted flex-shrink-0 tabular-nums">
+          {sizes.join("/")}pt
+        </span>
       )}
     </div>
   );

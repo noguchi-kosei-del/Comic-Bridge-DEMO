@@ -497,20 +497,20 @@ function DropCard({
   const colorStyles = {
     pink: {
       border: isDragOver
-        ? "border-accent bg-accent/10 shadow-[inset_0_0_40px_rgba(255,90,138,0.12)]"
+        ? "border-accent bg-accent/10 shadow-[inset_0_0_40px_rgba(58,123,213,0.14)]"
         : folderPath
           ? "border-accent/40 bg-accent/5"
           : "border-text-muted/20 hover:border-accent/40 hover:bg-accent/5",
-      icon: "from-accent to-accent-secondary",
+      icon: "from-accent to-accent-hover",
       badge: "bg-accent/15 text-accent",
     },
     purple: {
       border: isDragOver
-        ? "border-accent-secondary bg-accent-secondary/10 shadow-[inset_0_0_40px_rgba(124,92,255,0.12)]"
+        ? "border-accent-secondary bg-accent-secondary/10 shadow-[inset_0_0_40px_rgba(0,120,212,0.14)]"
         : folderPath
           ? "border-accent-secondary/40 bg-accent-secondary/5"
           : "border-text-muted/20 hover:border-accent-secondary/40 hover:bg-accent-secondary/5",
-      icon: "from-accent-secondary to-[#a78bfa]",
+      icon: "from-accent-secondary to-accent-tertiary",
       badge: "bg-accent-secondary/15 text-accent-secondary",
     },
     amber: {
@@ -699,7 +699,7 @@ function BatchTargetCard({
         transition-all duration-300 min-h-[280px]
         ${
           isDragOver
-            ? "border-accent-secondary bg-accent-secondary/10 shadow-[inset_0_0_40px_rgba(124,92,255,0.12)] scale-[1.02]"
+            ? "border-accent-secondary bg-accent-secondary/10 shadow-[inset_0_0_40px_rgba(0,120,212,0.14)] scale-[1.02]"
             : hasAny
               ? "border-accent-secondary/40 bg-accent-secondary/5"
               : "border-text-muted/20 hover:border-accent-secondary/40"
@@ -708,7 +708,7 @@ function BatchTargetCard({
     >
       {/* ヘッダー */}
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent-secondary to-[#a78bfa] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent-secondary to-accent-tertiary flex items-center justify-center">
           <span className="text-white text-xs font-bold">B</span>
         </div>
         <div className="text-left">

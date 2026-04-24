@@ -30,9 +30,6 @@ export function useGlobalDragDrop() {
           const paths = event.payload.paths;
           if (!paths || paths.length === 0) return;
 
-          // D&D時に自動ロック
-          usePsdStore.getState().setContentLocked(true);
-
           // ドロップされたフォルダパスを記録（サブフォルダ再スキャン用）
           const folderPaths: string[] = [];
           const imageFiles: string[] = [];
@@ -99,10 +96,6 @@ export function useGlobalDragDrop() {
           } else if (folderPaths.length > 0) {
             // フォルダのみでファイルがない場合 → loadFolderで更新（追加ではなく置き換え）
             await loadFolder(folderPaths[0]);
-            // PSDがなければロック解除
-            if (usePsdStore.getState().files.length === 0) {
-              usePsdStore.getState().setContentLocked(false);
-            }
           }
           // folderContentsも更新
           usePsdStore.getState().triggerRefresh();

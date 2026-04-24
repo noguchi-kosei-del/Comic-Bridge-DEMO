@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { usePsdStore } from "../../store/psdStore";
 import { useOpenInPhotoshop } from "../../hooks/useOpenInPhotoshop";
-import { CompactFileList } from "../common/CompactFileList";
 import { SpecTextGrid, type TextIssueFilter } from "../spec-checker/SpecTextGrid";
 import { SpecViewerPanel } from "../spec-checker/SpecViewerPanel";
 import { SpecScanJsonDialog } from "../spec-checker/SpecScanJsonDialog";
@@ -50,7 +49,6 @@ export function TypsettingView() {
       <div className="flex-1 flex overflow-hidden">
         {subTab === "spec" && (
           <>
-            <CompactFileList className="w-52 flex-shrink-0 border-r border-border" />
             <div className="flex-1 overflow-hidden relative">
               <SpecTextGrid
                 onFilterFont={(font) => {
@@ -76,7 +74,7 @@ export function TypsettingView() {
               {files.length > 0 && (
                 <div className="absolute bottom-6 right-6 z-10 flex flex-col items-end gap-4">
                   <button
-                    className="h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary border-2 border-accent/40 text-accent hover:bg-bg-elevated hover:border-accent/60 hover:shadow-[0_6px_24px_rgba(255,90,138,0.25)] active:scale-[0.97]"
+                    className="h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary border-2 border-accent/40 text-accent hover:bg-bg-elevated hover:border-accent/60 hover:shadow-[0_6px_24px_rgba(58,123,213,0.25)] active:scale-[0.97]"
                     onClick={() => setShowScanJsonDialog(true)}
                   >
                     <svg

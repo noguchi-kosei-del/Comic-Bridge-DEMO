@@ -1,14 +1,16 @@
 // @ts-nocheck
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { FileText, FileJson, ClipboardCheck, Shield, Check, RotateCcw, type LucideIcon } from "lucide-react";
 import { useViewStore, validateAndSetABPath } from "../../store/viewStore";
 import { usePsdStore } from "../../store/psdStore";
 import { useSpecStore } from "../../store/specStore";
 import { useAppUpdater } from "../../hooks/useAppUpdater";
-import { useUnifiedViewerStore, type FontPresetEntry } from "../../store/unifiedViewerStore";
+import { useUnifiedViewerStore, useTextEditorViewerStore, type FontPresetEntry } from "../../store/unifiedViewerStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useProgenStore } from "../../store/progenStore";
-import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+import { open as dialogOpen, ask as dialogAsk, message as dialogMessage } from "@tauri-apps/plugin-dialog";
+import { globalLoadFolder } from "../../lib/psdLoaderRegistry";
 import { invoke } from "@tauri-apps/api/core";
 import type { ProofreadingCheckItem } from "../../types/typesettingCheck";
 import { JsonFileBrowser } from "../scanPsd/JsonFileBrowser";
@@ -23,22 +25,40 @@ export function TopNav() {
   const setActiveView = useViewStore((s) => s.setActiveView);
   const files = usePsdStore((s) => s.files);
   const checkResults = useSpecStore((s) => s.checkResults);
+  const textLoadedForReset = useUnifiedViewerStore((s) => s.textContent.length > 0 || !!s.textFilePath);
+  const textEditorLoadedForReset = useTextEditorViewerStore((s) => s.textContent.length > 0 || !!s.textFilePath);
+  const presetsLoadedForReset = useUnifiedViewerStore((s) => s.fontPresets.length > 0 || !!s.presetJsonPath);
+  const checkLoadedForReset = useUnifiedViewerStore((s) => !!s.checkData);
   const updater = useAppUpdater();
   const viewerStore = useUnifiedViewerStore();
   const jsonFolderPath = useScanPsdStore((s) => s.jsonFolderPath);
   const jsonBrowserMode = useViewStore((s) => s.jsonBrowserMode);
   const setJsonBrowserMode = useViewStore((s) => s.setJsonBrowserMode);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const passedCount = Array.from(checkResults.values()).filter((r) => r.passed).length;
   const failedCount = Array.from(checkResults.values()).filter((r) => !r.passed).length;
 
   // JSON file selection handler
   const handleJsonSelect = useCallback(async (filePath: string) => {
+    const mode = jsonBrowserMode;
+    const ext = filePath.substring(filePath.lastIndexOf(".") + 1).toLowerCase();
+    if (ext !== "json") {
+      await dialogMessage("対応していないファイル形式です。.json ファイルを選択してください。", {
+        title: mode === "check" ? "校正JSON読み込みエラー" : "作品情報JSON読み込みエラー",
+        kind: "error",
+      });
+      setJsonBrowserMode(null);
+      return;
+    }
     try {
       const content = await invoke<string>("read_text_file", { filePath });
-      const data = JSON.parse(content);
-      if (jsonBrowserMode === "check") {
+      let data: any;
+      try {
+        data = JSON.parse(content);
+      } catch (parseErr) {
+        throw new Error(`JSONの解析に失敗しました: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
+      }
+      if (mode === "check") {
         const allItems: ProofreadingCheckItem[] = [];
         const parse = (src: any, fallbackKind: "correctness" | "proposal") => {
           const arr = Array.isArray(src) ? src : Array.isArray(src?.items) ? src.items : null;
@@ -48,6 +68,9 @@ export function TopNav() {
         };
         if (data.checks) { parse(data.checks.simple, "correctness"); parse(data.checks.variation, "proposal"); }
         else if (Array.isArray(data)) { parse(data, "correctness"); }
+        else {
+          throw new Error("校正JSONの形式が正しくありません（checks フィールド、または配列形式が必要です）。");
+        }
         viewerStore.setCheckData({
           title: data.work || "", fileName: filePath.substring(filePath.lastIndexOf("\\") + 1), filePath,
           allItems, correctnessItems: allItems.filter((i) => i.checkKind === "correctness"), proposalItems: allItems.filter((i) => i.checkKind === "proposal"),
@@ -64,10 +87,14 @@ export function TopNav() {
                 presets.push({ font: p.font || p.postScriptName, name: p.name || p.displayName || "", subName: p.subName || "" });
           }
         }
+        const wi = data?.presetData?.workInfo ?? data?.workInfo;
+        const hasWorkInfo = wi && typeof wi === "object";
+        if (presets.length === 0 && !hasWorkInfo) {
+          throw new Error("作品情報JSONの形式が正しくありません（presets / workInfo いずれも見つかりません）。");
+        }
         if (presets.length > 0) { viewerStore.setFontPresets(presets); viewerStore.setPresetJsonPath(filePath); }
         // workInfo（ジャンル/タイトル/巻数等）をscanPsdStoreにセット
-        const wi = data?.presetData?.workInfo ?? data?.workInfo;
-        if (wi && typeof wi === "object") {
+        if (hasWorkInfo) {
           const scanStore = useScanPsdStore.getState();
           scanStore.setWorkInfo({
             ...scanStore.workInfo,
@@ -89,7 +116,12 @@ export function TopNav() {
           await progenStore.loadMasterRule(wi.label);
         }
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      await dialogMessage(
+        `${mode === "check" ? "校正JSON" : "作品情報JSON"}を読み込めませんでした。\n\n${e instanceof Error ? e.message : String(e)}`,
+        { title: mode === "check" ? "校正JSON読み込みエラー" : "作品情報JSON読み込みエラー", kind: "error" },
+      );
+    }
     setJsonBrowserMode(null);
   }, [jsonBrowserMode]);
 
@@ -106,35 +138,80 @@ export function TopNav() {
 
       {!wfActive && (
         <>
-          {/* ツール + 設定 */}
+          {/* ツール + 設定 + フォルダから開く */}
           <div className="flex items-center gap-1 flex-shrink-0">
             <TopNavToolMenu />
             <SettingsButton />
-          </div>
-
-          {/* リセットボタン */}
-          <button
-            className="w-7 h-7 flex items-center justify-center rounded transition-colors text-text-muted hover:text-accent hover:bg-accent/10"
-            onClick={() => {
-              const psd = usePsdStore.getState();
-              const uv = useUnifiedViewerStore.getState();
-              const hasData = psd.files.length > 0 || uv.textContent.length > 0 || uv.fontPresets.length > 0 || !!uv.checkData;
-              if (hasData) {
-                setShowResetConfirm(true);
-              } else {
-                psd.clearFiles();
-                psd.setCurrentFolderPath(null);
-                psd.setContentLocked(false);
-                psd.setSpecViewMode("thumbnails");
-                setActiveView("specCheck");
+            <button
+              onClick={async () => {
+                const path = await dialogOpen({
+                  directory: true,
+                  multiple: false,
+                  defaultPath: usePsdStore.getState().currentFolderPath || undefined,
+                });
+                if (!path) return;
+                const p = (path as string).replace(/\/+$|\\+$/g, "");
+                usePsdStore.getState().setCurrentFolderPath(p);
+                try { await globalLoadFolder(p); } catch { /* ignore */ }
+                usePsdStore.getState().triggerRefresh();
+              }}
+              className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-primary rounded hover:bg-bg-tertiary transition-colors"
+              title="フォルダから開く"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+            </button>
+            <button
+              onClick={async () => {
+                const ps = usePsdStore.getState();
+                const vs = useUnifiedViewerStore.getState();
+                const ts = useTextEditorViewerStore.getState();
+                const hasAny =
+                  ps.files.length > 0 ||
+                  vs.textContent.length > 0 ||
+                  !!vs.textFilePath ||
+                  ts.textContent.length > 0 ||
+                  !!ts.textFilePath ||
+                  vs.fontPresets.length > 0 ||
+                  !!vs.presetJsonPath ||
+                  !!vs.checkData;
+                if (!hasAny) return;
+                const ok = await dialogAsk("読み込みをリセットします。よろしいですか？", {
+                  title: "読み込みリセット",
+                  kind: "warning",
+                });
+                if (!ok) return;
+                // PSD フォルダ
+                ps.clearFiles();
+                ps.triggerRefresh();
+                // テキスト（両方のビューアーインスタンスをクリア）
+                for (const s of [vs, ts]) {
+                  s.setTextContent("");
+                  s.setTextFilePath(null);
+                  s.setTextHeader([]);
+                  s.setTextPages([]);
+                  s.setIsDirty(false);
+                }
+                // 作品情報JSON
+                vs.setFontPresets([]);
+                vs.setPresetJsonPath(null);
+                // 校正JSON
+                vs.setCheckData(null);
+              }}
+              disabled={
+                files.length === 0 &&
+                !textLoadedForReset &&
+                !textEditorLoadedForReset &&
+                !presetsLoadedForReset &&
+                !checkLoadedForReset
               }
-            }}
-            title="リセットしてホームに戻る"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
+              className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-primary rounded hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-text-muted disabled:hover:bg-transparent"
+              title="読み込みリセット"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </div>
 
           <div className="w-px h-8 bg-border flex-shrink-0" />
 
@@ -159,12 +236,12 @@ export function TopNav() {
           {checkResults.size > 0 && (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-bg-tertiary">
               <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                <span className="text-xs font-bold text-success leading-none">○</span>
                 <span className="text-xs font-medium text-success">{passedCount}</span>
               </div>
               <span className="w-px h-3 bg-border" />
               <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-error" />
+                <span className="text-xs font-bold text-error leading-none">×</span>
                 <span className="text-xs font-medium text-error">{failedCount}</span>
               </div>
             </div>
@@ -172,12 +249,9 @@ export function TopNav() {
         </div>
       )}
 
-      {/* Version + Update */}
-      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-        {updater.appVersion && (
-          <span className="text-[10px] text-text-muted/60 font-mono">v{updater.appVersion}</span>
-        )}
-        {updater.phase === "available" ? (
+      {/* 更新検出時のみ: 更新可用バッジ（バージョン表示は設定パネルへ移設済み） */}
+      {updater.phase === "available" && (
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
           <button
             onClick={() => updater.downloadAndInstall()}
             className="relative flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-accent-tertiary bg-accent-tertiary/10 rounded-lg hover:bg-accent-tertiary/20 transition-colors"
@@ -185,18 +259,8 @@ export function TopNav() {
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent-tertiary animate-pulse" />
             v{updater.updateInfo?.version}
           </button>
-        ) : updater.phase === "checking" ? (
-          <svg className="w-3.5 h-3.5 text-text-muted animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        ) : updater.phase === "up-to-date" ? (
-          <span className="text-[10px] text-accent-tertiary">
-            <svg className="w-3 h-3 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </span>
-        ) : null}
-      </div>
+        </div>
+      )}
 
       {/* Update Prompt Dialog */}
       {updater.showPrompt && updater.updateInfo &&
@@ -259,44 +323,6 @@ export function TopNav() {
           document.body,
         )}
 
-      {/* リセット確認ダイアログ */}
-      {showResetConfirm && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" onClick={() => setShowResetConfirm(false)}>
-          <div className="bg-bg-secondary border border-border rounded-2xl p-6 shadow-xl max-w-xs text-center space-y-3" onClick={(e) => e.stopPropagation()}>
-            <div className="w-10 h-10 mx-auto rounded-xl bg-warning/15 flex items-center justify-center">
-              <svg className="w-5 h-5 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <p className="text-xs text-text-primary font-medium">読み込み中のファイル・テキスト・JSONを<br />すべてクリアしますか？</p>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors"
-              >キャンセル</button>
-              <button
-                onClick={() => {
-                  setShowResetConfirm(false);
-                  usePsdStore.getState().clearFiles();
-                  usePsdStore.getState().setCurrentFolderPath(null);
-                  usePsdStore.getState().setContentLocked(false);
-                  usePsdStore.getState().setSpecViewMode("thumbnails");
-                  const uv = useUnifiedViewerStore.getState();
-                  uv.setTextContent(""); uv.setTextFilePath(null); uv.setTextHeader([]); uv.setTextPages([]); uv.setIsDirty(false);
-                  uv.setFontPresets([]); uv.setPresetJsonPath(null);
-                  uv.setCheckData(null);
-                  useViewStore.getState().setKenbanPathA(null);
-                  useViewStore.getState().setKenbanPathB(null);
-                  usePsdStore.getState().triggerRefresh();
-                  setActiveView("specCheck");
-                }}
-                className="flex-1 px-3 py-2 text-xs font-medium text-white bg-error rounded-lg hover:bg-error/90 transition-colors"
-              >リセット</button>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
 
       {/* JSON File Browser Modal */}
       {jsonBrowserMode &&
@@ -344,57 +370,46 @@ function TopNavDataButtons() {
   const checkTooltip = checkData
     ? `校正JSON: ${checkData.title || ""}${checkData.fileName ? ` (${checkData.fileName})` : ""}`
     : "校正JSON";
-  const kenbanPathA = useViewStore((s) => s.kenbanPathA);
-  const kenbanPathB = useViewStore((s) => s.kenbanPathB);
   const wfActive = useWorkflowStore((s) => s.activeWorkflow !== null);
 
-  const [kenbanPickMode, setKenbanPickMode] = useState<{ side: "A" | "B" } | null>(null);
-  const pickRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!kenbanPickMode) return;
-    const h = (e: MouseEvent) => { if (pickRef.current && !pickRef.current.contains(e.target as Node)) setKenbanPickMode(null); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [kenbanPickMode]);
-
   const handleOpenText = useCallback(async () => {
-    const path = await dialogOpen({ filters: [{ name: "テキスト", extensions: ["txt"] }], multiple: false });
+    const path = await dialogOpen({
+      filters: [
+        { name: "テキスト", extensions: ["txt"] },
+        { name: "すべてのファイル", extensions: ["*"] },
+      ],
+      multiple: false,
+    });
     if (!path) return;
+    const p = path as string;
+    const ext = p.substring(p.lastIndexOf(".") + 1).toLowerCase();
+    if (ext !== "txt") {
+      await dialogMessage("対応していないファイル形式です。.txt ファイルを選択してください。", {
+        title: "テキスト読み込みエラー",
+        kind: "error",
+      });
+      return;
+    }
     try {
-      const content = await invoke<string>("read_text_file", { filePath: path as string });
+      const content = await invoke<string>("read_text_file", { filePath: p });
+      if (typeof content !== "string") {
+        throw new Error("ファイル内容を文字列として取得できませんでした。");
+      }
       const vs = useUnifiedViewerStore.getState();
       vs.setTextContent(content);
-      vs.setTextFilePath(path as string);
+      vs.setTextFilePath(p);
       vs.setIsDirty(false);
       // COMIC-POTフォーマットをパースしてページ/ブロックに分割
       const { header, pages } = parseComicPotText(content);
       vs.setTextHeader(header);
       vs.setTextPages(pages);
-    } catch { /* ignore */ }
-  }, []);
-
-  const handleKenbanPick = async (type: "folder" | "file") => {
-    if (!kenbanPickMode) return;
-    const side = kenbanPickMode.side;
-    setKenbanPickMode(null);
-    let selected: string | null = null;
-    if (type === "folder") {
-      const r = await dialogOpen({ directory: true, multiple: false, title: `${side}側: フォルダを選択` });
-      if (r) selected = r as string;
-    } else {
-      const r = await dialogOpen({
-        directory: false, multiple: false, title: `${side}側: ファイルを選択`,
-        filters: [{ name: "対応ファイル", extensions: ["pdf", "psd", "tif", "tiff", "jpg", "jpeg", "png", "bmp"] }],
-      });
-      if (r) selected = r as string;
+    } catch (e) {
+      await dialogMessage(
+        `テキストファイルを読み込めませんでした。ファイル形式または文字コードが対応していない可能性があります。\n\n${e instanceof Error ? e.message : String(e)}`,
+        { title: "テキスト読み込みエラー", kind: "error" },
+      );
     }
-    if (!selected) return;
-    if (side === "A") useViewStore.getState().setKenbanPathA(selected);
-    else useViewStore.getState().setKenbanPathB(selected);
-    const vs = useViewStore.getState();
-    if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer");
-  };
+  }, []);
 
   return (
     <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -414,49 +429,48 @@ function TopNavDataButtons() {
       ) : (
         <>
           {/* テキスト */}
-          <SmallBtn loaded={textLoaded} label="テキスト" title="テキスト読み込み" clearTitle="クリア"
-            cCls="text-accent-tertiary hover:bg-accent-tertiary/15" bCls="border-accent-tertiary/50"
+          <SmallBtn loaded={textLoaded} icon={FileText} title="テキスト読み込み" clearTitle="クリア"
             onLoad={handleOpenText}
             onClear={() => { const v = useUnifiedViewerStore.getState(); v.setTextContent(""); v.setTextFilePath(null); v.setTextHeader([]); v.setTextPages([]); v.setIsDirty(false); }}
             tooltip={textTooltip}
           />
           {/* 作品情報 */}
-          <SmallBtn loaded={presetsLoaded} label="作品情報" title="作品情報JSON" clearTitle="クリア"
-            cCls="text-accent-secondary hover:bg-accent-secondary/15" bCls="border-accent-secondary/50"
+          <SmallBtn loaded={presetsLoaded} icon={FileJson} title="作品情報JSON" clearTitle="クリア"
             onLoad={() => useViewStore.getState().setJsonBrowserMode("preset")}
             onClear={() => { useUnifiedViewerStore.getState().setFontPresets([]); useUnifiedViewerStore.getState().setPresetJsonPath(null); }}
             tooltip={presetTooltip}
           />
           {/* 校正JSON */}
-          <SmallBtn loaded={checkLoaded} label="校正JSON" title="校正JSON" clearTitle="クリア"
-            cCls="text-warning hover:bg-warning/15" bCls="border-warning/50"
+          <SmallBtn loaded={checkLoaded} icon={ClipboardCheck} title="校正JSON" clearTitle="クリア"
             onLoad={() => useViewStore.getState().setJsonBrowserMode("check")}
             onClear={() => useUnifiedViewerStore.getState().setCheckData(null)}
             tooltip={checkTooltip}
           />
         </>
       )}
-      <div className="w-px h-3 bg-border/30 mx-0.5" />
-      {/* A/B 統合ボタン */}
-      <ABPickerButton kenbanPickMode={kenbanPickMode} setKenbanPickMode={setKenbanPickMode} handleKenbanPick={handleKenbanPick} />
     </div>
   );
 }
 
 // ─── 小さなデータ読み込みボタン ───
-function SmallBtn({ loaded, label, title, clearTitle, cCls, bCls, onLoad, onClear, tooltip }: {
-  loaded: boolean; label: string; title: string; clearTitle: string;
-  cCls: string; bCls: string; onLoad: () => void; onClear: () => void;
+function SmallBtn({ loaded, icon: Icon, title, clearTitle, onLoad, onClear, tooltip }: {
+  loaded: boolean; icon: LucideIcon; title: string; clearTitle: string;
+  onLoad: () => void; onClear: () => void;
   tooltip?: string;
 }) {
+  const bgCls = loaded
+    ? "bg-sky-500/15 text-sky-500 hover:bg-sky-500/25"
+    : "bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/70";
   return (
-    <div className="flex items-center gap-0">
-      <button onClick={onLoad} className="px-1.5 py-0.5 text-[9px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded-l transition-colors" title={tooltip || title}>{label}</button>
-      {loaded ? (
-        <button onClick={onClear} className={`w-3.5 h-3.5 flex items-center justify-center rounded-r transition-colors ${cCls}`} title={clearTitle}>
-          <svg className="w-2 h-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+    <div className="flex items-center gap-0.5">
+      <button onClick={onLoad} className={`h-6 px-1.5 flex items-center justify-center rounded-md transition-colors ${bgCls}`} title={tooltip || title}>
+        <Icon className="w-3.5 h-3.5" />
+      </button>
+      {loaded && (
+        <button onClick={onClear} className="w-3.5 h-3.5 flex items-center justify-center rounded text-sky-500 hover:bg-sky-500/15 transition-colors" title={clearTitle}>
+          <Check className="w-3 h-3" strokeWidth={3} />
         </button>
-      ) : <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mr-0.5 border ${bCls}`} />}
+      )}
     </div>
   );
 }
@@ -502,7 +516,7 @@ function WfDataPickerButton({
           {/* テキスト */}
           <div className="px-3 py-1.5 border-b border-border/30">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-bold text-emerald-600">📝 テキスト</span>
+              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><FileText className="w-3 h-3" />テキスト</span>
               {textLoaded && (
                 <button onClick={onClearText} className="text-[9px] text-text-muted hover:text-error">クリア</button>
               )}
@@ -523,7 +537,7 @@ function WfDataPickerButton({
           {/* 作品情報JSON */}
           <div className="px-3 py-1.5 border-b border-border/30">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-bold text-purple-600">📄 作品情報JSON</span>
+              <span className="text-[10px] font-bold text-purple-600 flex items-center gap-1"><FileJson className="w-3 h-3" />作品情報JSON</span>
               {presetsLoaded && (
                 <button onClick={onClearPreset} className="text-[9px] text-text-muted hover:text-error">クリア</button>
               )}
@@ -544,7 +558,7 @@ function WfDataPickerButton({
           {/* 校正JSON */}
           <div className="px-3 py-1.5">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-bold text-amber-600">✓ 校正JSON</span>
+              <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1"><ClipboardCheck className="w-3 h-3" />校正JSON</span>
               {checkLoaded && (
                 <button onClick={onClearCheck} className="text-[9px] text-text-muted hover:text-error">クリア</button>
               )}
@@ -574,106 +588,10 @@ const TOOL_PROGEN_MODES = [
   { id: "proofreading" as const, label: "校正プロンプト" },
 ];
 
-// ─── A/B 統合ピッカーボタン ───
-function ABPickerButton({ kenbanPickMode, setKenbanPickMode, handleKenbanPick }: {
-  kenbanPickMode: { side: "A" | "B" } | null;
-  setKenbanPickMode: (v: { side: "A" | "B" } | null) => void;
-  handleKenbanPick: (type: "folder" | "file") => Promise<void>;
-}) {
-  const kenbanPathA = useViewStore((s) => s.kenbanPathA);
-  const kenbanPathB = useViewStore((s) => s.kenbanPathB);
-  const ref = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState(false);
-
-  // ホバーまたはピック中は開いたまま
-  const isOpen = hover || !!kenbanPickMode;
-
-  useEffect(() => {
-    if (!kenbanPickMode) return;
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setKenbanPickMode(null); setHover(false); } };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [kenbanPickMode]);
-
-  const hasAny = !!kenbanPathA || !!kenbanPathB;
-  const nameA = kenbanPathA?.split("\\").pop() || "";
-  const nameB = kenbanPathB?.split("\\").pop() || "";
-
-  return (
-    <div ref={ref} className="relative" onMouseEnter={() => { clearTimeout((ref.current as any)?._hoverTimer); setHover(true); }} onMouseLeave={() => { if (!kenbanPickMode) (ref.current as any)._hoverTimer = setTimeout(() => setHover(false), 300); }}>
-      {/* メインボタン */}
-      <div className={`flex items-center gap-0 px-1.5 py-0.5 text-[9px] rounded transition-colors cursor-default ${
-        hasAny ? "bg-sky-100 text-sky-600" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
-      }`}>
-        <span>A/B</span>
-        {hasAny && (
-          <button onClick={() => { useViewStore.getState().setKenbanPathA(null); useViewStore.getState().setKenbanPathB(null); }}
-            className="ml-1 w-3 h-3 flex items-center justify-center rounded-full hover:bg-sky-200 text-sky-500">
-            <svg className="w-2 h-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        )}
-      </div>
-      {/* ホバードロップダウン */}
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1.5 min-w-[180px]">
-          {/* A */}
-          <div className="px-3 py-1">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-bold text-blue-500">A（変更前）</span>
-              {kenbanPathA && (
-                <button onClick={() => useViewStore.getState().setKenbanPathA(null)} className="text-[9px] text-text-muted hover:text-error">クリア</button>
-              )}
-            </div>
-            {kenbanPathA ? (
-              <div className="text-[9px] text-text-secondary truncate mb-1" title={kenbanPathA}>{nameA}</div>
-            ) : (
-              <div className="text-[9px] text-text-muted mb-1">未選択</div>
-            )}
-            <div className="flex gap-1">
-              <button onClick={async () => {
-                const r = await dialogOpen({ directory: true, multiple: false, title: "A側: フォルダを選択" });
-                setHover(false);
-                if (r) { const ok = await validateAndSetABPath("A", r as string); if (ok) { const vs = useViewStore.getState(); if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer"); } }
-              }} className="flex-1 px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-blue-50 hover:text-blue-600 rounded transition-colors">フォルダ</button>
-              <button onClick={async () => {
-                const r = await dialogOpen({ directory: false, multiple: false, title: "A側: ファイルを選択", filters: [{ name: "対応ファイル", extensions: ["pdf","psd","tif","tiff","jpg","jpeg","png","bmp"] }] });
-                setHover(false);
-                if (r) { useViewStore.getState().setKenbanPathA(r as string); const vs = useViewStore.getState(); if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer"); }
-              }} className="flex-1 px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-blue-50 hover:text-blue-600 rounded transition-colors">ファイル</button>
-            </div>
-          </div>
-          <div className="border-t border-border/40 my-1" />
-          {/* B */}
-          <div className="px-3 py-1">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-bold text-orange-500">B（変更後）</span>
-              {kenbanPathB && (
-                <button onClick={() => useViewStore.getState().setKenbanPathB(null)} className="text-[9px] text-text-muted hover:text-error">クリア</button>
-              )}
-            </div>
-            {kenbanPathB ? (
-              <div className="text-[9px] text-text-secondary truncate mb-1" title={kenbanPathB}>{nameB}</div>
-            ) : (
-              <div className="text-[9px] text-text-muted mb-1">未選択</div>
-            )}
-            <div className="flex gap-1">
-              <button onClick={async () => {
-                const r = await dialogOpen({ directory: true, multiple: false, title: "B側: フォルダを選択" });
-                setHover(false);
-                if (r) { const ok = await validateAndSetABPath("B", r as string); if (ok) { const vs = useViewStore.getState(); if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer"); } }
-              }} className="flex-1 px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-orange-50 hover:text-orange-600 rounded transition-colors">フォルダ</button>
-              <button onClick={async () => {
-                const r = await dialogOpen({ directory: false, multiple: false, title: "B側: ファイルを選択", filters: [{ name: "対応ファイル", extensions: ["pdf","psd","tif","tiff","jpg","jpeg","png","bmp"] }] });
-                setHover(false);
-                if (r) { useViewStore.getState().setKenbanPathB(r as string); const vs = useViewStore.getState(); if (vs.kenbanPathA && vs.kenbanPathB) vs.setActiveView("unifiedViewer"); }
-              }} className="flex-1 px-2 py-1 text-[9px] bg-bg-tertiary hover:bg-orange-50 hover:text-orange-600 rounded transition-colors">ファイル</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+const TOOL_INSPECTION_MODES = [
+  { id: "diff" as const, label: "差分モード" },
+  { id: "parallel" as const, label: "分割ビューアー" },
+];
 
 function TopNavToolMenu() {
   const [hover, setHover] = useState(false);
@@ -701,14 +619,18 @@ function TopNavToolMenu() {
           {useSettingsStore.getState().toolMenuButtons.map((id) => {
             const btn = ALL_NAV_BUTTONS.find((b) => b.id === id);
             if (!btn) return null;
+            const Icon = btn.icon;
             return (
-              <button key={btn.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors" onClick={() => {
+              <button key={btn.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors inline-flex items-center gap-1.5" onClick={() => {
                 if (btn.id === "layers") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("layers"); }
                 else if (btn.id === "layerControl") { setActiveView("layers"); }
                 else if (btn.id === "specCheck") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("thumbnails"); }
                 else setActiveView(btn.id as any);
                 setHover(false);
-              }}>{btn.label}</button>
+              }}>
+                {Icon && <Icon className="w-3.5 h-3.5 flex-shrink-0" />}
+                {btn.label}
+              </button>
             );
           })}
           <div className="border-t border-border/40 my-1" />
@@ -735,6 +657,24 @@ function TopNavToolMenu() {
               {!hasWorkJson && <span className="text-[9px] text-text-muted/50 ml-1">新規</span>}
             </button>
           ))}
+          <div className="border-t border-border/40 my-1" />
+          <div className="px-3 py-0.5 text-[9px] text-text-muted/50 font-medium inline-flex items-center gap-1">
+            <Shield className="w-3 h-3" />
+            検版ツール
+          </div>
+          {TOOL_INSPECTION_MODES.map((mode) => (
+            <button
+              key={mode.id}
+              className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors"
+              onClick={() => {
+                useViewStore.getState().setKenbanViewMode(mode.id);
+                setActiveView("inspection");
+                setHover(false);
+              }}
+            >
+              {mode.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -745,16 +685,34 @@ function TopNavToolMenu() {
 function NavBarButtons() {
   const navBarButtons = useSettingsStore((s) => s.navBarButtons);
   const setActiveView = useViewStore((s) => s.setActiveView);
+  const activeView = useViewStore((s) => s.activeView);
+  const specViewMode = usePsdStore((s) => s.specViewMode);
+
+  // 各ボタン ID → 現在アクティブかどうかの判定。click 側のルーティングと対称に揃える。
+  const isActive = (id: string): boolean => {
+    if (id === "layers") return activeView === "specCheck" && specViewMode === "layers";
+    if (id === "layerControl") return activeView === "layers";
+    if (id === "specCheck") return activeView === "specCheck" && specViewMode !== "layers";
+    return activeView === id;
+  };
 
   return (
     <>
       {navBarButtons.map((id) => {
         const btn = ALL_NAV_BUTTONS.find((b) => b.id === id);
         if (!btn) return null;
+        const Icon = btn.icon;
+        const active = isActive(btn.id);
         return (
           <button
             key={btn.id}
-            className="px-3 py-1 text-[11px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-colors"
+            aria-current={active ? "page" : undefined}
+            title={btn.label}
+            className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
+              active
+                ? "bg-accent/15 text-accent ring-1 ring-accent/40"
+                : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
+            }`}
             onClick={() => {
               if (btn.id === "layers") {
                 setActiveView("specCheck");
@@ -770,7 +728,7 @@ function NavBarButtons() {
               }
             }}
           >
-            {btn.label}
+            {Icon && <Icon className="w-4 h-4" />}
           </button>
         );
       })}

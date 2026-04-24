@@ -10,9 +10,9 @@ interface GlowCardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 const glowColors: Record<GlowColor, string> = {
-  pink: "hover:shadow-[0_0_25px_rgba(255,107,157,0.2)]",
-  purple: "hover:shadow-[0_0_25px_rgba(124,92,255,0.2)]",
-  mint: "hover:shadow-[0_0_25px_rgba(0,212,170,0.2)]",
+  pink: "hover:shadow-[0_0_25px_rgba(58,123,213,0.22)]",
+  purple: "hover:shadow-[0_0_25px_rgba(0,120,212,0.22)]",
+  mint: "hover:shadow-[0_0_25px_rgba(30,144,255,0.22)]",
   none: "",
 };
 
@@ -52,7 +52,7 @@ export const GlowCard = forwardRef<HTMLDivElement, GlowCardProps>(
     const selectedStyles = selected
       ? `
         border-accent
-        shadow-[0_0_20px_rgba(255,107,157,0.25)]
+        shadow-[0_0_20px_rgba(58,123,213,0.25)]
       `
       : "border-white/5";
 

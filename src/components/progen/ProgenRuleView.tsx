@@ -2,9 +2,10 @@
  * ProGen ルール編集ビュー（Phase 1）
  * サイドバー（6カテゴリ）+ メインエリア（ルールカード/リスト）
  */
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+import { FolderOpen, ScanText, Wand2, SpellCheck, Lightbulb } from "lucide-react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useProgenStore } from "../../store/progenStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
@@ -20,6 +21,60 @@ import { generateSimpleCheckPrompt, generateVariationCheckPrompt, generateExtrac
 export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}) {
   const store = useProgenStore();
   const [searchText, setSearchText] = useState("");
+
+  // ── プロンプト生成共有 state（GeminiButtons から持ち上げ） ──
+  const [copied, setCopied] = useState<string | null>(null);
+  const [textSources, setTextSources] = useState<{ name: string; content: string }[]>([]);
+  const [showTextPicker, setShowTextPicker] = useState<"correctness" | "proposal" | null>(null);
+  const [browseDir, setBrowseDir] = useState("");
+  const [browseFolders, setBrowseFolders] = useState<string[]>([]);
+  const [browseFiles, setBrowseFiles] = useState<string[]>([]);
+
+  const loadBrowseDir = useCallback(async (dir: string) => {
+    try {
+      const r = await invoke<{ folders: string[]; json_files: string[] }>("list_folder_contents", { folderPath: dir });
+      setBrowseDir(dir);
+      setBrowseFolders(r.folders || []);
+      const allFiles = await invoke<string[]>("kenban_list_files_in_folder", { path: dir, extensions: ["txt"] }).catch(() => [] as string[]);
+      const txtFiles = allFiles
+        .map((f: string) => f.replace(/\//g, "\\").split("\\").pop() || "")
+        .filter(Boolean);
+      setBrowseFiles(txtFiles);
+    } catch { setBrowseFolders([]); setBrowseFiles([]); }
+  }, []);
+
+  const showCopied = useCallback((msg: string) => { setCopied(msg); setTimeout(() => setCopied(null), 2000); }, []);
+  const gemini = useCallback(() => openExternalUrl("https://gemini.google.com/app"), []);
+
+  const extraction = useCallback(async () => {
+    const prompt = generateExtractionPrompt(store.symbolRules, store.currentProofRules, store.options, store.numberRules);
+    await navigator.clipboard.writeText(prompt); showCopied("抽出"); gemini();
+    useProgenStore.getState().setResultSaveMode("text");
+  }, [store, showCopied, gemini]);
+
+  const formatting = useCallback(async () => {
+    const prompt = generateFormattingPrompt(store.symbolRules, store.currentProofRules, store.options, store.numberRules);
+    await navigator.clipboard.writeText(prompt); showCopied("整形"); gemini();
+    useProgenStore.getState().setResultSaveMode("text");
+  }, [store, showCopied, gemini]);
+
+  const correctness = useCallback(async () => {
+    const current = useUnifiedViewerStore.getState().textContent || "";
+    const text = [current, textSources.map((s) => s.content).join("\n\n")].filter(Boolean).join("\n\n");
+    if (!text) { setShowTextPicker("correctness"); return; }
+    const prompt = generateSimpleCheckPrompt(text, store.symbolRules, store.currentProofRules, store.options, store.numberRules);
+    await navigator.clipboard.writeText(prompt); showCopied("正誤"); gemini();
+    useProgenStore.getState().setResultSaveMode("json");
+  }, [store, textSources, showCopied, gemini]);
+
+  const proposal = useCallback(async () => {
+    const current = useUnifiedViewerStore.getState().textContent || "";
+    const text = [current, textSources.map((s) => s.content).join("\n\n")].filter(Boolean).join("\n\n");
+    if (!text) { setShowTextPicker("proposal"); return; }
+    const prompt = generateVariationCheckPrompt(text, store.symbolRules, store.currentProofRules, store.options, store.numberRules);
+    await navigator.clipboard.writeText(prompt); showCopied("提案"); gemini();
+    useProgenStore.getState().setResultSaveMode("json");
+  }, [store, textSources, showCopied, gemini]);
 
   // カテゴリ別ルール数
   const catCounts = useMemo(() => {
@@ -44,25 +99,24 @@ export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}
   return (
     <div className="flex h-full overflow-hidden">
       {/* サイドバー */}
-      <div className="w-[160px] flex-shrink-0 border-r border-border/50 flex flex-col bg-bg-tertiary/30">
-        <div className="flex-1 overflow-y-auto">
+      <div className="w-[272px] flex-shrink-0 border-r border-border/50 flex flex-col bg-bg-tertiary/30">
+        <div className="flex-1 overflow-y-auto p-2 grid grid-cols-3 gap-1.5 content-start">
           {EDIT_CATEGORIES.map((cat) => {
             const c = catCounts[cat.key];
+            const isActive = store.currentEditCategory === cat.key;
             return (
               <button
                 key={cat.key}
                 onClick={() => store.setCurrentEditCategory(cat.key)}
-                className={`w-full text-left px-3 py-2.5 text-[10px] transition-colors border-b border-border/10 flex items-center justify-between ${
-                  store.currentEditCategory === cat.key
-                    ? "bg-accent/10 text-accent font-medium"
-                    : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
+                className={`aspect-square px-1.5 py-2 text-[10px] rounded-lg border transition-colors flex flex-col items-center justify-center gap-1 ${
+                  isActive
+                    ? "bg-accent/15 text-accent border-accent/40 font-medium"
+                    : "bg-bg-primary/60 text-text-secondary border-border/40 hover:text-text-primary hover:bg-bg-tertiary hover:border-border"
                 }`}
               >
-                <span className="flex items-center gap-1.5">
-                  <span className="text-sm">{cat.icon}</span>
-                  <span>{cat.name}</span>
-                </span>
-                {c && <span className="text-[9px] text-text-muted tabular-nums">{c.active}/{c.total}</span>}
+                <span className="text-base leading-none text-sky-500">{cat.icon}</span>
+                <span className="leading-none text-center">{cat.name}</span>
+                {c && <span className="text-[9px] text-text-muted tabular-nums leading-none">{c.active}/{c.total}</span>}
               </button>
             );
           })}
@@ -79,19 +133,104 @@ export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}
         </div>
         {/* 保存ボタン */}
         <SaveButton />
-        {/* Geminiボタン群 */}
-        <GeminiButtons />
       </div>
 
       {/* メインエリア */}
-      <div className="flex-1 overflow-auto p-3">
-        {store.currentEditCategory === "symbol" ? (
-          <SymbolRulePanel searchText={searchText} listMode={listMode} />
-        ) : store.currentEditCategory === "number" ? (
-          <NumberRulePanel />
-        ) : (
-          <ProofRulePanel category={store.currentEditCategory} searchText={searchText} listMode={listMode} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* プロンプト生成バー（横並び） */}
+        <div className="flex-shrink-0 px-3 py-2 border-b border-border/30 bg-bg-tertiary/20 flex items-center gap-2">
+          <span className="text-[10px] font-medium text-text-muted flex-shrink-0">プロンプト生成</span>
+          <button onClick={extraction} className="px-5 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 transition-colors inline-flex items-center gap-1.5">
+            <ScanText className="w-4 h-4" />
+            抽出
+          </button>
+          <button onClick={formatting} className="px-5 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 transition-colors inline-flex items-center gap-1.5">
+            <Wand2 className="w-4 h-4" />
+            整形
+          </button>
+          <button onClick={correctness} className="px-5 py-2 text-sm font-medium text-white bg-emerald-500 rounded-md hover:bg-emerald-600 transition-colors inline-flex items-center gap-1.5">
+            <SpellCheck className="w-4 h-4" />
+            正誤
+          </button>
+          <button onClick={proposal} className="px-5 py-2 text-sm font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600 transition-colors inline-flex items-center gap-1.5">
+            <Lightbulb className="w-4 h-4" />
+            提案
+          </button>
+          {copied && <span className="text-[10px] text-success ml-1">{copied} コピー済</span>}
+
+          {/* 右寄せ: ドロップダウン2つ */}
+          <div className="flex-1" />
+          <TextSourceDropdown
+            textSources={textSources}
+            setTextSources={setTextSources}
+            setShowTextPicker={setShowTextPicker}
+            loadBrowseDir={loadBrowseDir}
+          />
+          <ResultPasteDropdown />
+        </div>
+
+        {/* テキストフォルダブラウザモーダル */}
+        {showTextPicker && browseDir && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowTextPicker(null)}>
+            <div className="bg-bg-secondary rounded-xl shadow-2xl w-[400px] max-h-[60vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-bg-tertiary/30">
+                <span className="text-[10px] font-medium text-text-primary truncate flex-1">{browseDir.split(/[/\\]/).pop()}</span>
+                <button onClick={() => setShowTextPicker(null)} className="text-text-muted hover:text-text-primary">✕</button>
+              </div>
+              <div className="flex-1 overflow-auto">
+                <button
+                  onClick={() => { const parent = browseDir.replace(/[/\\][^/\\]+$/, ""); if (parent && parent !== browseDir) loadBrowseDir(parent); }}
+                  className="w-full px-3 py-1.5 text-left text-[10px] text-text-secondary hover:bg-bg-tertiary/50 flex items-center gap-1"
+                >← 上へ</button>
+                {browseFolders.map((f) => (
+                  <button key={f} onClick={() => loadBrowseDir(`${browseDir}/${f}`)} className="w-full px-3 py-1.5 text-left text-[10px] text-text-primary hover:bg-bg-tertiary/50 flex items-center gap-1.5">
+                    <FolderOpen className="w-3.5 h-3.5 text-folder" /> {f}
+                  </button>
+                ))}
+                {browseFiles.filter((f) => f.endsWith(".txt")).map((f) => {
+                  const fullPath = `${browseDir}/${f}`;
+                  const isChecked = textSources.some((s) => s.name === f);
+                  return (
+                    <label key={f} className="w-full px-3 py-1.5 text-left text-[10px] hover:bg-accent/5 flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={async () => {
+                          if (isChecked) {
+                            setTextSources((prev) => prev.filter((s) => s.name !== f));
+                          } else {
+                            try {
+                              const content = await invoke<string>("read_text_file", { filePath: fullPath });
+                              setTextSources((prev) => [...prev, { name: f, content }]);
+                            } catch { /* ignore */ }
+                          }
+                        }}
+                        className="accent-accent w-3 h-3 flex-shrink-0"
+                      />
+                      <span className={isChecked ? "text-accent font-medium" : "text-text-primary"}>{f}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="px-3 py-2 border-t border-border flex items-center gap-2">
+                <span className="text-[9px] text-text-muted">{textSources.length}件追加</span>
+                <div className="flex-1" />
+                <button onClick={() => setShowTextPicker(null)} className="px-3 py-1 text-[9px] font-medium text-white bg-accent rounded hover:bg-accent/90">完了</button>
+              </div>
+            </div>
+          </div>
         )}
+
+        {/* コンテンツ */}
+        <div className="flex-1 overflow-auto p-3">
+          {store.currentEditCategory === "symbol" ? (
+            <SymbolRulePanel searchText={searchText} listMode={listMode} />
+          ) : store.currentEditCategory === "number" ? (
+            <NumberRulePanel />
+          ) : (
+            <ProofRulePanel category={store.currentEditCategory} searchText={searchText} listMode={listMode} />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -176,7 +315,7 @@ function SymbolRulePanel({ searchText, listMode }: { searchText: string; listMod
   return (
     <div>
       <h3 className="text-xs font-bold text-text-primary mb-3">記号・句読点ルール ({filtered.length})</h3>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {filtered.map((rule, i) => {
           const realIdx = symbolRules.indexOf(rule);
           return (
@@ -309,7 +448,7 @@ function ProofRulePanel({ category, searchText, listMode }: { category: string; 
   return (
     <div>
       <h3 className="text-xs font-bold text-text-primary mb-3">{cat?.name || category} ({rules.length})</h3>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {rules.map((rule, i) => {
           const realIdx = currentProofRules.indexOf(rule);
           return (
@@ -330,7 +469,7 @@ function ProofRulePanel({ category, searchText, listMode }: { category: string; 
             </div>
           );
         })}
-        {rules.length === 0 && !showAddForm && <div className="col-span-2 text-text-muted text-xs text-center py-8">ルールなし</div>}
+        {rules.length === 0 && !showAddForm && <div className="col-span-3 text-text-muted text-xs text-center py-8">ルールなし</div>}
         {/* 追加カード（最後尾） */}
         {showAddForm ? (
           <div className="bg-accent/5 border-2 border-dashed border-accent/30 rounded-lg px-3 py-2">
@@ -406,6 +545,11 @@ function NumberRulePanel() {
 function SaveButton() {
   const store = useProgenStore();
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [resultDialog, setResultDialog] = useState<
+    | { ok: true; label: string | null; jsonPath: string | null }
+    | { ok: false; error: string }
+    | null
+  >(null);
 
   const handleSave = useCallback(async () => {
     setStatus("saving");
@@ -452,10 +596,12 @@ function SaveButton() {
         store.setCurrentLoadedJson(json);
       }
       setStatus("saved");
+      setResultDialog({ ok: true, label: label || null, jsonPath: jsonPath || null });
       setTimeout(() => setStatus("idle"), 2000);
     } catch (e) {
       console.error("ProGen save failed:", e);
       setStatus("error");
+      setResultDialog({ ok: false, error: e instanceof Error ? e.message : String(e) });
       setTimeout(() => setStatus("idle"), 2000);
     }
   }, [store]);
@@ -485,196 +631,182 @@ function SaveButton() {
       >
         {status === "saving" ? "保存中..." : status === "saved" ? "✓ 保存しました" : status === "error" ? "保存エラー" : "ルールを保存"}
       </button>
+
+      {/* 保存結果ダイアログ */}
+      {resultDialog && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
+          onClick={() => setResultDialog(null)}
+        >
+          <div
+            className="bg-bg-secondary border border-border rounded-2xl p-5 shadow-xl w-[340px] space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {resultDialog.ok ? (
+              <>
+                <p className="text-sm font-medium text-success text-center">
+                  ✓ ルールを保存しました
+                </p>
+                <div className="text-[11px] text-text-secondary space-y-1">
+                  {resultDialog.label && (
+                    <div>
+                      <span className="text-text-muted">マスタールール: </span>
+                      <span className="font-medium text-text-primary">{resultDialog.label}</span>
+                    </div>
+                  )}
+                  {resultDialog.jsonPath && (
+                    <div className="break-all">
+                      <span className="text-text-muted">作品JSON: </span>
+                      <span className="font-medium text-text-primary">{resultDialog.jsonPath}</span>
+                    </div>
+                  )}
+                  {!resultDialog.label && !resultDialog.jsonPath && (
+                    <div className="text-warning">
+                      保存先（レーベル / 作品JSON）が未設定のため、何も書き込まれていません。
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-error text-center">保存に失敗しました</p>
+                <p className="text-[11px] text-text-secondary break-all">{resultDialog.error}</p>
+              </>
+            )}
+            <button
+              onClick={() => setResultDialog(null)}
+              className="w-full px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-lg hover:-translate-y-0.5 transition-all"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ═══ Geminiボタン群 ═══
+// ═══ 校正用テキスト追加ドロップダウン ═══
 
-function GeminiButtons() {
-  const store = useProgenStore();
-  const [copied, setCopied] = useState<string | null>(null);
-  const [textSources, setTextSources] = useState<{ name: string; content: string }[]>([]);
-  const [showTextPicker, setShowTextPicker] = useState<"correctness" | "proposal" | null>(null);
-  const [browseDir, setBrowseDir] = useState("");
-  const [browseFolders, setBrowseFolders] = useState<string[]>([]);
-  const [browseFiles, setBrowseFiles] = useState<string[]>([]);
+interface TextSourceDropdownProps {
+  textSources: { name: string; content: string }[];
+  setTextSources: React.Dispatch<React.SetStateAction<{ name: string; content: string }[]>>;
+  setShowTextPicker: React.Dispatch<React.SetStateAction<"correctness" | "proposal" | null>>;
+  loadBrowseDir: (dir: string) => Promise<void>;
+}
 
-  const loadBrowseDir = useCallback(async (dir: string) => {
-    try {
-      const r = await invoke<{ folders: string[]; json_files: string[] }>("list_folder_contents", { folderPath: dir });
-      setBrowseDir(dir);
-      setBrowseFolders(r.folders || []);
-      // カレントディレクトリの全ファイルからtxtをフィルタ（list_all_filesは再帰なので kenban_list_files_in_folder を使用）
-      const allFiles = await invoke<string[]>("kenban_list_files_in_folder", { path: dir, extensions: ["txt"] }).catch(() => [] as string[]);
-      const txtFiles = allFiles
-        .map((f: string) => f.replace(/\//g, "\\").split("\\").pop() || "")
-        .filter(Boolean);
-      setBrowseFiles(txtFiles);
-    } catch { setBrowseFolders([]); setBrowseFiles([]); }
-  }, []);
+function TextSourceDropdown({ textSources, setTextSources, setShowTextPicker, loadBrowseDir }: TextSourceDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-  const getAllText = (): string => {
-    const current = useUnifiedViewerStore.getState().textContent || "";
-    const extra = textSources.map((s) => s.content).join("\n\n");
-    return [current, extra].filter(Boolean).join("\n\n");
-  };
-  const showCopied = (msg: string) => { setCopied(msg); setTimeout(() => setCopied(null), 2000); };
-  const gemini = () => openExternalUrl("https://gemini.google.com/app");
-
-  const extraction = async () => {
-    // 抽出プロンプトはテキスト不要（後から画像を送信する）
-    const prompt = generateExtractionPrompt(
-      store.symbolRules,
-      store.currentProofRules,
-      store.options,
-      store.numberRules,
-    );
-    await navigator.clipboard.writeText(prompt); showCopied("抽出"); gemini();
-    useProgenStore.getState().setResultSaveMode("text");
-  };
-  const formatting = async () => {
-    const prompt = generateFormattingPrompt(
-      store.symbolRules,
-      store.currentProofRules,
-      store.options,
-      store.numberRules,
-    );
-    await navigator.clipboard.writeText(prompt); showCopied("整形"); gemini();
-    useProgenStore.getState().setResultSaveMode("text");
-  };
-  const correctness = async () => {
-    const text = getAllText();
-    if (!text) { setShowTextPicker("correctness"); return; }
-    const prompt = generateSimpleCheckPrompt(text, store.symbolRules, store.currentProofRules, store.options, store.numberRules);
-    await navigator.clipboard.writeText(prompt); showCopied("正誤"); gemini();
-    useProgenStore.getState().setResultSaveMode("json");
-  };
-  const proposal = async () => {
-    const text = getAllText();
-    if (!text) { setShowTextPicker("proposal"); return; }
-    const prompt = generateVariationCheckPrompt(text, store.symbolRules, store.currentProofRules, store.options, store.numberRules);
-    await navigator.clipboard.writeText(prompt); showCopied("提案"); gemini();
-    useProgenStore.getState().setResultSaveMode("json");
-  };
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
 
   return (
-    <div className="flex-shrink-0 p-2 border-t border-border/30 space-y-1">
-      {copied && <div className="text-[9px] text-success text-center">{copied} コピー済</div>}
-      <div className="text-[8px] text-text-muted/60 mb-0.5">プロンプト生成</div>
-      <div className="grid grid-cols-2 gap-1">
-        <button onClick={extraction} className="px-1 py-1 text-[8px] font-medium text-white bg-blue-500 rounded hover:bg-blue-600 transition-colors">抽出</button>
-        <button onClick={formatting} className="px-1 py-1 text-[8px] font-medium text-white bg-blue-500 rounded hover:bg-blue-600 transition-colors">整形</button>
-        <button onClick={correctness} className="px-1 py-1 text-[8px] font-medium text-white bg-emerald-500 rounded hover:bg-emerald-600 transition-colors">正誤</button>
-        <button onClick={proposal} className="px-1 py-1 text-[8px] font-medium text-white bg-orange-500 rounded hover:bg-orange-600 transition-colors">提案</button>
-      </div>
-      <button onClick={gemini} className="w-full px-1 py-1 text-[8px] text-blue-500 hover:bg-blue-50 rounded transition-colors">Gemini を開く</button>
-      {/* テキストソース管理 */}
-      <div className="text-[8px] text-text-muted/60 mt-2 mb-0.5">
-        校正用テキスト追加 {textSources.length > 0 ? `(+${textSources.length}件)` : ""}
-      </div>
-      {textSources.length > 0 && (
-        <div className="space-y-0.5 mb-1 max-h-16 overflow-auto">
-          {textSources.map((s, i) => (
-            <div key={i} className="flex items-center gap-0.5 text-[8px] text-text-muted">
-              <span className="truncate flex-1">{s.name}</span>
-              <button onClick={() => setTextSources((prev) => prev.filter((_, j) => j !== i))} className="text-text-muted/40 hover:text-error flex-shrink-0">✕</button>
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="px-2 py-1 text-[10px] font-medium rounded border border-border/40 text-text-secondary hover:text-text-primary hover:border-accent/30 transition-colors inline-flex items-center gap-1"
+      >
+        校正用テキスト追加
+        {textSources.length > 0 && (
+          <span className="text-[9px] text-accent font-bold">+{textSources.length}</span>
+        )}
+        <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-40 bg-bg-secondary border border-border rounded-lg shadow-xl py-2 min-w-[240px]">
+          {textSources.length > 0 && (
+            <div className="px-3 pb-2 border-b border-border/30 mb-2">
+              <div className="text-[9px] text-text-muted/60 mb-1">追加済み ({textSources.length})</div>
+              <div className="space-y-0.5 max-h-32 overflow-auto">
+                {textSources.map((s, i) => (
+                  <div key={i} className="flex items-center gap-1 text-[10px] text-text-secondary">
+                    <span className="truncate flex-1">{s.name}</span>
+                    <button onClick={() => setTextSources((prev) => prev.filter((_, j) => j !== i))} className="text-text-muted/40 hover:text-error flex-shrink-0">✕</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setTextSources([])} className="text-[9px] text-text-muted/60 hover:text-error mt-1">全クリア</button>
             </div>
-          ))}
-          <button onClick={() => setTextSources([])} className="text-[7px] text-text-muted/40 hover:text-error">全クリア</button>
+          )}
+          <button
+            onClick={async () => {
+              const path = await dialogOpen({ filters: [{ name: "テキスト", extensions: ["txt"] }], multiple: true });
+              if (!path) return;
+              const paths = Array.isArray(path) ? path : [path];
+              for (const p of paths) {
+                try {
+                  const bytes = await readFile(p as string);
+                  const content = new TextDecoder("utf-8").decode(bytes);
+                  const name = (p as string).replace(/\\/g, "/").split("/").pop() || "text.txt";
+                  setTextSources((prev) => [...prev, { name, content }]);
+                } catch { /* ignore */ }
+              }
+            }}
+            className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-accent hover:bg-bg-tertiary transition-colors"
+            title="エクスプローラーからテキストファイルを選択"
+          >エクスプローラーから参照…</button>
+          <button
+            onClick={() => {
+              const base = useScanPsdStore.getState().textLogFolderPath || "";
+              if (base) loadBrowseDir(base);
+              setShowTextPicker("correctness");
+              setOpen(false);
+            }}
+            className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-accent hover:bg-bg-tertiary transition-colors"
+            title="テキストフォルダから選択"
+          >テキストフォルダから選択…</button>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-0.5 mb-1">
-        <button
-          onClick={async () => {
-            const path = await dialogOpen({ filters: [{ name: "テキスト", extensions: ["txt"] }], multiple: true });
-            if (!path) return;
-            const paths = Array.isArray(path) ? path : [path];
-            for (const p of paths) {
-              try {
-                const bytes = await readFile(p as string);
-                const content = new TextDecoder("utf-8").decode(bytes);
-                const name = (p as string).replace(/\\/g, "/").split("/").pop() || "text.txt";
-                setTextSources((prev) => [...prev, { name, content }]);
-              } catch { /* ignore */ }
-            }
-          }}
-          className="px-0.5 py-0.5 text-[7px] rounded border border-border/40 text-text-muted hover:text-accent hover:border-accent/30 transition-colors truncate"
-          title="エクスプローラーからテキストファイルを選択"
-        >参照</button>
-        <button
-          onClick={() => {
-            const base = useScanPsdStore.getState().textLogFolderPath || "";
-            if (base) loadBrowseDir(base);
-            setShowTextPicker("correctness");
-          }}
-          className="px-0.5 py-0.5 text-[7px] rounded border border-border/40 text-text-muted hover:text-accent hover:border-accent/30 transition-colors truncate"
-          title="テキストフォルダから選択"
-        >フォルダ</button>
-      </div>
+    </div>
+  );
+}
 
-      {/* 結果貼り付けボタン */}
-      <div className="text-[8px] text-text-muted/60 mt-1 mb-0.5">結果を貼り付け</div>
-      <div className="grid grid-cols-2 gap-1">
-        <button
-          onClick={() => useProgenStore.getState().setResultSaveMode("text")}
-          className="px-1 py-1 text-[8px] font-medium rounded border border-blue-400 text-blue-500 hover:bg-blue-50 transition-colors"
-        >テキスト保存</button>
-        <button
-          onClick={() => useProgenStore.getState().setResultSaveMode("json")}
-          className="px-1 py-1 text-[8px] font-medium rounded border border-emerald-400 text-emerald-500 hover:bg-emerald-50 transition-colors"
-        >JSON保存</button>
-      </div>
+// ═══ 結果貼り付けドロップダウン ═══
 
-      {/* テキストフォルダブラウザ（チェックボックス付き） */}
-      {showTextPicker && browseDir && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowTextPicker(null)}>
-          <div className="bg-bg-secondary rounded-xl shadow-2xl w-[400px] max-h-[60vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-bg-tertiary/30">
-              <span className="text-[10px] font-medium text-text-primary truncate flex-1">{browseDir.split(/[/\\]/).pop()}</span>
-              <button onClick={() => setShowTextPicker(null)} className="text-text-muted hover:text-text-primary">✕</button>
-            </div>
-            <div className="flex-1 overflow-auto">
-              <button
-                onClick={() => { const parent = browseDir.replace(/[/\\][^/\\]+$/, ""); if (parent && parent !== browseDir) loadBrowseDir(parent); }}
-                className="w-full px-3 py-1.5 text-left text-[10px] text-text-secondary hover:bg-bg-tertiary/50 flex items-center gap-1"
-              >← 上へ</button>
-              {browseFolders.map((f) => (
-                <button key={f} onClick={() => loadBrowseDir(`${browseDir}/${f}`)} className="w-full px-3 py-1.5 text-left text-[10px] text-text-primary hover:bg-bg-tertiary/50 flex items-center gap-1.5">
-                  <span className="text-sm">📁</span> {f}
-                </button>
-              ))}
-              {browseFiles.filter((f) => f.endsWith(".txt")).map((f) => {
-                const fullPath = `${browseDir}/${f}`;
-                const isChecked = textSources.some((s) => s.name === f);
-                return (
-                  <label key={f} className="w-full px-3 py-1.5 text-left text-[10px] hover:bg-accent/5 flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={async () => {
-                        if (isChecked) {
-                          setTextSources((prev) => prev.filter((s) => s.name !== f));
-                        } else {
-                          try {
-                            const content = await invoke<string>("read_text_file", { filePath: fullPath });
-                            setTextSources((prev) => [...prev, { name: f, content }]);
-                          } catch { /* ignore */ }
-                        }
-                      }}
-                      className="accent-accent w-3 h-3 flex-shrink-0"
-                    />
-                    <span className={isChecked ? "text-accent font-medium" : "text-text-primary"}>{f}</span>
-                  </label>
-                );
-              })}
-            </div>
-            <div className="px-3 py-2 border-t border-border flex items-center gap-2">
-              <span className="text-[9px] text-text-muted">{textSources.length}件追加</span>
-              <div className="flex-1" />
-              <button onClick={() => setShowTextPicker(null)} className="px-3 py-1 text-[9px] font-medium text-white bg-accent rounded hover:bg-accent/90">完了</button>
-            </div>
-          </div>
+function ResultPasteDropdown() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="px-2 py-1 text-[10px] font-medium rounded border border-border/40 text-text-secondary hover:text-text-primary hover:border-accent/30 transition-colors inline-flex items-center gap-1"
+      >
+        結果を貼り付け
+        <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-40 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[160px]">
+          <button
+            onClick={() => { useProgenStore.getState().setResultSaveMode("text"); setOpen(false); }}
+            className="w-full text-left px-3 py-1.5 text-[10px] font-medium text-blue-500 hover:bg-blue-50 transition-colors"
+          >テキスト保存</button>
+          <button
+            onClick={() => { useProgenStore.getState().setResultSaveMode("json"); setOpen(false); }}
+            className="w-full text-left px-3 py-1.5 text-[10px] font-medium text-emerald-500 hover:bg-emerald-50 transition-colors"
+          >JSON保存</button>
         </div>
       )}
     </div>

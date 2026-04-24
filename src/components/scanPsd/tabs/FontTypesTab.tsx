@@ -663,7 +663,7 @@ export function FontTypesTab() {
             <button
               onClick={handleRenameSet}
               className="text-[10px] text-white font-medium px-3 py-1.5 rounded-lg"
-              style={{ background: "linear-gradient(135deg, #ff5a8a, #7c5cff)" }}
+              style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
             >
               OK
             </button>
@@ -816,7 +816,7 @@ export function FontTypesTab() {
               onClick={handleCreateSetWithFonts}
               disabled={!newSetName.trim() || !!presetSets[newSetName.trim()]}
               className="text-[10px] font-bold text-white px-4 py-1.5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ background: "linear-gradient(135deg, #ff5a8a, #7c5cff)" }}
+              style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
             >
               作成{pickerSelected.size > 0 ? `（${pickerSelected.size}件）` : "（空）"}
             </button>
@@ -935,7 +935,7 @@ export function FontTypesTab() {
               <button
                 onClick={handleManualGroup}
                 className="text-[9px] font-bold text-white px-3 py-1 rounded-lg"
-                style={{ background: "linear-gradient(135deg, #ff5a8a, #7c5cff)" }}
+                style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
               >
                 纏める
               </button>
@@ -1054,7 +1054,7 @@ export function FontTypesTab() {
                 <button
                   onClick={handleExecuteGroup}
                   className="text-[9px] font-bold text-white px-3 py-1 rounded-lg transition-all"
-                  style={{ background: "linear-gradient(135deg, #ff5a8a, #7c5cff)" }}
+                  style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
                 >
                   実行（{groupRemoveCount}件除外）
                 </button>
@@ -1337,7 +1337,7 @@ export function FontTypesTab() {
                               setEditingPresetIndex(null);
                             }}
                             className="text-[9px] font-bold text-white px-3 py-1 rounded-lg transition-all"
-                            style={{ background: "linear-gradient(135deg, #ff5a8a, #7c5cff)" }}
+                            style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
                           >
                             保存
                           </button>
@@ -1477,7 +1477,7 @@ export function FontTypesTab() {
                 onClick={handleManualFontAdd}
                 disabled={!manualFont.psName.trim()}
                 className="text-[10px] font-bold text-white px-4 py-1.5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ background: "linear-gradient(135deg, #00c9a7, #7c5cff)" }}
+                style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
               >
                 手動追加に登録
               </button>
@@ -1561,8 +1561,8 @@ export function FontTypesTab() {
                 onClick={handleAddAllUnregistered}
                 className="w-full py-2 text-[10px] font-bold text-white rounded-xl transition-all hover:-translate-y-0.5"
                 style={{
-                  background: "linear-gradient(135deg, #ff5a8a, #7c5cff)",
-                  boxShadow: "0 3px 12px rgba(255,90,138,0.2)",
+                  background: "linear-gradient(135deg, #3a7bd5, #0078d4)",
+                  boxShadow: "0 3px 12px rgba(58,123,213,0.2)",
                 }}
               >
                 検出フォントを全て追加

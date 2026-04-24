@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { desktopDir } from "@tauri-apps/api/path";
+import { FolderOpen, FileText, AlertTriangle } from "lucide-react";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { GENRE_LABELS } from "../../types/scanPsd";
@@ -383,7 +384,7 @@ export function RequestPrepView() {
               <div className="space-y-1.5">
                 {items.map((item, idx) => (
                   <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-bg-secondary border border-border">
-                    <span className="text-xs">{item.isFolder ? "📁" : "📄"}</span>
+                    {item.isFolder ? <FolderOpen className="w-3 h-3 text-folder" /> : <FileText className="w-3 h-3" />}
                     <div className="flex-1 min-w-0">
                       <div className="text-[10px] font-medium text-text-primary truncate">{item.name}</div>
                       <div className="text-[9px] text-text-muted font-mono truncate">{item.path}</div>
@@ -410,7 +411,7 @@ export function RequestPrepView() {
                   ))}
                 </div>
                 {ingestLabels.filter((_, i) => !ingestChecks[i]).length > 0 && (
-                  <div className="text-[9px] text-warning mt-1">⚠ 不足: {ingestLabels.filter((_, i) => !ingestChecks[i]).join("、")}</div>
+                  <div className="text-[9px] text-warning mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />不足: {ingestLabels.filter((_, i) => !ingestChecks[i]).join("、")}</div>
                 )}
               </div>
             )}

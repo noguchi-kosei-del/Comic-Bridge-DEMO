@@ -254,7 +254,7 @@ export function ScanPsdEditView() {
       <div className="px-5 py-2.5 border-b border-border bg-white flex items-center gap-3 flex-shrink-0 shadow-soft">
         <div
           className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-          style={{ background: "linear-gradient(135deg, #ff5a8a, #7c5cff)" }}
+          style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
         >
           <svg
             className="w-4 h-4 text-white"
@@ -319,8 +319,8 @@ export function ScanPsdEditView() {
           style={
             !(pendingTitleLabel && workInfo.title && workInfo.label)
               ? {
-                  background: "linear-gradient(135deg, #ff5a8a, #7c5cff)",
-                  boxShadow: "0 4px 15px rgba(255, 90, 138, 0.3)",
+                  background: "linear-gradient(135deg, #3a7bd5, #0078d4)",
+                  boxShadow: "0 4px 15px rgba(58, 123, 213, 0.3)",
                 }
               : undefined
           }
@@ -383,7 +383,7 @@ export function ScanPsdEditView() {
                   <p className="text-[11px] text-text-muted text-center">統一表記・校正ルールの確認、Geminiプロンプト生成</p>
                   <button
                     onClick={() => setShowProgenJson(true)}
-                    className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg hover:opacity-90 transition-opacity"
+                    className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-accent to-accent-hover rounded-lg hover:opacity-90 transition-opacity"
                   >
                     ルール一覧を開く
                   </button>
@@ -406,13 +406,13 @@ export function ScanPsdEditView() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setShowProofreading(true)}
-                      className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg hover:opacity-90 transition-opacity"
+                      className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-accent to-accent-hover rounded-lg hover:opacity-90 transition-opacity"
                     >
                       校正チェック
                     </button>
                     <button
                       onClick={() => setShowResultViewer(true)}
-                      className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:opacity-90 transition-opacity"
+                      className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-accent to-accent-hover rounded-lg hover:opacity-90 transition-opacity"
                     >
                       結果ビューア
                     </button>
@@ -427,7 +427,7 @@ export function ScanPsdEditView() {
                   <p className="text-[11px] text-text-muted text-center">作品JSONの読み込み・保存</p>
                   <button
                     onClick={() => setShowJsonBrowser(true)}
-                    className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-lg hover:opacity-90 transition-opacity"
+                    className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-accent to-accent-hover rounded-lg hover:opacity-90 transition-opacity"
                   >
                     JSONブラウザを開く
                   </button>
@@ -441,7 +441,7 @@ export function ScanPsdEditView() {
                   <p className="text-[11px] text-text-muted text-center">テキスト編集・ルビ付与・形式変換</p>
                   <button
                     onClick={() => setShowComicPotEditor(true)}
-                    className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-rose-500 to-rose-600 rounded-lg hover:opacity-90 transition-opacity"
+                    className="px-4 py-2 text-[11px] font-medium text-white bg-gradient-to-r from-accent to-accent-hover rounded-lg hover:opacity-90 transition-opacity"
                   >
                     エディタを開く
                   </button>
@@ -612,8 +612,8 @@ function ScanCompleteDialog({ result, onClose }: { result: ScanResult; onClose: 
           className="px-5 py-4 text-center"
           style={{
             background: isSuccess
-              ? "linear-gradient(135deg, rgba(16,185,129,0.08), rgba(77,184,255,0.06))"
-              : "linear-gradient(135deg, rgba(239,68,68,0.08), rgba(255,90,138,0.06))",
+              ? "linear-gradient(135deg, rgba(21,128,61,0.08), rgba(58,123,213,0.06))"
+              : "linear-gradient(135deg, rgba(185,28,28,0.08), rgba(161,98,7,0.06))",
           }}
         >
           {isSuccess ? (
@@ -680,8 +680,8 @@ function ScanCompleteDialog({ result, onClose }: { result: ScanResult; onClose: 
             onClick={onClose}
             className="w-full py-2 text-xs font-bold text-white rounded-xl transition-all hover:-translate-y-0.5"
             style={{
-              background: "linear-gradient(135deg, #ff5a8a, #7c5cff)",
-              boxShadow: "0 3px 12px rgba(255,90,138,0.2)",
+              background: "linear-gradient(135deg, #3a7bd5, #0078d4)",
+              boxShadow: "0 3px 12px rgba(58,123,213,0.2)",
             }}
           >
             OK
@@ -727,7 +727,7 @@ function AdditionalScanDialog({
           <div className="flex items-center gap-2.5">
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #ff5a8a, #7c5cff)" }}
+              style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
             >
               <svg
                 className="w-3.5 h-3.5 text-white"
@@ -884,8 +884,8 @@ function AdditionalScanDialog({
               disabled={folders.length === 0}
               className="px-5 py-2 text-[11px] font-bold text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               style={{
-                background: "linear-gradient(135deg, #ff5a8a, #7c5cff)",
-                boxShadow: folders.length > 0 ? "0 4px 15px rgba(255, 90, 138, 0.3)" : undefined,
+                background: "linear-gradient(135deg, #3a7bd5, #0078d4)",
+                boxShadow: folders.length > 0 ? "0 4px 15px rgba(58, 123, 213, 0.3)" : undefined,
               }}
             >
               スキャン開始

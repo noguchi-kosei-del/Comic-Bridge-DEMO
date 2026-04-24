@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { Search } from "lucide-react";
 import { usePsdStore } from "../../store/psdStore";
 import { useLayerStore, PRESET_CONDITIONS } from "../../store/layerStore";
 import type { LayerActionMode, CustomVisibilityOp, CustomMoveOp } from "../../store/layerStore";
@@ -2472,10 +2473,10 @@ export function LayerDiagnosticsBar({ targetFiles }: { targetFiles: PsdFile[] })
           {hasMissing && (
             <button
               onClick={() => setShowFontBrowser(true)}
-              className="px-2 py-0.5 text-[10px] rounded bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25"
+              className="px-2 py-0.5 text-[10px] rounded bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25 inline-flex items-center gap-1"
               title="共有フォルダから探す"
             >
-              🔍 共有フォルダから探す
+              <Search className="w-3 h-3" /> 共有フォルダから探す
             </button>
           )}
         </div>

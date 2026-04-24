@@ -421,25 +421,24 @@ export function ProgenAdminView({ onBack }: Props) {
         {viewMode === "edit" ? (
           <>
             {/* サイドバー */}
-            <div className="w-[160px] flex-shrink-0 border-r border-border/50 flex flex-col bg-bg-tertiary/30">
-              <div className="flex-1 overflow-y-auto">
+            <div className="w-[272px] flex-shrink-0 border-r border-border/50 flex flex-col bg-bg-tertiary/30">
+              <div className="flex-1 overflow-y-auto p-2 grid grid-cols-3 gap-1.5 content-start">
                 {EDIT_CATEGORIES.map((cat) => {
                   const c = catCounts[cat.key];
+                  const isActive = currentCategory === cat.key;
                   return (
                     <button
                       key={cat.key}
                       onClick={() => setCurrentCategory(cat.key)}
-                      className={`w-full text-left px-3 py-2.5 text-[10px] transition-colors border-b border-border/10 flex items-center justify-between ${
-                        currentCategory === cat.key
-                          ? "bg-accent/10 text-accent font-medium"
-                          : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
+                      className={`aspect-square px-1.5 py-2 text-[10px] rounded-lg border transition-colors flex flex-col items-center justify-center gap-1 ${
+                        isActive
+                          ? "bg-accent/15 text-accent border-accent/40 font-medium"
+                          : "bg-bg-primary/60 text-text-secondary border-border/40 hover:text-text-primary hover:bg-bg-tertiary hover:border-border"
                       }`}
                     >
-                      <span className="flex items-center gap-1.5">
-                        <span className="text-sm">{cat.icon}</span>
-                        <span>{cat.name}</span>
-                      </span>
-                      {c && <span className="text-[9px] text-text-muted tabular-nums">{c.active}/{c.total}</span>}
+                      <span className="text-base leading-none text-sky-500">{cat.icon}</span>
+                      <span className="leading-none text-center">{cat.name}</span>
+                      {c && <span className="text-[9px] text-text-muted tabular-nums leading-none">{c.active}/{c.total}</span>}
                     </button>
                   );
                 })}
@@ -668,7 +667,7 @@ function SymbolPanel({
         <h3 className="text-xs font-bold text-text-primary">記号・句読点ルール ({rules.length})</h3>
         <button onClick={onAdd} className="px-2 py-1 text-[9px] font-medium text-accent bg-accent/10 rounded hover:bg-accent/20 transition-colors">＋ 追加</button>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {rules.map((rule, i) => (
           <div
             key={i}
@@ -696,7 +695,7 @@ function SymbolPanel({
             {rule.note && <div className="text-[9px] text-text-muted mt-0.5 ml-6">{rule.note}</div>}
           </div>
         ))}
-        {rules.length === 0 && <div className="col-span-2 text-text-muted text-xs text-center py-8">ルールなし</div>}
+        {rules.length === 0 && <div className="col-span-3 text-text-muted text-xs text-center py-8">ルールなし</div>}
       </div>
     </div>
   );
@@ -730,22 +729,22 @@ function ProofPanel({
             return (
               <div key={subCat}>
                 <div className="text-[10px] text-text-muted font-medium mb-1.5 border-b border-border/20 pb-1">{subLabel}</div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {subRules.map(({ rule, index }) => (
                     <ProofCard key={index} rule={rule} index={index} onToggle={onToggle} onDelete={onDelete} onEdit={onEdit} />
                   ))}
-                  {subRules.length === 0 && <div className="col-span-2 text-text-muted text-[9px] text-center py-4">ルールなし</div>}
+                  {subRules.length === 0 && <div className="col-span-3 text-text-muted text-[9px] text-center py-4">ルールなし</div>}
                 </div>
               </div>
             );
           })}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {rules.map(({ rule, index }) => (
             <ProofCard key={index} rule={rule} index={index} onToggle={onToggle} onDelete={onDelete} onEdit={onEdit} />
           ))}
-          {rules.length === 0 && <div className="col-span-2 text-text-muted text-xs text-center py-8">ルールなし</div>}
+          {rules.length === 0 && <div className="col-span-3 text-text-muted text-xs text-center py-8">ルールなし</div>}
         </div>
       )}
     </div>
@@ -810,7 +809,7 @@ function DifficultPanel({
         <h3 className="text-xs font-bold text-text-primary">難読文字 ({rules.length})</h3>
         <button onClick={onAdd} className="px-2 py-1 text-[9px] font-medium text-accent bg-accent/10 rounded hover:bg-accent/20 transition-colors">＋ 追加</button>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {rules.map(({ rule, index }) => (
           <div
             key={index}
@@ -854,7 +853,7 @@ function DifficultPanel({
             {rule.note && <div className="text-[9px] text-text-muted mt-0.5 ml-6">{rule.note}</div>}
           </div>
         ))}
-        {rules.length === 0 && <div className="col-span-2 text-text-muted text-xs text-center py-8">ルールなし</div>}
+        {rules.length === 0 && <div className="col-span-3 text-text-muted text-xs text-center py-8">ルールなし</div>}
       </div>
     </div>
   );

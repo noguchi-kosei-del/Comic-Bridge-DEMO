@@ -30,7 +30,7 @@ export const WORKFLOWS: Workflow[] = [
   {
     id: "ingest",
     name: "写植入稿",
-    icon: "📦",
+    icon: "入",
     steps: [
       { label: "完成原稿 読み込み", desc: "フォルダセットアップ → PSD自動読み込み", nav: "folderSetup" },
       { label: "仕様を一括で修正", desc: "カラーモード・ビット深度・解像度・ガイド一括反映", nav: "specCheck", confirmOnNext: "specCheck" },
@@ -44,7 +44,7 @@ export const WORKFLOWS: Workflow[] = [
   {
     id: "proof",
     name: "初校確認",
-    icon: "📝",
+    icon: "初",
     steps: [
       { label: "初校データ 読み込み", desc: "問題を検出", nav: "specCheck", confirmOnNext: "specCheck" },
       { label: "レイヤー構造確認", desc: "レイヤー階層・名称を確認", nav: "layers" },
@@ -58,7 +58,7 @@ export const WORKFLOWS: Workflow[] = [
   {
     id: "review",
     name: "校正確認",
-    icon: "✅",
+    icon: "校",
     steps: [
       { label: "校正確認", desc: "校正内容を確認" },
       { label: "赤字は修正 書きつぎ", desc: "赤字反映" },
@@ -69,7 +69,7 @@ export const WORKFLOWS: Workflow[] = [
   {
     id: "tiff",
     name: "白消しTIFF",
-    icon: "🖼️",
+    icon: "T",
     steps: [
       { label: "白消し(棒消し)差し替え", desc: "差替え or 合成", nav: "replace" },
       { label: "差し替え → 差分検知ビュー", desc: "差分チェック", nav: "unifiedViewer" },

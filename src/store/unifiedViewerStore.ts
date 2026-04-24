@@ -1,8 +1,18 @@
 /**
  * 統合ビューアー専用ストア
  * メインの psdStore とは独立したファイル管理を行う
+ *
+ * この store はファクトリ関数 `createUnifiedViewerStore()` で複数インスタンス
+ * 生成できる。アプリでは 2 つのインスタンスを使い分ける:
+ *   - useUnifiedViewerStore : ビューアー View 用（デフォルト / 外部からの参照もこちら）
+ *   - useTextEditorViewerStore : テキストエディタ View 用
+ * これによりファイル選択 / タブ配置 / 読み込み中の TXT 内容などが 2 画面間で連動せず
+ * 独立して維持される。UnifiedViewer コンポーネント内部では `ScopedViewerStoreProvider`
+ * を介してどちらのインスタンスを使うか切り替える。
  */
-import { create } from "zustand";
+import { createContext, createElement, useContext, type ReactNode } from "react";
+import { create, useStore } from "zustand";
+import type { StoreApi, UseBoundStore } from "zustand";
 import type { PsdMetadata } from "../types";
 import type {
   ParsedProofreadingData,
@@ -42,13 +52,14 @@ export interface FontPresetEntry {
   subName?: string; // Category
 }
 
-export type PanelTab = "files" | "layers" | "spec" | "text" | "proofread" | "diff";
+export type PanelTab = "files" | "layers" | "spec" | "text" | "proofread" | "diff" | "editor";
 export type LeftTab = PanelTab;
 export type RightTab = PanelTab;
-export type PanelPosition = "far-left" | "left-sub" | "right-sub" | "far-right";
-export const PANEL_POSITIONS: PanelPosition[] = ["far-left", "left-sub", "right-sub", "far-right"];
+// 「右サブ」レイヤーは廃止。右側は「右端」のみを使用する。
+export type PanelPosition = "far-left" | "left-sub" | "far-right";
+export const PANEL_POSITIONS: PanelPosition[] = ["far-left", "left-sub", "far-right"];
 export const PANEL_POSITION_LABELS: Record<PanelPosition, string> = {
-  "far-left": "左端", "left-sub": "左サブ", "right-sub": "右サブ", "far-right": "右端",
+  "far-left": "左端", "left-sub": "左サブ", "far-right": "右端",
 };
 
 interface UnifiedViewerState {
@@ -116,13 +127,16 @@ interface UnifiedViewerState {
   updateFileMetadata: (index: number, metadata: PsdMetadata) => void;
 }
 
-export const useUnifiedViewerStore = create<UnifiedViewerState>((set, get) => ({
+export type UnifiedViewerStore = UseBoundStore<StoreApi<UnifiedViewerState>>;
+
+export function createUnifiedViewerStore(): UnifiedViewerStore {
+  return create<UnifiedViewerState>((set, get) => ({
   // Initial state
   files: [],
   currentFileIndex: -1,
   leftTab: "files",
   rightTab: "text",
-  tabPositions: { files: "left-sub", text: "right-sub" },
+  tabPositions: { text: "far-right" },
   displacedTabs: {},
   textContent: "",
   textFilePath: null,
@@ -148,6 +162,18 @@ export const useUnifiedViewerStore = create<UnifiedViewerState>((set, get) => ({
   setLeftTab: (tab) => set({ leftTab: tab }),
   setRightTab: (tab) => set({ rightTab: tab }),
   setTabPosition: (tab, pos) => {
+    // 「右サブ」は廃止済み。互換のため万一渡ってきたら「右端」へ正規化する。
+    if ((pos as string | null) === "right-sub") {
+      pos = "far-right";
+    }
+    // files は「左端固定」もしくは非表示のみ許可（右側・左サブへ移動不可）
+    if (tab === "files" && pos !== null && pos !== "far-left") {
+      pos = "far-left";
+    }
+    // text / proofread / diff は左端へ移動不可（左端は files 専用）。左端を要求された場合は非表示扱い。
+    if ((tab === "text" || tab === "proofread" || tab === "diff") && pos === "far-left") {
+      pos = null;
+    }
     const tp = { ...get().tabPositions };
     const dp = { ...get().displacedTabs };
     const oldPos = tp[tab] ?? null;
@@ -213,4 +239,36 @@ export const useUnifiedViewerStore = create<UnifiedViewerState>((set, get) => ({
     updated[index] = { ...updated[index], metadata };
     set({ files: updated });
   },
-}));
+  }));
+}
+
+// ─ View 別インスタンス ─────────────────────────────────────
+// デフォルト: ビューアー View 用（外部モジュール・旧コードからの参照先）
+export const useUnifiedViewerStore: UnifiedViewerStore = createUnifiedViewerStore();
+// テキストエディタ View 用（UnifiedViewer 内部からのみ使用）
+export const useTextEditorViewerStore: UnifiedViewerStore = createUnifiedViewerStore();
+
+// ─ React Context でスコープ伝播 ────────────────────────────
+const ScopedStoreCtx = createContext<UnifiedViewerStore>(useUnifiedViewerStore);
+
+export function ScopedViewerStoreProvider(
+  props: { store: UnifiedViewerStore; children: ReactNode },
+) {
+  return createElement(ScopedStoreCtx.Provider, { value: props.store }, props.children);
+}
+
+/** UnifiedViewer 内部と、その配下のパネルから呼び出すフック。
+ *  Provider が無い場所で呼ぶと既定のビューアーインスタンスを返す。
+ *  セレクタ無しで呼べば state 全体、セレクタありで呼べば派生値を返す。 */
+export function useScopedViewerStore(): UnifiedViewerState;
+export function useScopedViewerStore<T>(selector: (s: UnifiedViewerState) => T): T;
+export function useScopedViewerStore<T>(selector?: (s: UnifiedViewerState) => T) {
+  const store = useContext(ScopedStoreCtx);
+  return useStore(store, selector as (s: UnifiedViewerState) => T);
+}
+
+/** Provider 経由で現在のスコープ用 store インスタンスそのものを取得する。
+ *  getState() / setState() / subscribe() を呼ぶ必要がある箇所で使う。 */
+export function useScopedViewerStoreApi(): UnifiedViewerStore {
+  return useContext(ScopedStoreCtx);
+}

@@ -446,9 +446,9 @@ export function SplitPanel() {
               disabled={files.length === 0 || !canExecuteUneven}
               className="
                 flex-1 px-3 py-2.5 text-sm font-medium rounded-xl text-white
-                bg-gradient-to-r from-accent-tertiary to-accent-secondary
-                shadow-[0_3px_12px_rgba(0,212,170,0.25)]
-                hover:shadow-[0_5px_16px_rgba(0,212,170,0.35)]
+                bg-gradient-to-r from-accent to-accent-hover
+                shadow-[0_3px_12px_rgba(58,123,213,0.3)]
+                hover:shadow-[0_5px_16px_rgba(58,123,213,0.4)]
                 hover:-translate-y-0.5
                 transition-all duration-200
                 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none

@@ -25,6 +25,7 @@ export function GuideEditorModal() {
   const checkResults = useSpecStore((state) => state.checkResults);
 
   const [applyTarget, setApplyTarget] = useState<"selected" | "all">("all");
+  const [canvasZoom, setCanvasZoom] = useState(1);
 
   // Get high-resolution preview for the active file
   const activeFilePath = activeFile?.filePath || files[0]?.filePath;
@@ -99,6 +100,10 @@ export function GuideEditorModal() {
         <div className="flex items-center justify-between px-6 py-4 border-b border-text-muted/10">
           <h2 className="text-lg font-medium text-text-primary">ガイド編集</h2>
           <div className="flex items-center gap-2">
+            {/* Zoom % */}
+            <span className="text-xs text-text-muted tabular-nums px-2 py-1 rounded bg-bg-tertiary/60 border border-text-muted/10">
+              {Math.round(canvasZoom * 100)}%
+            </span>
             {/* Undo/Redo */}
             <button
               className="p-2 rounded hover:bg-bg-tertiary disabled:opacity-30"
@@ -152,6 +157,7 @@ export function GuideEditorModal() {
               imageUrl={imageUrl ?? undefined}
               imageSize={canvasSize}
               isLoading={isPreviewLoading}
+              onZoomChange={setCanvasZoom}
             />
           </div>
 

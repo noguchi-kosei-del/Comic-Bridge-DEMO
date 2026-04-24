@@ -9,6 +9,7 @@
 import { useEffect, useCallback, useRef } from "react";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
+import { FolderOpen, FileText } from "lucide-react";
 import { useParallelStore } from "../../store/parallelStore";
 import { useViewStore } from "../../store/viewStore";
 
@@ -218,8 +219,8 @@ function PanelView({ side, onSelectFolder, onSelectFile }: PanelProps) {
       <div className="flex-shrink-0 flex items-center gap-1 px-2 py-1 border-b border-border/50 bg-bg-secondary/50">
         <span className={`text-[10px] font-medium ${sideColor}`}>{side}</span>
 
-        <button onClick={onSelectFolder} className="px-1.5 py-0.5 text-[9px] text-text-muted hover:text-text-primary bg-bg-tertiary rounded transition-colors" title="フォルダ選択">📁</button>
-        <button onClick={onSelectFile} className="px-1.5 py-0.5 text-[9px] text-text-muted hover:text-text-primary bg-bg-tertiary rounded transition-colors" title="ファイル選択">📄</button>
+        <button onClick={onSelectFolder} className="w-5 h-5 flex items-center justify-center text-text-muted hover:text-text-primary bg-bg-tertiary rounded transition-colors" title="フォルダ選択"><FolderOpen className="w-3 h-3" /></button>
+        <button onClick={onSelectFile} className="w-5 h-5 flex items-center justify-center text-text-muted hover:text-text-primary bg-bg-tertiary rounded transition-colors" title="ファイル選択"><FileText className="w-3 h-3" /></button>
 
         <div className="w-px h-4 bg-border mx-0.5" />
 

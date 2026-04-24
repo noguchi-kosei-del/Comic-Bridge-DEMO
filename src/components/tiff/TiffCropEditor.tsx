@@ -1108,14 +1108,14 @@ export function TiffCropEditor({ onSwitchToQueue }: TiffCropEditorProps) {
                         top: GUIDE_HIT_HALF - 1,
                         height: 2,
                         background: isSelected
-                          ? "linear-gradient(90deg, #ff5a8a, #ffb142, #ff5a8a)"
-                          : "linear-gradient(90deg, rgba(255,177,66,0.6), rgba(255,90,138,0.6), rgba(255,177,66,0.6))",
-                        boxShadow: isSelected ? "0 0 6px rgba(255,177,66,0.4)" : "none",
+                          ? "linear-gradient(90deg, #3a7bd5, #60a5fa, #3a7bd5)"
+                          : "linear-gradient(90deg, rgba(96,165,250,0.6), rgba(58,123,213,0.6), rgba(96,165,250,0.6))",
+                        boxShadow: isSelected ? "0 0 6px rgba(58,123,213,0.45)" : "none",
                       }}
                     />
                     {isSelected && (
                       <div
-                        className="absolute w-3 h-3 rounded-full bg-accent-warm border-2 border-white"
+                        className="absolute w-3 h-3 rounded-full bg-accent border-2 border-white"
                         style={{ left: -6, top: GUIDE_HIT_HALF - 6 }}
                       />
                     )}
@@ -1143,14 +1143,14 @@ export function TiffCropEditor({ onSwitchToQueue }: TiffCropEditorProps) {
                         left: GUIDE_HIT_HALF - 1,
                         width: 2,
                         background: isSelected
-                          ? "linear-gradient(180deg, #ff5a8a, #ffb142, #ff5a8a)"
-                          : "linear-gradient(180deg, rgba(255,177,66,0.6), rgba(255,90,138,0.6), rgba(255,177,66,0.6))",
-                        boxShadow: isSelected ? "0 0 6px rgba(255,177,66,0.4)" : "none",
+                          ? "linear-gradient(180deg, #3a7bd5, #60a5fa, #3a7bd5)"
+                          : "linear-gradient(180deg, rgba(96,165,250,0.6), rgba(58,123,213,0.6), rgba(96,165,250,0.6))",
+                        boxShadow: isSelected ? "0 0 6px rgba(58,123,213,0.45)" : "none",
                       }}
                     />
                     {isSelected && (
                       <div
-                        className="absolute w-3 h-3 rounded-full bg-accent-warm border-2 border-white"
+                        className="absolute w-3 h-3 rounded-full bg-accent border-2 border-white"
                         style={{ top: -6, left: GUIDE_HIT_HALF - 6 }}
                       />
                     )}
@@ -1171,8 +1171,8 @@ export function TiffCropEditor({ onSwitchToQueue }: TiffCropEditorProps) {
                     width: imageLayout.displayW,
                     height: 2,
                     background:
-                      "linear-gradient(90deg, rgba(255,177,66,0.8), rgba(255,90,138,0.8), rgba(255,177,66,0.8))",
-                    boxShadow: "0 0 8px rgba(255,177,66,0.5)",
+                      "linear-gradient(90deg, rgba(96,165,250,0.8), rgba(58,123,213,0.8), rgba(96,165,250,0.8))",
+                    boxShadow: "0 0 8px rgba(58,123,213,0.5)",
                   }}
                 />
               ) : (
@@ -1184,8 +1184,8 @@ export function TiffCropEditor({ onSwitchToQueue }: TiffCropEditorProps) {
                     width: 2,
                     height: imageLayout.displayH,
                     background:
-                      "linear-gradient(180deg, rgba(255,177,66,0.8), rgba(255,90,138,0.8), rgba(255,177,66,0.8))",
-                    boxShadow: "0 0 8px rgba(255,177,66,0.5)",
+                      "linear-gradient(180deg, rgba(96,165,250,0.8), rgba(58,123,213,0.8), rgba(96,165,250,0.8))",
+                    boxShadow: "0 0 8px rgba(58,123,213,0.5)",
                   }}
                 />
               ))}
@@ -1320,7 +1320,7 @@ export function TiffCropEditor({ onSwitchToQueue }: TiffCropEditorProps) {
                     top: cropScreenRect.y,
                     width: cropScreenRect.w,
                     height: cropScreenRect.h,
-                    border: "2px dashed rgba(255,90,138,0.6)",
+                    border: "2px dashed rgba(58,123,213,0.7)",
                   }}
                   onMouseDown={(e) => handleCropMouseDown(e, "move")}
                 >

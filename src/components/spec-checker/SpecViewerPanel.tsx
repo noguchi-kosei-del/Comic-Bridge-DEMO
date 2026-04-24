@@ -1009,27 +1009,6 @@ export function SpecViewerPanel({
                 )}
               </span>
             )}
-            {viewerFile && (
-              <button
-                className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded transition-all text-text-muted hover:text-text-primary hover:bg-bg-tertiary active:scale-95"
-                onClick={() => openFolderForFile(viewerFile.filePath)}
-                title="フォルダを開く (F)"
-              >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                  />
-                </svg>
-              </button>
-            )}
             {onOpenInPhotoshop && viewerFile && (
               <button
                 className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded transition-all text-[#31A8FF] hover:bg-[#31A8FF]/15 active:scale-95"
@@ -1559,13 +1538,13 @@ export function SpecViewerPanel({
             style={{
               fontSize: "min(8vw, 8vh)",
               lineHeight: 1.3,
-              background: "linear-gradient(135deg, #ff6b9d, #c084fc, #60a5fa, #34d399)",
+              background: "linear-gradient(135deg, #3a7bd5, #1e90ff, #0078d4, #1e6bb8)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
               backgroundClip: "text",
             }}
           >
-            COMIC-Bridge
+            Comic-Bridge DEMO
           </span>
           <span
             className="font-medium tracking-[0.3em] uppercase text-black/20"

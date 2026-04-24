@@ -20,8 +20,8 @@ export function DropZone() {
     >
       <div className="text-center p-8">
         <div className="w-24 h-24 mx-auto mb-6 rounded-3xl flex items-center justify-center bg-bg-tertiary">
-          <svg className="w-12 h-12 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          <svg className="w-12 h-12 text-folder" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
           </svg>
         </div>
         <p className="text-xl font-display font-medium mb-3 text-text-primary">

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useSettingsStore, ALL_NAV_BUTTONS } from "../../store/settingsStore";
+import { useAppUpdater } from "../../hooks/useAppUpdater";
 
 const FONT_SIZES = [
   { id: "small" as const, label: "小", desc: "9px基準" },
@@ -41,6 +42,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     fontSize, accentColor, darkMode, defaultFolderPath, navBarButtons, toolMenuButtons,
     setFontSize, setAccentColor, setDarkMode, setDefaultFolderPath, setNavBarButtons, setToolMenuButtons,
   } = useSettingsStore();
+  const updater = useAppUpdater();
   const [tab, setTab] = useState<SettingsTab>("general");
   const [editNav, setEditNav] = useState<string[]>(navBarButtons);
   const [editTool, setEditTool] = useState<string[]>(toolMenuButtons);
@@ -174,6 +176,8 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
                 {/* 番号 */}
                 <span className="text-[9px] text-text-muted/50 w-3 text-right flex-shrink-0">{idx + 1}</span>
+                {/* アイコン */}
+                {btn.icon && <btn.icon className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />}
                 {/* 名称 */}
                 <span className="text-text-primary">{btn.label}</span>
               </div>
@@ -199,6 +203,8 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   />
                   {/* 番号なし */}
                   <span className="w-3 flex-shrink-0" />
+                  {/* アイコン */}
+                  {btn.icon && <btn.icon className="w-3.5 h-3.5 text-text-muted/50 flex-shrink-0" />}
                   {/* 名称 */}
                   <span className="text-text-muted">{btn.label}</span>
                 </div>
@@ -288,7 +294,38 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+        <div className="px-5 py-3 border-t border-border flex justify-end gap-2 items-center">
+          {/* バージョン情報（左側） */}
+          <div className="mr-auto flex items-center gap-2 text-[11px] text-text-muted">
+            {updater.appVersion && (
+              <span className="font-mono">v{updater.appVersion}</span>
+            )}
+            {updater.phase === "checking" && (
+              <span className="inline-flex items-center gap-1 text-text-muted/70">
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                更新を確認中
+              </span>
+            )}
+            {updater.phase === "up-to-date" && (
+              <span className="inline-flex items-center gap-1 text-success">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                最新版
+              </span>
+            )}
+            {updater.phase === "available" && updater.updateInfo && (
+              <button
+                onClick={() => updater.downloadAndInstall()}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-accent-tertiary bg-accent-tertiary/10 hover:bg-accent-tertiary/20 transition-colors"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-tertiary animate-pulse" />
+                更新 v{updater.updateInfo.version}
+              </button>
+            )}
+          </div>
           {tab === "layout" && layoutDirty && (
             <button onClick={applyLayout} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-success text-white hover:bg-success/90 transition-colors">決定</button>
           )}

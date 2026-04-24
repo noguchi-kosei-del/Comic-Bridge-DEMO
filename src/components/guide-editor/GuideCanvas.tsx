@@ -6,6 +6,7 @@ interface GuideCanvasProps {
   imageUrl?: string;
   imageSize: { width: number; height: number };
   isLoading?: boolean;
+  onZoomChange?: (zoom: number) => void;
 }
 
 /** ガイドのヒットエリア半径 (片側px) */
@@ -15,11 +16,12 @@ const GUIDE_HIT_HALF = 5;
  * Guide editing canvas with Photoshop-style rulers.
  * Supports drag-to-create guides, zoom, and pan.
  */
-export function GuideCanvas({ imageUrl, imageSize, isLoading }: GuideCanvasProps) {
+export function GuideCanvas({ imageUrl, imageSize, isLoading, onZoomChange }: GuideCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
+  useEffect(() => { onZoomChange?.(zoom); }, [zoom, onZoomChange]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragDirection, setDragDirection] = useState<"horizontal" | "vertical" | null>(null);
   const [previewPosition, setPreviewPosition] = useState<number | null>(null);
@@ -362,7 +364,7 @@ export function GuideCanvas({ imageUrl, imageSize, isLoading }: GuideCanvasProps
         }}
       >
         {/* Ruler Corner */}
-        <div className="bg-bg-tertiary border-r border-b border-[#e0dcd8]" />
+        <div className="bg-bg-tertiary border-r border-b border-border-light" />
 
         {/* Horizontal Ruler (creates vertical guides) */}
         <div className="overflow-hidden">
@@ -473,11 +475,11 @@ export function GuideCanvas({ imageUrl, imageSize, isLoading }: GuideCanvasProps
                         top: GUIDE_HIT_HALF,
                         height: 1,
                         background: isSelected
-                          ? "linear-gradient(90deg, #ffb142, #ff5a8a, #ffb142)"
-                          : "linear-gradient(90deg, #ffb14299, #ff5a8a99, #ffb14299)",
+                          ? "linear-gradient(90deg, #3a7bd5, #60a5fa, #3a7bd5)"
+                          : "linear-gradient(90deg, #3a7bd599, #60a5fa99, #3a7bd599)",
                         boxShadow: isSelected
-                          ? "0 0 6px rgba(255, 177, 66, 0.8)"
-                          : "0 0 3px rgba(255, 177, 66, 0.3)",
+                          ? "0 0 6px rgba(58, 123, 213, 0.8)"
+                          : "0 0 3px rgba(58, 123, 213, 0.3)",
                       }}
                     />
                     {/* Selection indicator */}
@@ -490,8 +492,8 @@ export function GuideCanvas({ imageUrl, imageSize, isLoading }: GuideCanvasProps
                           width: 10,
                           height: 10,
                           borderRadius: "50%",
-                          background: "linear-gradient(135deg, #ffb142, #ff5a8a)",
-                          boxShadow: "0 0 4px rgba(255, 177, 66, 0.8)",
+                          background: "linear-gradient(135deg, #3a7bd5, #0078d4)",
+                          boxShadow: "0 0 4px rgba(58, 123, 213, 0.8)",
                         }}
                       />
                     )}
@@ -517,11 +519,11 @@ export function GuideCanvas({ imageUrl, imageSize, isLoading }: GuideCanvasProps
                         left: GUIDE_HIT_HALF,
                         width: 1,
                         background: isSelected
-                          ? "linear-gradient(180deg, #ffb142, #ff5a8a, #ffb142)"
-                          : "linear-gradient(180deg, #ffb14299, #ff5a8a99, #ffb14299)",
+                          ? "linear-gradient(180deg, #3a7bd5, #60a5fa, #3a7bd5)"
+                          : "linear-gradient(180deg, #3a7bd599, #60a5fa99, #3a7bd599)",
                         boxShadow: isSelected
-                          ? "0 0 6px rgba(255, 177, 66, 0.8)"
-                          : "0 0 3px rgba(255, 177, 66, 0.3)",
+                          ? "0 0 6px rgba(58, 123, 213, 0.8)"
+                          : "0 0 3px rgba(58, 123, 213, 0.3)",
                       }}
                     />
                     {/* Selection indicator */}
@@ -535,8 +537,8 @@ export function GuideCanvas({ imageUrl, imageSize, isLoading }: GuideCanvasProps
                           width: 10,
                           height: 10,
                           borderRadius: "50%",
-                          background: "linear-gradient(135deg, #ffb142, #ff5a8a)",
-                          boxShadow: "0 0 4px rgba(255, 177, 66, 0.8)",
+                          background: "linear-gradient(135deg, #3a7bd5, #0078d4)",
+                          boxShadow: "0 0 4px rgba(58, 123, 213, 0.8)",
                         }}
                       />
                     )}
@@ -555,9 +557,9 @@ export function GuideCanvas({ imageUrl, imageSize, isLoading }: GuideCanvasProps
                       left: -guideOverflowX,
                       right: -guideOverflowX,
                       height: 2,
-                      background: "linear-gradient(90deg, #ffb142, #ff5a8a, #ffb142)",
+                      background: "linear-gradient(90deg, #3a7bd5, #60a5fa, #3a7bd5)",
                       opacity: 0.8,
-                      boxShadow: "0 0 8px rgba(255, 177, 66, 0.6)",
+                      boxShadow: "0 0 8px rgba(58, 123, 213, 0.55)",
                     }}
                   />
                 ) : (
@@ -568,9 +570,9 @@ export function GuideCanvas({ imageUrl, imageSize, isLoading }: GuideCanvasProps
                       top: -guideOverflowY,
                       bottom: -guideOverflowY,
                       width: 2,
-                      background: "linear-gradient(180deg, #ffb142, #ff5a8a, #ffb142)",
+                      background: "linear-gradient(180deg, #3a7bd5, #60a5fa, #3a7bd5)",
                       opacity: 0.8,
-                      boxShadow: "0 0 8px rgba(255, 177, 66, 0.6)",
+                      boxShadow: "0 0 8px rgba(58, 123, 213, 0.55)",
                     }}
                   />
                 ))}
@@ -579,15 +581,6 @@ export function GuideCanvas({ imageUrl, imageSize, isLoading }: GuideCanvasProps
         </div>
       </div>
 
-      {/* Zoom indicator */}
-      <div className="absolute bottom-2 right-2 z-40 bg-bg-secondary/90 px-3 py-1.5 rounded-md text-xs text-text-muted backdrop-blur-sm border border-text-muted/10">
-        {Math.round(zoom * 100)}%
-      </div>
-
-      {/* Instructions */}
-      <div className="absolute bottom-2 left-2 z-40 bg-bg-secondary/90 px-3 py-1.5 rounded-md text-xs text-text-muted backdrop-blur-sm border border-text-muted/10">
-        定規ドラッグ: 作成 | ガイドドラッグ: 移動 | 矢印キー: 微調整(+Shift 10px) | BackSpace: 削除
-      </div>
     </div>
   );
 }

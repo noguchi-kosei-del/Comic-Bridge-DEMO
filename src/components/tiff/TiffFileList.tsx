@@ -129,8 +129,11 @@ export function TiffFileList({ onOpenCropEditor }: TiffFileListProps) {
             <div key={file.id}>
               {/* サブフォルダヘッダー */}
               {showSubfolderHeader && (
-                <div className="px-2.5 py-1 bg-accent-warm/5 border-b border-accent-warm/20 sticky top-0 z-10">
-                  <span className="text-[9px] font-semibold text-accent-warm/70 truncate block">
+                <div className="px-2.5 py-1 bg-folder/10 border-b border-folder/25 sticky top-0 z-10 flex items-center gap-1.5">
+                  <svg className="w-2.5 h-2.5 text-folder flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
+                  </svg>
+                  <span className="text-[9px] font-semibold text-folder-dark truncate block">
                     {currentSubfolder}
                   </span>
                 </div>

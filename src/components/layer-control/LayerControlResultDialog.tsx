@@ -156,15 +156,15 @@ export function LayerControlResultDialog() {
         detailHeader: "bg-emerald-500/10 border-emerald-500/15",
         detailTitle: "text-emerald-400",
         detailDivider: "divide-emerald-500/10",
-        btn: "from-emerald-500 to-teal-500 shadow-[0_4px_15px_rgba(16,185,129,0.3)]",
+        btn: "from-accent to-accent-hover shadow-[0_4px_15px_rgba(58,123,213,0.3)]",
       }
     : isLayerMoveMode
       ? {
-          detail: "bg-violet-500/5 border-violet-500/20",
-          detailHeader: "bg-violet-500/10 border-violet-500/15",
-          detailTitle: "text-violet-400",
-          detailDivider: "divide-violet-500/10",
-          btn: "from-violet-500 to-purple-500 shadow-[0_4px_15px_rgba(139,92,246,0.3)]",
+          detail: "bg-accent/5 border-accent/20",
+          detailHeader: "bg-accent/10 border-accent/15",
+          detailTitle: "text-accent",
+          detailDivider: "divide-accent/10",
+          btn: "from-accent to-accent-hover shadow-[0_4px_15px_rgba(58,123,213,0.3)]",
         }
       : isOrganizeMode
         ? {
@@ -176,18 +176,18 @@ export function LayerControlResultDialog() {
           }
         : isHideMode
           ? {
-              detail: "bg-accent-secondary/5 border-accent-secondary/20",
-              detailHeader: "bg-accent-secondary/10 border-accent-secondary/15",
-              detailTitle: "text-accent-secondary",
-              detailDivider: "divide-accent-secondary/10",
-              btn: "from-accent to-accent-secondary shadow-glow-pink",
+              detail: "bg-accent/5 border-accent/20",
+              detailHeader: "bg-accent/10 border-accent/15",
+              detailTitle: "text-accent",
+              detailDivider: "divide-accent/10",
+              btn: "from-accent to-accent-hover shadow-[0_4px_15px_rgba(58,123,213,0.3)]",
             }
           : {
-              detail: "bg-accent-tertiary/5 border-accent-tertiary/20",
-              detailHeader: "bg-accent-tertiary/10 border-accent-tertiary/15",
-              detailTitle: "text-accent-tertiary",
-              detailDivider: "divide-accent-tertiary/10",
-              btn: "from-accent-tertiary to-manga-sky shadow-[0_4px_15px_rgba(0,212,170,0.3)]",
+              detail: "bg-accent/5 border-accent/20",
+              detailHeader: "bg-accent/10 border-accent/15",
+              detailTitle: "text-accent",
+              detailDivider: "divide-accent/10",
+              btn: "from-accent to-accent-hover shadow-[0_4px_15px_rgba(58,123,213,0.3)]",
             };
 
   const changedLabel = isMergeMode
@@ -455,7 +455,7 @@ export function LayerControlResultDialog() {
               {lastMergeSourceFolder && (
                 <button
                   onClick={handleOpenKenban}
-                  className="px-4 py-2.5 text-sm font-medium rounded-xl text-white bg-gradient-to-r from-blue-500 to-indigo-500 shadow-[0_4px_15px_rgba(59,130,246,0.3)] hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-1.5"
+                  className="px-4 py-2.5 text-sm font-medium rounded-xl text-white bg-gradient-to-r from-accent to-accent-hover shadow-[0_4px_15px_rgba(58,123,213,0.3)] hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-1.5"
                 >
                   <svg
                     className="w-4 h-4"

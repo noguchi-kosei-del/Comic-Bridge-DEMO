@@ -185,7 +185,7 @@ export function GuideLinesTab() {
                     {isSelected ? (
                       <span
                         className="text-[8px] font-bold text-white px-2 py-0.5 rounded-full flex-shrink-0"
-                        style={{ background: "linear-gradient(135deg, #00c9a7, #5ce0c9)" }}
+                        style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
                       >
                         選択中
                       </span>

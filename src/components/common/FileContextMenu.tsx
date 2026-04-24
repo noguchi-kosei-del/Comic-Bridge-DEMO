@@ -1,8 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
+import {
+  FolderOpen, Palette, BookMarked, Search, FileText,
+  Scissors, Clipboard, Trash2, Pencil, Calendar, Inbox, BarChart3,
+  BookOpen, Image as ImageIcon, Wrench, Ruler, Layers,
+  Package, SquarePen, Replace,
+} from "lucide-react";
 import { usePsdStore } from "../../store/psdStore";
 import { useViewStore, validateAndSetABPath, showPromptDialog, type AppView } from "../../store/viewStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
@@ -11,6 +17,17 @@ import { useScanPsdStore } from "../../store/scanPsdStore";
 import { usePsdLoader } from "../../hooks/usePsdLoader";
 import { useTextExtract } from "../../hooks/useTextExtract";
 import type { PsdFile } from "../../types";
+
+// アイコン共通サイズ
+const ICON = "w-3.5 h-3.5";
+
+// A/B バッジ（丸囲み文字の代替）
+const BadgeA = () => (
+  <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-accent/20 text-accent text-[8px] font-bold leading-none">A</span>
+);
+const BadgeB = () => (
+  <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-accent-secondary/25 text-accent-secondary text-[8px] font-bold leading-none">B</span>
+);
 
 // ═══════════════════════════════════════════════════
 // Types
@@ -36,7 +53,7 @@ interface FileContextMenuProps {
 interface MenuItem {
   label: string;
   shortcut?: string;
-  icon?: string;
+  icon?: ReactNode;
   disabled?: boolean;
   onClick?: () => void;
   children?: MenuItem[];
@@ -71,7 +88,7 @@ function SubMenu({ items, onClose }: { items: MenuItem[]; onClose: () => void })
               if (item.onClick) item.onClick();
             }}
           >
-            {item.icon && <span className="w-4 text-center text-xs flex-shrink-0">{item.icon}</span>}
+            {item.icon && <span className="w-4 flex items-center justify-center text-text-muted flex-shrink-0">{item.icon}</span>}
             <span className="flex-1">{item.label}</span>
             {item.shortcut && (
               <span className="text-[9px] text-text-muted/50 ml-2">{item.shortcut}</span>
@@ -121,7 +138,7 @@ function SubMenuItem({ item, onClose }: { item: MenuItem; onClose: () => void })
             : showSub ? "bg-accent/8 text-accent" : "text-text-primary hover:bg-accent/8 hover:text-accent cursor-pointer"
         }`}
       >
-        {item.icon && <span className="w-4 text-center text-xs flex-shrink-0">{item.icon}</span>}
+        {item.icon && <span className="w-4 flex items-center justify-center text-text-muted flex-shrink-0">{item.icon}</span>}
         <span className="flex-1">{item.label}</span>
         <svg className="w-3 h-3 text-text-muted/50 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -517,45 +534,45 @@ export function FileContextMenu({
     ...(selectedFolderName ? [
       {
         label: "フォルダを開く",
-        icon: "📂",
+        icon: <FolderOpen className={ICON} />,
         onClick: openSelectedItemLocation,
       },
       {
-        label: "フォルダ内をPsで開く",
-        icon: "🎨",
+        label: "フォルダ内をPs",
+        icon: <Palette className={ICON} />,
         onClick: openFolderPsdsInPhotoshop,
       },
       {
         label: "PDF作成（フォルダ内）",
-        icon: "📑",
+        icon: <BookMarked className={ICON} />,
         onClick: launchTachimiForFolder,
       },
       { separator: true, label: "sep-ab-folder" },
       {
         label: "A/B比較",
-        icon: "🔍",
+        icon: <Search className={ICON} />,
         children: [
-          { label: "Aにセット", icon: "🅰️", onClick: () => { if (selectedItemPath) validateAndSetABPath("A", selectedItemPath); } },
-          { label: "Bにセット", icon: "🅱️", onClick: () => { if (selectedItemPath) validateAndSetABPath("B", selectedItemPath); } },
+          { label: "Aにセット", icon: <BadgeA />, onClick: () => { if (selectedItemPath) validateAndSetABPath("A", selectedItemPath); } },
+          { label: "Bにセット", icon: <BadgeB />, onClick: () => { if (selectedItemPath) validateAndSetABPath("B", selectedItemPath); } },
         ],
       },
     ] : [
       {
         label: "ファイルの場所を開く",
-        icon: "📂",
+        icon: <FolderOpen className={ICON} />,
         onClick: openSelectedItemLocation,
       },
     ]),
     // プレビュー中のテキストを読み込み
     ...(previewText ? [{
       label: `「${previewText.name}」をテキストとして読み込み`,
-      icon: "📝",
+      icon: <SquarePen className={ICON} />,
       onClick: handleLoadPreviewText,
     }] : []),
     { separator: true, label: "sep-np1" },
     {
       label: "カット",
-      icon: "✂️",
+      icon: <Scissors className={ICON} />,
       onClick: async () => {
         if (!selectedItemPath) return;
         await navigator.clipboard.writeText(selectedItemPath).catch(() => {});
@@ -571,12 +588,12 @@ export function FileContextMenu({
     },
     {
       label: "コピー",
-      icon: "📋",
+      icon: <Clipboard className={ICON} />,
       onClick: copySelectedItemPath,
     },
     {
       label: "複製",
-      icon: "📄",
+      icon: <FileText className={ICON} />,
       onClick: async () => {
         if (!selectedItemPath) return;
         let createdPath = "";
@@ -608,7 +625,7 @@ export function FileContextMenu({
     },
     {
       label: "削除",
-      icon: "🗑️",
+      icon: <Trash2 className={ICON} />,
       onClick: async () => {
         if (!selectedItemPath) return;
         if (!window.confirm(`「${selectedFolderName || selectedFileName}」を削除しますか？`)) return;
@@ -624,11 +641,11 @@ export function FileContextMenu({
     },
     {
       label: "リネーム",
-      icon: "✏️",
+      icon: <Pencil className={ICON} />,
       children: [
         {
           label: "名前を変更",
-          icon: "📝",
+          icon: <SquarePen className={ICON} />,
           onClick: async () => {
             if (!selectedItemPath) return;
             const name = selectedFolderName || selectedFileName || "";
@@ -654,7 +671,7 @@ export function FileContextMenu({
         },
         {
           label: "yyyymmdd_ジャンル_タイトル_巻",
-          icon: "📅",
+          icon: <Calendar className={ICON} />,
           onClick: async () => {
             if (!selectedItemPath) return;
             const name = selectedFolderName || selectedFileName || "";
@@ -701,115 +718,115 @@ export function FileContextMenu({
     { separator: true, label: "sep-np2" },
     {
       label: "読み込み",
-      icon: "📥",
+      icon: <Inbox className={ICON} />,
       children: [
-        { label: "別の作品を読み込み", icon: "📂", onClick: handleLoadFolder },
-        { label: "セリフテキスト読み込み", icon: "📄", onClick: handleLoadText },
-        { label: "校正JSON読み込み", icon: "📊", onClick: handleLoadCheckJson },
-        { label: "作品JSON読み込み", icon: "📋", onClick: handleLoadPresetJson },
+        { label: "別の作品を読み込み", icon: <FolderOpen className={ICON} />, onClick: handleLoadFolder },
+        { label: "セリフテキスト読み込み", icon: <FileText className={ICON} />, onClick: handleLoadText },
+        { label: "校正JSON読み込み", icon: <BarChart3 className={ICON} />, onClick: handleLoadCheckJson },
+        { label: "作品JSON読み込み", icon: <Clipboard className={ICON} />, onClick: handleLoadPresetJson },
       ],
     },
   ] : [];
 
   const menuItems: MenuItem[] = nonPsdMenuItems.length > 0 ? nonPsdMenuItems : [
     {
-      label: "Psで開く",
+      label: "Ps",
       shortcut: "P",
-      icon: "🎨",
+      icon: <Palette className={ICON} />,
       onClick: openInPhotoshop,
       disabled: targetFiles.length === 0,
     },
     {
       label: "MojiQで開く",
       shortcut: "M",
-      icon: "📖",
+      icon: <BookOpen className={ICON} />,
       onClick: openInMojiQ,
       disabled: !hasPdf,
     },
     {
       label: "ファイルの場所を開く",
-      icon: "📂",
+      icon: <FolderOpen className={ICON} />,
       onClick: openFileLocation,
       disabled: targetFiles.length === 0,
     },
     // txtファイル: セリフテキストとして読み込み
     ...(isSingleTxt ? [{
       label: "セリフテキストとして読み込み",
-      icon: "📝",
+      icon: <SquarePen className={ICON} />,
       onClick: handleLoadThisText,
     }] : []),
     // プレビュー中のテキストを読み込み
     ...(!isSingleTxt && previewText ? [{
       label: `「${previewText.name}」をテキストとして読み込み`,
-      icon: "📝",
+      icon: <SquarePen className={ICON} />,
       onClick: handleLoadPreviewText,
     }] : []),
     { separator: true, label: "sep1" },
     {
       label: "カット",
-      icon: "✂️",
+      icon: <Scissors className={ICON} />,
       onClick: cutFiles,
       disabled: targetFiles.length === 0,
     },
     {
       label: "コピー",
-      icon: "📋",
+      icon: <Clipboard className={ICON} />,
       onClick: copyFiles,
       disabled: targetFiles.length === 0,
     },
     {
       label: "複製",
-      icon: "📄",
+      icon: <FileText className={ICON} />,
       onClick: duplicateFiles,
       disabled: targetFiles.length === 0,
     },
     {
       label: "削除",
-      icon: "🗑️",
+      icon: <Trash2 className={ICON} />,
       onClick: deleteFiles,
       disabled: targetFiles.length === 0,
     },
     { separator: true, label: "sep2" },
     {
       label: "PDF作成",
-      icon: "📑",
+      icon: <BookMarked className={ICON} />,
       onClick: onLaunchTachimi,
       disabled: allFiles.length === 0,
     },
     {
       label: "TIFF作成",
-      icon: "🖼️",
+      icon: <ImageIcon className={ICON} />,
       onClick: () => navigateTo("tiff"),
     },
     {
       label: "テキスト抽出",
-      icon: "📝",
+      icon: <SquarePen className={ICON} />,
       onClick: handleTextExtract,
       disabled: textExtract.psdFiles.length === 0,
     },
     {
       label: "編集",
-      icon: "🔧",
+      icon: <Wrench className={ICON} />,
       children: [
-        { label: "差し替え", icon: "🔄", onClick: () => navigateTo("replace") },
-        { label: "見開き分割", icon: "📐", onClick: () => navigateTo("split") },
-        { label: "レイヤー制御", icon: "📚", onClick: () => navigateTo("layers") },
+        { label: "差し替え", icon: <Replace className={ICON} />, onClick: () => navigateTo("replace") },
+        { label: "見開き分割", icon: <Ruler className={ICON} />, onClick: () => navigateTo("split") },
+        { label: "レイヤー制御", icon: <Layers className={ICON} />, onClick: () => navigateTo("layers") },
       ],
     },
     {
       label: "リネーム",
-      icon: "✏️",
+      icon: <Pencil className={ICON} />,
       children: [
         {
           label: "このファイルをリネーム",
-          icon: "📝",
+          icon: <SquarePen className={ICON} />,
           onClick: handleRenameSingle,
           disabled: targetFiles.length === 0,
         },
-        { label: "バッチでリネーム", icon: "📋", onClick: () => navigateTo("rename") },
+        { label: "バッチでリネーム", icon: <Clipboard className={ICON} />, onClick: () => navigateTo("rename") },
         {
           label: "yyyymmdd_ジャンル_タイトル_巻",
-          icon: "📅",
+          icon: <Calendar className={ICON} />,
           onClick: handleRenameYYYYMMDD,
           disabled: targetFiles.length === 0,
         },
@@ -817,18 +834,18 @@ export function FileContextMenu({
     },
     {
       label: "圧縮",
-      icon: "📦",
+      icon: <Package className={ICON} />,
       onClick: () => navigateTo("requestPrep" as any),
     },
     {
       label: "A/B比較",
-      icon: "🔍",
+      icon: <Search className={ICON} />,
       children: [
-        { label: "Aにセット", icon: "🅰️", onClick: () => {
+        { label: "Aにセット", icon: <BadgeA />, onClick: () => {
           const path = singleFile?.filePath ? (singleFile.filePath.substring(0, singleFile.filePath.lastIndexOf("\\"))) : usePsdStore.getState().currentFolderPath;
           if (path) validateAndSetABPath("A", path);
         }},
-        { label: "Bにセット", icon: "🅱️", onClick: () => {
+        { label: "Bにセット", icon: <BadgeB />, onClick: () => {
           const path = singleFile?.filePath ? (singleFile.filePath.substring(0, singleFile.filePath.lastIndexOf("\\"))) : usePsdStore.getState().currentFolderPath;
           if (path) validateAndSetABPath("B", path);
         }},
@@ -837,12 +854,12 @@ export function FileContextMenu({
     { separator: true, label: "sep3" },
     {
       label: "読み込み",
-      icon: "📥",
+      icon: <Inbox className={ICON} />,
       children: [
-        { label: "別の作品を読み込み", icon: "📂", onClick: handleLoadFolder },
-        { label: "セリフテキスト読み込み", icon: "📄", onClick: handleLoadText },
-        { label: "校正JSON読み込み", icon: "📊", onClick: handleLoadCheckJson },
-        { label: "作品JSON読み込み", icon: "📋", onClick: handleLoadPresetJson },
+        { label: "別の作品を読み込み", icon: <FolderOpen className={ICON} />, onClick: handleLoadFolder },
+        { label: "セリフテキスト読み込み", icon: <FileText className={ICON} />, onClick: handleLoadText },
+        { label: "校正JSON読み込み", icon: <BarChart3 className={ICON} />, onClick: handleLoadCheckJson },
+        { label: "作品JSON読み込み", icon: <Clipboard className={ICON} />, onClick: handleLoadPresetJson },
       ],
     },
   ];

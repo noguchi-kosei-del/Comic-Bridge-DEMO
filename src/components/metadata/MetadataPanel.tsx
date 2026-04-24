@@ -149,11 +149,11 @@ export function MetadataPanel({ file }: MetadataPanelProps) {
           <div className="bg-bg-tertiary rounded-xl p-3 mt-3">
             {file.metadata.hasTombo ? (
               <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-manga-peach/20 text-manga-peach">
-                あり
+                トンボレイヤーあり
               </span>
             ) : (
               <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-text-muted/20 text-text-muted">
-                なし
+                トンボレイヤーなし
               </span>
             )}
           </div>

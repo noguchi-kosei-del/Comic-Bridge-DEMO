@@ -302,10 +302,10 @@ export function JsonFileBrowser({ basePath, onSelect, onCancel, mode, defaultFil
                       hover:bg-bg-tertiary transition-colors group"
                   >
                     <svg
-                      className="w-4 h-4 text-accent flex-shrink-0"
-                      fill="none"
+                      className="w-4 h-4 text-folder flex-shrink-0"
+                      fill="currentColor"
                       viewBox="0 0 24 24"
-                      stroke="currentColor"
+                      stroke="none"
                       strokeWidth={2}
                     >
                       <path

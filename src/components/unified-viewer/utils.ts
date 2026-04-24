@@ -3,15 +3,25 @@
  */
 import type { PanelTab } from "../../store/unifiedViewerStore";
 import type { TextPage, FontPresetEntry } from "../../store/unifiedViewerStore";
+import {
+  Layers,
+  Ruler,
+  Type,
+  ClipboardCheck,
+  GitCompare,
+  FileEdit,
+  type LucideIcon,
+} from "lucide-react";
 
 // ─── Panel tab definitions (共通タブ) ───────────────────
-export const ALL_PANEL_TABS: { id: PanelTab; label: string }[] = [
-  { id: "files", label: "ファイル" },
-  { id: "layers", label: "レイヤー" },
-  { id: "spec", label: "写植仕様" },
-  { id: "text", label: "テキスト" },
-  { id: "proofread", label: "校正JSON" },
-  { id: "diff", label: "テキスト照合" },
+// files タブは廃止済み（左サイドバーのファイル一覧表示を削除）。
+export const ALL_PANEL_TABS: { id: PanelTab; label: string; icon: LucideIcon }[] = [
+  { id: "layers", label: "レイヤー", icon: Layers },
+  { id: "spec", label: "写植仕様", icon: Ruler },
+  { id: "text", label: "テキスト", icon: Type },
+  { id: "proofread", label: "校正JSON", icon: ClipboardCheck },
+  { id: "diff", label: "テキスト照合", icon: GitCompare },
+  { id: "editor", label: "テキストエディタ", icon: FileEdit },
 ];
 
 // ─── Constants ──────────────────────────────────────────
@@ -91,6 +101,69 @@ export function serializeText(
     }
   }
   return lines.join("\r\n");
+}
+
+// ─── ProGen 並び替え用: チャンクパーサ ───────────────────
+// テキストを「dialogue（セリフ）」と「separator（<<NPage>> / [N巻] / ----------）」の
+// チャンク配列に分割する。空行がチャンク境界。ProGen の cpParseTextToChunks 相当。
+export type TextChunkType = "dialogue" | "separator";
+export interface TextChunk { content: string; type: TextChunkType }
+
+export function parseTextToChunks(inputText: string): TextChunk[] {
+  if (!inputText) return [];
+  const lines = inputText.split("\n");
+  const parsed: TextChunk[] = [];
+  let current: string[] = [];
+  const volumeMarker = /^\[\d+巻\]$/;
+  const pageMarker = /^<<\d+Page>>$/;
+  const cpHeader = /^\[COMIC-POT(:\w+)?\]$/;
+  const dash = /^-{10}$/;
+  const flush = () => {
+    if (current.length > 0) {
+      parsed.push({ content: current.join("\n"), type: "dialogue" });
+      current = [];
+    }
+  };
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (cpHeader.test(trimmed)) continue; // header は除外（外側で管理）
+    if (volumeMarker.test(trimmed) || pageMarker.test(trimmed)) {
+      flush();
+      parsed.push({ content: trimmed, type: "separator" });
+    } else if (dash.test(trimmed)) {
+      flush();
+      parsed.push({ content: "----------", type: "separator" });
+    } else if (trimmed === "") {
+      flush();
+    } else {
+      current.push(raw);
+    }
+  }
+  flush();
+  return parsed;
+}
+
+export function extractComicPotHeader(content: string): string {
+  if (!content) return "";
+  const re = /^\[COMIC-POT(:\w+)?\]$/;
+  for (const line of content.split("\n")) {
+    const t = line.trim();
+    if (re.test(t)) return t;
+  }
+  return "";
+}
+
+export function reconstructTextFromChunks(chunks: TextChunk[], header: string): string {
+  let result = header ? header + "\n\n" : "";
+  for (let i = 0; i < chunks.length; i++) {
+    result += chunks[i].content;
+    if (i < chunks.length - 1) {
+      const cur = chunks[i];
+      const nxt = chunks[i + 1];
+      result += cur.type === "separator" || nxt.type === "separator" ? "\n" : "\n\n";
+    }
+  }
+  return result;
 }
 
 // ─── File Helpers ────────────────────────────────────────

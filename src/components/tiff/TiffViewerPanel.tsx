@@ -306,7 +306,7 @@ function CropOverlay({
         width={right - left}
         height={bottom - top}
         fill="none"
-        stroke="rgba(255,90,138,0.6)"
+        stroke="rgba(58,123,213,0.7)"
         strokeWidth={2}
         vectorEffect="non-scaling-stroke"
       />

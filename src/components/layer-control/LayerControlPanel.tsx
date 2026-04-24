@@ -1076,21 +1076,7 @@ export function LayerControlPanel() {
           disabled={!canExecute}
           className={`
             w-full px-4 py-3 text-sm font-medium rounded-xl text-white
-            ${
-              isMergeMode
-                ? "bg-gradient-to-r from-emerald-500 to-teal-500 shadow-[0_4px_15px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.4)]"
-                : isLockMode
-                  ? "bg-gradient-to-r from-amber-500 to-yellow-500 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.4)]"
-                  : isCustomMode
-                    ? "bg-gradient-to-r from-sky-500 to-blue-500 shadow-[0_4px_15px_rgba(14,165,233,0.3)] hover:shadow-[0_6px_20px_rgba(14,165,233,0.4)]"
-                    : isLayerMoveMode
-                      ? "bg-gradient-to-r from-violet-500 to-purple-500 shadow-[0_4px_15px_rgba(139,92,246,0.3)] hover:shadow-[0_6px_20px_rgba(139,92,246,0.4)]"
-                      : isOrganizeMode
-                        ? "bg-gradient-to-r from-warning to-amber-500 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:shadow-[0_6px_20px_rgba(245,158,11,0.4)]"
-                        : isHideMode
-                          ? "bg-gradient-to-r from-accent to-accent-secondary shadow-glow-pink hover:shadow-[0_6px_20px_rgba(255,107,157,0.4)]"
-                          : "bg-gradient-to-r from-accent-tertiary to-manga-sky shadow-[0_4px_15px_rgba(0,212,170,0.3)] hover:shadow-[0_6px_20px_rgba(0,212,170,0.4)]"
-            }
+            bg-gradient-to-r from-accent to-accent-hover shadow-[0_4px_15px_rgba(58,123,213,0.3)] hover:shadow-[0_6px_20px_rgba(58,123,213,0.4)]
             hover:-translate-y-0.5
             transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
@@ -1259,7 +1245,7 @@ function ModeButton({
     <button
       className={`
         flex-1 px-2 py-1.5 text-[11px] font-medium rounded-lg transition-all duration-200
-        flex items-center justify-center gap-1
+        flex flex-col items-center justify-center gap-1
         ${
           isSelected
             ? selectedClass
@@ -1269,7 +1255,7 @@ function ModeButton({
       onClick={() => onChange(mode)}
     >
       {icon}
-      {label}
+      <span className="leading-none">{label}</span>
     </button>
   );
 }
@@ -1309,9 +1295,7 @@ function ConditionItem({
           w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-200
           ${
             isSelected
-              ? isHideMode
-                ? "bg-gradient-to-br from-accent to-accent-secondary border-accent"
-                : "bg-gradient-to-br from-accent-tertiary to-manga-sky border-accent-tertiary"
+              ? "bg-gradient-to-br from-accent to-accent-hover border-accent"
               : "border-text-muted/50"
           }
         `}

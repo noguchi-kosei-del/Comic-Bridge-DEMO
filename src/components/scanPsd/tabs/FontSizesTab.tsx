@@ -91,7 +91,7 @@ export function FontSizesTab() {
       <div
         className="rounded-xl p-4 text-center relative overflow-hidden"
         style={{
-          background: "linear-gradient(135deg, rgba(255,177,66,0.1), rgba(255,90,138,0.08))",
+          background: "linear-gradient(135deg, rgba(58,123,213,0.10), rgba(0,120,212,0.08))",
         }}
       >
         <div className="absolute inset-0 bg-tone opacity-50" />
@@ -120,7 +120,7 @@ export function FontSizesTab() {
                 <span
                   className="text-3xl font-black font-display"
                   style={{
-                    background: "linear-gradient(135deg, #ff5a8a, #7c5cff)",
+                    background: "linear-gradient(135deg, #3a7bd5, #0078d4)",
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
                   }}
@@ -191,8 +191,8 @@ export function FontSizesTab() {
                     width: `${Math.max((s.count / maxCount) * 100, 4)}%`,
                     background:
                       i === 0
-                        ? "linear-gradient(90deg, #ff5a8a, #7c5cff)"
-                        : `rgba(124, 92, 255, ${0.5 - i * 0.04})`,
+                        ? "linear-gradient(90deg, #3a7bd5, #0078d4)"
+                        : `rgba(58, 123, 213, ${0.5 - i * 0.04})`,
                   }}
                 />
               </div>

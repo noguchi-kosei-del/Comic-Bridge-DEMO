@@ -11,9 +11,11 @@ export type AppView =
   | "scanPsd"
   | "typesetting"
   | "progen"
+  | "textEditor"
   | "unifiedViewer"
   | "folderSetup"
-  | "requestPrep";
+  | "requestPrep"
+  | "inspection";
 
 export type ProgenMode = "extraction" | "formatting" | "proofreading" | null;
 

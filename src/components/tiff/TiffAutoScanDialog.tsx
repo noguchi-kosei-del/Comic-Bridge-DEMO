@@ -476,7 +476,7 @@ export function TiffAutoScanDialog({
           <button
             onClick={handleExecute}
             disabled={!isReady || jsonLoading}
-            className="flex-1 px-4 py-2.5 text-xs font-medium rounded-xl text-white bg-gradient-to-r from-accent-warm to-accent shadow-[0_3px_12px_rgba(255,177,66,0.25)] hover:shadow-[0_5px_16px_rgba(255,177,66,0.35)] hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
+            className="flex-1 px-4 py-2.5 text-xs font-medium rounded-xl text-white bg-gradient-to-r from-accent to-accent-hover shadow-[0_3px_12px_rgba(58,123,213,0.3)] hover:shadow-[0_5px_16px_rgba(58,123,213,0.4)] hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
           >
             {jsonEnabled ? "JSON登録して実行" : "実行"}
           </button>

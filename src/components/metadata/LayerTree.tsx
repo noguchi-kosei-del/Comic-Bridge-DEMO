@@ -28,7 +28,7 @@ export function LayerTree({
     if (depth !== 0 || !rootRef.current) return;
     const rows = rootRef.current.querySelectorAll("[data-layer-row]");
     rows.forEach((el, i) => {
-      (el as HTMLElement).style.backgroundColor = i % 2 === 0 ? "#ffffff" : "#f0f8f0";
+      (el as HTMLElement).style.backgroundColor = i % 2 === 0 ? "#ffffff" : "#eaf2fb";
     });
   });
 

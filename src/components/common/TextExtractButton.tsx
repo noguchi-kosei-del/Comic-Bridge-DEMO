@@ -137,7 +137,7 @@ export function TextExtractButton({
 
         {/* メインボタン */}
         <button
-          className={`${compact ? "h-11 min-w-[150px] px-5 text-sm" : "h-16 min-w-[220px] px-8 text-lg"} font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-2 whitespace-nowrap bg-bg-secondary border-2 border-[#7c5cff]/40 text-[#7c5cff] hover:bg-bg-elevated hover:border-[#7c5cff]/60 hover:shadow-[0_4px_16px_rgba(124,92,255,0.25)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed`}
+          className={`${compact ? "h-8 px-3 text-sm" : "h-10 px-4 text-base"} font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1 whitespace-nowrap bg-bg-secondary border-2 border-[#3a7bd5]/40 text-[#3a7bd5] hover:bg-bg-elevated hover:border-[#3a7bd5]/60 hover:shadow-[0_4px_16px_rgba(58,123,213,0.25)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed`}
           onClick={() => {
             setResult(null);
             setShowOptions(!showOptions);
@@ -148,7 +148,7 @@ export function TextExtractButton({
           {isExtracting ? (
             <>
               <div
-                className={`${compact ? "w-4 h-4" : "w-5 h-5"} rounded-full border-2 border-[#7c5cff]/30 border-t-[#7c5cff] animate-spin`}
+                className={`${compact ? "w-4 h-4" : "w-5 h-5"} rounded-full border-2 border-[#3a7bd5]/30 border-t-[#3a7bd5] animate-spin`}
               />
               <span className={compact ? "text-xs" : "text-base"}>抽出中...</span>
             </>
@@ -169,11 +169,6 @@ export function TextExtractButton({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 3v5a1 1 0 001 1h5" />
               </svg>
               テキスト抽出
-              <span
-                className={`${compact ? "px-1.5 py-0.5 text-xs" : "px-2 py-1 text-sm"} rounded-lg bg-[#7c5cff]/10 text-[#7c5cff] font-bold`}
-              >
-                {psdFiles.length}
-              </span>
             </>
           )}
         </button>

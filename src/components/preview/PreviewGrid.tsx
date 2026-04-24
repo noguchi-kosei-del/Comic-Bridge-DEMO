@@ -14,6 +14,7 @@ export function PreviewGrid({ fileFilter, fileSorter, onDoubleClickFile }: { fil
   const activeFileId = usePsdStore((state) => state.activeFileId);
   const selectFile = usePsdStore((state) => state.selectFile);
   const selectRange = usePsdStore((state) => state.selectRange);
+  const clearSelection = usePsdStore((state) => state.clearSelection);
   const checkResults = useSpecStore((state) => state.checkResults);
   const { outlierFileIds, majoritySize } = useCanvasSizeCheck();
 
@@ -49,7 +50,12 @@ export function PreviewGrid({ fileFilter, fileSorter, onDoubleClickFile }: { fil
     } else if (e.ctrlKey || e.metaKey) {
       selectFile(fileId, true);
     } else {
-      selectFile(fileId);
+      // 選択中カードを再度クリックしたら選択解除（単一選択時のみ）
+      if (selectedFileIds.length === 1 && selectedFileIds[0] === fileId) {
+        clearSelection();
+      } else {
+        selectFile(fileId);
+      }
     }
   };
 

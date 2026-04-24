@@ -6,32 +6,34 @@ export default {
     extend: {
       colors: {
         // ══════════════════════════════════════════════════════════
-        // 背景: クリームホワイト維持 + 温中性tertiary
+        // 背景: 台割マネージャー準拠（ホワイトベース・クール中性）
         // ══════════════════════════════════════════════════════════
         bg: {
-          primary:   "#fbfaf7",  // クリームホワイト（メイン背景）
-          secondary: "#ffffff",  // パネル・モーダル
-          tertiary:  "#ebeae5",  // 温中性薄グレー（カード・非アクティブ）
+          primary:   "#f8f9fc",  // クールホワイト（メイン背景）
+          secondary: "#ffffff",  // 純白（パネル・モーダル）
+          tertiary:  "#f0f2f5",  // クール薄グレー（カード・非アクティブ）
           elevated:  "#ffffff",  // 浮き上がり要素
         },
         // ══════════════════════════════════════════════════════════
-        // テキスト: 深い中性色、全てAA以上
+        // テキスト: 深いネイビー系、全てAA以上
         // ══════════════════════════════════════════════════════════
         text: {
-          primary:   "#1a1a24",  // 主要 (17.8:1 AAA)
+          primary:   "#1a1a2e",  // 主要（台割マネージャー準拠）
           secondary: "#4a4a5a",  // 副次 (9.6:1 AAA)
           muted:     "#6b6b7a",  // 控えめ (5.5:1 AA)
         },
         // ══════════════════════════════════════════════════════════
-        // アクセント: 単一Indigo原則
+        // アクセント: 単一ブルー原則（台割マネージャー準拠）
         // ══════════════════════════════════════════════════════════
         accent: {
-          DEFAULT:   "#4f46e5",  // Indigo (6.3:1) 主要操作
-          hover:     "#4338ca",  // Deep Indigo (8.2:1)
-          glow:      "rgba(79, 70, 229, 0.18)",
-          secondary: "#a16207",  // Amber (5.9:1) 編集朱入れ（使用最小限）
-          tertiary:  "#0e7490",  // Teal (6.1:1) 情報リンク
-          warm:      "#b45309",  // Burnt Orange (5.4:1) 注意喚起
+          DEFAULT:   "#3a7bd5",  // Blue 主要操作
+          hover:     "#0078d4",  // Deep Blue（ホバー時・グラデ終点）
+          glow:      "rgba(58, 123, 213, 0.20)",
+          // ブルー統一方針（v3.8.2〜）: secondary/tertiary/warm もグラデ用のブルー系に再定義。
+          // 従来 semantic（amber/teal/orange）だった用途は全て青基調に集約。
+          secondary: "#0078d4",  // Deep Blue（from-accent to-accent-secondary グラデで使用）
+          tertiary:  "#1e90ff",  // Dodger Blue（info 系ハイライト・グラデのバリエーション）
+          warm:      "#1e6bb8",  // Steel Blue（旧 warm トーン → 落ち着いたブルー）
         },
         // ══════════════════════════════════════════════════════════
         // 漫画装飾カラー: 事実上廃止（CSS で全て bg-tertiary に上書き）
@@ -59,11 +61,19 @@ export default {
           v: "#0891b2",
         },
         // ══════════════════════════════════════════════════════════
-        // ボーダー: 温中性
+        // フォルダアイコン: Windows風マニラフォルダ（オレンジよりの黄色）
+        // ══════════════════════════════════════════════════════════
+        folder: {
+          DEFAULT: "#f5b73d",  // マニラフォルダ基調
+          hover:   "#ffc857",  // ホバー時やや明るく
+          dark:    "#d49a2b",  // 縁・影表現
+        },
+        // ══════════════════════════════════════════════════════════
+        // ボーダー: クール中性（台割マネージャー準拠）
         // ══════════════════════════════════════════════════════════
         border: {
-          DEFAULT: "#d9d7d0",  // 明確な区切り
-          light:   "#e9e7e0",  // 薄い区切り
+          DEFAULT: "#d5d9e0",  // 明確な区切り
+          light:   "#e5e7ec",  // 薄い区切り
         },
       },
       // ══════════════════════════════════════════════════════════════
@@ -129,12 +139,12 @@ export default {
       // 影: ドロップシャドウ維持 + 3色グロー（Indigo系に統一）
       // ══════════════════════════════════════════════════════════════
       boxShadow: {
-        'soft':     '0 2px 8px rgba(26, 26, 36, 0.06), 0 1px 2px rgba(26, 26, 36, 0.04)',
-        'card':     '0 4px 16px rgba(26, 26, 36, 0.06), 0 2px 4px rgba(26, 26, 36, 0.04)',
-        'elevated': '0 8px 24px rgba(26, 26, 36, 0.10), 0 4px 8px rgba(26, 26, 36, 0.06)',
-        // 3色グロー（Indigo主体、既存クラス名を後方互換で維持）
-        'glow-pink':    '0 0 20px rgba(79, 70, 229, 0.22)',   // Indigo
-        'glow-purple':  '0 0 20px rgba(67, 56, 202, 0.22)',   // Deep Indigo
+        'soft':     '0 2px 8px rgba(26, 26, 46, 0.06), 0 1px 2px rgba(26, 26, 46, 0.04)',
+        'card':     '0 4px 16px rgba(26, 26, 46, 0.06), 0 2px 4px rgba(26, 26, 46, 0.04)',
+        'elevated': '0 8px 24px rgba(26, 26, 46, 0.10), 0 4px 8px rgba(26, 26, 46, 0.06)',
+        // 3色グロー（ブルー主体、既存クラス名を後方互換で維持）
+        'glow-pink':    '0 0 20px rgba(58, 123, 213, 0.22)',  // Blue
+        'glow-purple':  '0 0 20px rgba(0, 120, 212, 0.22)',   // Deep Blue
         'glow-mint':    '0 0 20px rgba(14, 116, 144, 0.22)',  // Teal
         'glow-success': '0 0 16px rgba(21, 128, 61, 0.25)',
         'glow-error':   '0 0 16px rgba(185, 28, 28, 0.25)',
@@ -161,8 +171,8 @@ export default {
           '100%': { transform: 'scale(1)' },
         },
         'glow-pulse': {
-          '0%, 100%': { boxShadow: '0 0 0 0   rgba(79, 70, 229, 0.25)' },
-          '50%':      { boxShadow: '0 0 0 6px rgba(79, 70, 229, 0)'    },
+          '0%, 100%': { boxShadow: '0 0 0 0   rgba(58, 123, 213, 0.25)' },
+          '50%':      { boxShadow: '0 0 0 6px rgba(58, 123, 213, 0)'    },
         },
         'float': {
           '0%, 100%': { transform: 'translateY(0)' },
@@ -178,10 +188,10 @@ export default {
         },
       },
       backgroundImage: {
-        'gradient-pop':   'linear-gradient(135deg, #4f46e5, #4338ca)',
-        'gradient-fresh': 'linear-gradient(135deg, #0e7490, #4f46e5)',
-        'gradient-warm':  'linear-gradient(135deg, #b45309, #a16207)',
-        'gradient-card':  'linear-gradient(180deg, #ffffff, #fbfaf7)',
+        'gradient-pop':   'linear-gradient(135deg, #3a7bd5, #0078d4)',
+        'gradient-fresh': 'linear-gradient(135deg, #1e90ff, #3a7bd5)',
+        'gradient-warm':  'linear-gradient(135deg, #1e6bb8, #0078d4)',
+        'gradient-card':  'linear-gradient(180deg, #ffffff, #f8f9fc)',
       },
     },
   },

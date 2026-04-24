@@ -5,7 +5,7 @@ export function ReplaceView() {
   return (
     <div className="flex h-full overflow-hidden" data-tool-panel>
       {/* Settings panel */}
-      <div className="w-[360px] flex-shrink-0 border-r border-border overflow-hidden">
+      <div className="w-[272px] flex-shrink-0 border-r border-border overflow-hidden">
         <ReplacePanel />
       </div>
 

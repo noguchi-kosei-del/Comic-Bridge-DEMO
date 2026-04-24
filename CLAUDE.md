@@ -9,7 +9,7 @@
 
 ## 概要
 
-漫画制作者や編集者が入稿前にPSDファイルの仕様をチェックし、必要に応じてPhotoshopと連携して一括修正できるツール。統合ビューアー（テキスト照合・写植確認・校正JSON・DTPビューアー・差分モード・分割ビューアー）とProGen（テキスト抽出・校正プロンプト生成ツール）を内蔵。全機能React/Tailwind/Zustandネイティブ実装。
+漫画制作者や編集者が入稿前にPSDファイルの仕様をチェックし、必要に応じてPhotoshopと連携して一括修正できるツール。統合ビューアー（テキスト照合・写植確認・校正JSON・DTPビューアー）、検版ツール（差分モード・分割ビューアー、v3.9.0で独立化）、ProGen（テキスト抽出・校正プロンプト生成ツール）を内蔵。全機能React/Tailwind/Zustandネイティブ実装。
 
 ## 技術スタック
 
@@ -366,8 +366,9 @@
 **フォルダ検出** (`detect_psd_folders` Rustコマンド):
 - 指定フォルダ内のPSDファイルを含むサブフォルダを検出
 
-### 20. 差分ビューアー / 分割ビューアー（v3.5.0でKENBANから完全移植、v3.6.0で大幅改善）
-- **配置**: 統合ビューアータブ内のサブタブ（差分モード / 分割ビューアー）
+### 20. 差分ビューアー / 分割ビューアー（v3.5.0でKENBANから完全移植、v3.6.0で大幅改善、v3.9.0で検版ツールへ独立化）
+- **配置（v3.9.0〜）**: **検版ツール（`inspection`）ビュー内のサブタブ**（差分モード / 分割ビューアー）。[InspectionToolView.tsx](src/components/views/InspectionToolView.tsx) が `viewStore.kenbanViewMode` で2サブタブを切替
+- **旧配置（v3.5.0〜v3.8.2）**: 統合ビューアータブ内のサブタブ（v3.9.0で検版ツールへ移動）
 - **差分ビューアー** (`src/components/diff-viewer/DiffViewerView.tsx` + `src/store/diffStore.ts`)
   - **比較モード**: tiff-tiff / psd-psd / pdf-pdf / psd-tiff（PSD/TIFFは順序問わず双方向対応）
   - **表示モード**: 原稿A / 原稿B / 差分（ピクセル差分のヒートマップ・マーカー表示）
@@ -408,7 +409,7 @@
     - `toolMode === "proofreading"` → テキストなしならエラー、あれば 🟢正誤 + 🟠提案 の2ボタン並列
 - **新規作成のレーベル選択（v3.6.4）**: GENRE_LABELS（scanPsd.ts）による 2段階ドロップダウン（ジャンル → レーベル）。既存JSON読み込み時は従来の単一ドロップダウン
 - **主要コンポーネント**:
-  - `ProgenRuleView` — ルール編集（サイドバー7カテゴリ+Gemini連携4種+結果貼付2種）。**v3.7.1: listMode prop**でカード表示（ツール経由）/テーブル一覧表示（スキャナー経由）を切替。カードモード: 追加フォームはカード最後尾にインライン3項目入力。テーブルモード: コンパクト行表示+最下部に3項目インライン追加フォーム。**校正用テキスト複数選択**: 現在のテキスト（常時自動）+参照（エクスプローラー複数選択）+フォルダ（UIブラウザ、チェックボックス付き複数選択）。**結果貼付ボタン**: テキスト保存/JSON保存を追加。**parseCheckText改善**: 正誤/提案の自動判定（ヘッダー＋カテゴリ名ベース）
+  - `ProgenRuleView` — ルール編集（サイドバー7カテゴリ）。**v3.7.1: listMode prop**でカード表示（ツール経由）/テーブル一覧表示（スキャナー経由）を切替。カードモード: 追加フォームはカード最後尾にインライン3項目入力。テーブルモード: コンパクト行表示+最下部に3項目インライン追加フォーム。**v3.9.0 UI再構成**: メインエリア上部に **プロンプト生成ボタン横並びバー** を新設（[抽出][整形][正誤][提案] + コピー済表示 + 「校正用テキスト追加 ▾」「結果を貼り付け ▾」ドロップダウン）。サイドバーは「カテゴリ + 検索 + 保存ボタン」のみに簡素化。ルールカード `grid-cols-3`（v3.9.0、旧2列）。**ルール保存ダイアログ**: 保存後に成功/失敗を中央モーダルで表示（マスタールール+JSON保存先のパス詳細、未設定時は警告）。**校正用テキスト複数選択**: 現在のテキスト（常時自動）+ エクスプローラーから参照 + テキストフォルダから選択（チェックボックス付きフォルダブラウザ）。**parseCheckText改善**: 正誤/提案の自動判定（ヘッダー＋カテゴリ名ベース）。「Gemini を開く」単独ボタンは v3.9.0 で削除（プロンプトボタンは引き続き Gemini を自動オープン）
   - ~~`ProgenProofreadingView`~~ — **v3.6.4で厳重隔離**（ファイルは残すが、どこからもレンダリングされない）。校正は ProgenRuleView の popup で処理
   - `ProgenJsonBrowser` — GドライブJSONフォルダツリー（検索・読込・保存・新規作成）
   - `ProgenResultViewer` — 校正結果表示（3タブ+ピックアップ+CSV貼り付け）
@@ -550,6 +551,127 @@
 ### 26. ファイルプロパティパネル
 - **FilePropertiesPanel**: 右プレビューパネル下部に折りたたみ可能なプロパティ表示
 - **表示項目**: ファイル名 / ドキュメント種類 / 作成日 / 修正日 / ファイルサイズ / 寸法(px/inch/cm) / 用紙サイズ / 解像度 / ビット数 / カラーモード / αチャンネル / ガイド / トンボ / レイヤー数 / チェック結果
+
+### 31. v3.9.0 改修 — 検版ツール独立化・サイドバー幅統一・ProGen UI再構成・スキャナー常時全画面化
+
+**1. 検版ツール（Inspection）ビュー新設**
+- 統合ビューアー内のサブタブ「差分モード / 分割ビューアー」を独立した **`inspection`** ビューに切り出し
+- 新規: [src/components/views/InspectionToolView.tsx](src/components/views/InspectionToolView.tsx) — 「差分モード / 分割ビューアー」の2サブタブを内包、`viewStore.kenbanViewMode` と双方向同期
+- ヘッダーナビバー配置: ホーム → ビューアー → **検版ツール** → ProGen → スキャナー → レイヤー構造
+- ツールドロップダウン: ProGen 3モード直下に「検版ツール」セクション（差分モード/分割ビューアー の2項目）
+- アイコン: lucide `Shield`（盾）
+- `viewStore.AppView` に `"inspection"` 追加。`ViewRouter` で **状態保持型マウント**（差分計算結果を保持）
+- 統合ビューアー（[UnifiedViewerView.tsx](src/components/views/UnifiedViewerView.tsx)）はサブタブ撤去、`<UnifiedViewer />` のみに簡素化
+- `settingsStore.migrateNavBar()` で既存ユーザーは `unifiedViewer` 直後に `inspection` + `progen` を自動挿入
+
+**2. ProGen をヘッダーナビバーに追加**
+- アイコン: lucide `Sparkles`（✨ AI/プロンプト生成の慣用）
+- ナビバーから ProGen を開く場合は前回の状態を保持（toolMode/screen 初期化なし）。特定モード直行はツールドロップダウン経由
+
+**3. サイドバー幅 → 272px 統一**（ホームと揃え）
+| ファイル | 旧 | 新 |
+|---|---|---|
+| `DiffViewerView` | 220 | 272 |
+| `UnifiedViewer.TAB_WIDTHS` 全タブ | 200/260/280/420/380/400 | 272 |
+| `LayerControlView` / `ComposeView` / `RenameView` / `ReplaceView` | 360 | 272 |
+| `SplitView` 設定 | 320 | 272 |
+| `TiffView` 設定 | 400 | 272 |
+| `FontBookView` | 200 | 272 |
+| `ProgenRuleView` / `ProgenAdminView` ナビレール | 160 | 272 |
+| `ProgenProofreadingView`（隔離中） | 280 | 272 |
+
+維持した箇所: TiffFileList(210)、SpecViewerPanel/LayerSeparationPanel(320 = 内部サブパネル)、ScanPsdView は **400 のまま**（さらに改修2へ続く）
+
+**4. スキャナー常時3カラム全画面化**
+- [ScanPsdView.tsx](src/components/views/ScanPsdView.tsx) のルーティングを簡素化: モード選択後は **常に `ScanPsdEditView`**（3カラム全画面: 作品情報 / フォント種類等 / サイズ統計）
+- 旧 `mode === "edit" && JSONロード済み` の条件撤去
+- 旧 split layout（`ScanPsdPanel` 400px サイドバー + `ScanPsdContent`）は使われなくなる（ファイルは残存、必要なら復活可能）
+- 追加スキャン / 巻数管理 / 保存 / 戻る はヘッダー右の固定ボタンから操作
+
+**5. ProGen ルール編集 UI 再構成**
+- **プロンプト生成ボタン横並びバー新設**: メインエリア上部に `flex items-center gap-2` の固定バーを設置
+  - 左側: 「プロンプト生成」ラベル + [抽出][整形][正誤][提案] 4ボタン横並び + コピー済表示
+  - 右側: 「校正用テキスト追加 ▾」「結果を貼り付け ▾」の2ドロップダウン（クリック開閉、外側クリックで閉じる）
+- サイドバー旧 `GeminiButtons` 撤去 → サイドバーは「カテゴリ + 検索 + ルール保存」のみで非常にすっきり
+- 「Gemini を開く」**単独ボタン削除**（4プロンプトボタンの自動 Gemini オープン挙動は維持）
+- state は `ProgenRuleView` に持ち上げ（`textSources` / `copied` / `showTextPicker` 等）。テキストフォルダブラウザモーダルもメインエリア直下に移動
+
+**6. ProGen ルール保存ダイアログ追加**
+- 「ルールを保存」ボタン / `Ctrl+S` 押下時に成功/エラー結果を **中央モーダルダイアログ** で表示
+- 成功時: 「✓ ルールを保存しました」+ 保存先（マスタールール: ラベル名 / 作品JSON: パス）詳細
+- 保存先未設定時: 黄色文字で「何も書き込まれていません」警告
+- エラー時: 赤色見出し + エラーメッセージ
+- OK ボタン or 背景クリックで閉じる
+
+**7. ProGen ルールカード 2列 → 3列**
+- `ProgenRuleView` / `ProgenAdminView` の `grid-cols-2 gap-2` (6箇所) → `grid-cols-3 gap-2`
+- 関連する `col-span-2`（5箇所、空状態「ルールなし」メッセージ）→ `col-span-3`
+
+### 30. v3.8.2 改修 — 台割マネージャー準拠 Blue テーマ移行 + UI 全面整理
+
+**コンセプト**: 台割マネージャー (`daidori-manager-tauri`) Light Mode に合わせた **クールホワイト基調 + Blue グラデ + 白文字** へ全面刷新。併せて UI を大規模整理。
+
+#### カラーテーマ: Editorial Indigo → Daidori Blue
+- `bg-primary`: `#fbfaf7` (クリーム) → `#f8f9fc` (クールホワイト)
+- `accent`: `#4f46e5` (Indigo) → `#3a7bd5` (Blue)、`accent-hover`: `#4338ca` → `#0078d4`
+- `accent-secondary/tertiary/warm` も全て Blue 系に再定義 → 既存 `from-accent to-accent-secondary` 系グラデーションが自動的に Blue 統一
+- 旧ホットピンク/パープル/ミントの rgba shadow・glow を全て Blue rgba へ置換
+- 新トークン `folder`（#f5b73d Windows風マニラフォルダ色）追加、全フォルダアイコンに適用
+- フォント: Editorial Precision の Inter + IBM Plex Sans JP + JetBrains Mono 構成は維持
+
+#### カラー絵文字 → SVG アイコン全面置換
+- **FileContextMenu.tsx**: 30+ 絵文字 → lucide-react（`FolderOpen`/`Palette`/`Search`/`Scissors`/`Clipboard` 等）。A/B バッジは `BadgeA`/`BadgeB` カスタムspan
+- **ProgenView.tsx**: 大見出しの 📝/🔍/✓/💡/⚠ → `FileEdit`/`Search`/`CheckCircle2`/`Lightbulb`/`AlertTriangle`
+- **types/progen.ts EDIT_CATEGORIES**: ✏️👤🏷️ → 「表」「人」「名」の漢字1文字アイコン（既存「助/字/#/⋮」と統一）
+- **ProgenProofreadingView**: 10個のチェックカテゴリの絵文字を漢字1文字・記号に置換
+- **workflowStore.ts WORKFLOWS**: 📦📝✅🖼️ → 「入」「初」「校」「T」
+- **diff-viewer / parallel-viewer / unified-viewer / FolderSetupView / RequestPrepView / TiffBatchQueue / TiffFileList 等** の 📁/📄/⚠/📋/🔍 類も全て lucide SVG + `text-folder` トークンで統一
+- カテゴリ C（progenPrompts.ts の `♡♪` / `FONT_SHARE_PATH` の `■★` / placeholder の `★`）は **実データなので変更不可**として維持
+
+#### レイアウト整理
+- **コンテンツロック機能削除**: `psdStore.contentLocked` / `setContentLocked` 状態とアクションを撤去。仕様バーのロックボタン、D&D 時の自動ロック、アドレス変更ガードを全て削除
+- **TopNav**:
+  - A/B ピッカーボタン（`ABPickerButton`）削除 — 右クリックメニュー/差分・分割ビューアから引き続き操作可能
+  - バージョン表示を TopNav 右端から SettingsPanel フッター左下へ移設（更新検出時のみ TopNav に促進バッジ）
+  - リセットボタンを GlobalAddressBar の再読み込みボタン右隣へ移設、文言「読み込みリセット」、アイコンは MojiQ の `ClearAllIcon`（円＋×）
+  - 「フォルダから開く」ボタンを設定ボタン右隣に追加（旧 GlobalAddressBar のフォルダ参照ボタンから移動）
+  - OK/NG カラードット → 文字 `○` / `×`
+  - ナビボタン 4 種（specCheck/unifiedViewer/scanPsd/layers）に lucide アイコン（Home/Eye/ScanLine/Layers）を付与
+- **GlobalAddressBar**:
+  - 台割マネージャーのツールバーパターンで **折りたたみ可能**（localStorage `addressBarCollapsed` で永続化）
+  - 折りたたみ時は 14px の細いストリップ + シェブロントグルのみ残す
+  - 戻る/進む/上 の chevron アイコン → **軸付きフル矢印** (`M19 12H5…` 等)
+  - リセット確認モーダルもこのファイル内に集約（createPortal で body 直下に描画）
+- **SpecCheckView**:
+  - 空だった「Bar 1: View controls」撤去（ドットメニューは GlobalAddressBar 移設済）
+  - 仕様バーの OK/NG 件数表示・再チェックボタン削除（`useSpecChecker()` 自体はフックコール維持で自動チェック継続）
+  - 仕様セレクタ: 単一ループ型ボタン → **セグメント型トグルスイッチ**（モノクロ / カラー）。「仕様:」ラベル削除
+  - 昇順/降順: ボタン → `<select>` ドロップダウン（`昇順` / `降順`）
+  - **両サイドパネル折りたたみ** (左: 詳細/フォルダ階層, 右: プレビュー): `transition-[width] duration-300` で `w-[272px] ↔ w-8` アニメーション、≪≫ 二重シェブロンで開閉。プレビューの旧 ×閉じるボタンは ≫ に置換、折りたたみ中のストリップは ≪ ボタン
+  - パネル幅 `w-[320px]` → **`w-[272px]`**（左右合計 96px 削減でサムネエリアを広く）
+  - **下部アクションバー**: ガイド編集/PDF化/簡易スキャン/テキスト抽出/一括変換 の 5 ボタンを `h-16→h-10` / `text-lg→text-base` / `gap-3→gap-1.5` / `px-8→px-4` にコンパクト化、`flex-nowrap`+`whitespace-nowrap` で横 1 列化。ファイル数バッジ撤去
+  - 下部領域に **白背景 + 上端 border + 右 12px オフセット（スクロールバー回避）** を追加、`showActionBar` state で折りたたみ可能
+  - 折りたたみ時は右下隅に `h-7 w-9 rounded-tl-md border-l` の小ノッチ + `≫` 二重シェブロントグルのみ残す（サイドバーの下バージョン）
+  - ボタンと折りたたみトグルの間に縦区切り線
+- **FolderBreadcrumbTree**:
+  - 内部の「フォルダ階層」見出しトグル削除（外側パネルヘッダーで開閉一元化）
+  - 長いフォルダ名の折り返し 2 行目を **左揃え**（`text-left items-start break-all`）
+- **LayerTree / UnifiedSubComponents**: ゼブラストライプ色 `#f0f8f0`（薄緑）→ `#eaf2fb`（薄青）
+- **FileContextMenu**: 「Psで開く」→ 「Ps」、「フォルダ内をPsで開く」→ 「フォルダ内をPs」
+- **各種ビューアーの「フォルダを開く」アイコンボタン削除**（6箇所、F キーショートカット + 右クリックメニューから引き続き利用可能）
+
+#### プレビューパネル / 詳細パネル アニメーション仕様
+- 外側コンテナは常に描画し、内部のみ条件切替で React のマウント/アンマウントによる幅アニメ停止を回避
+- `overflow-hidden transition-[width] duration-300 ease-out` を外側に付与
+- ヘッダー帯 `h-8 border-b border-border/50 flex items-center px-2 gap-1` は展開/折りたたみとも共通、中の ≪≫ ボタンだけが切り替わる
+
+#### 意図的に維持した色
+- Photoshop ブランドブルー `#31A8FF` / `#0066CC` / `#001E36`（Ps 起動ボタン）
+- 分割ビューアー L/R 識別シアン `#00bcd4` / `#00e5ff`
+- ダークモード反転用黒背景 `bg-[#1a1a1e]`（`dark-mode-invert` で恒等変換される）
+- PSD レイヤータイプアイコン（`text-[#f06292]` 等）— フォルダではなくレイヤー種別の識別色
+- 警告系 `rgba(245,158,11,*)` amber — トースト・個別オーバーライド・テキスト overflow 警告等の意味的用途
+- ScanPsdEditView の `SECTION_COLORS`（pink/purple/mint/warm/sky）— セクション見出しのカテゴリ識別用
 
 ### 29. v3.8.1 改修 — ダークモード画像反転問題の修正
 
@@ -713,7 +835,7 @@ G:\共有ドライブ\CLLENN\編集部フォルダ\編集企画部\編集企画_
 - 深い階層での水平オフセットが半減、傾きが緩やかに
 
 ### 22. 統合ビューアータブ（UnifiedViewerView）
-- **3サブタブ構成**: 統合ビューアー / 差分モード / 分割ビューアー
+- **構成（v3.9.0〜）**: サブタブ撤去、`<UnifiedViewer />` のみを表示する単一画面。差分モード / 分割ビューアーは [検版ツール](#20-差分ビューアー--分割ビューアーv350でkenbanから完全移植v360で大幅改善v390で検版ツールへ独立化)へ移動
 - **統合ビューアー（UnifiedViewer）**: 2カラムレイアウト（左パネル廃止）
   - **タブバー**: 右寄せで全タブボタンを表示 + ◀▶配置移動ボタン。クリックで表示/非表示トグル。◀▶で選択中タブの配置位置を移動（左端↔左サブ↔右サブ↔右端、中央ビューアーはスキップ）
   - **5スロットパネルシステム（v3.7.0）**: 左端 / 左サブ / [中央ビューアー+ページリスト] / 右サブ / 右端。各パネルはタブ固有の適切な幅（`TAB_WIDTHS`）で表示。WFステップで`viewerTabSetup`によりタブ配置を自動制御可能
@@ -737,8 +859,7 @@ G:\共有ドライブ\CLLENN\編集部フォルダ\編集企画部\編集企画_
   - **右クリック**: FileContextMenu（viewerMode: カット/コピー/複製/削除/読み込みを非表示）
   - **ページ連動**: `navigateToTextPage`関数で単ページ化モード対応。logicalPageを走査してテキストページ番号に対応するページを特定
   - **psdStore同期**: メイン画面のファイルを`doSync`でビューアーストアに自動反映。タブ切替時にキャッシュクリア+`loadImageRef`で画像再読み込み。PDF情報（`isPdf`/`pdfPath`/`pdfPage`）も正しくマッピング（0-indexed→1-indexed変換）
-- **差分モード**: KenbanApp（defaultAppMode="diff-check", externalPathA/B props）
-- **分割ビューアー**: KenbanApp（defaultAppMode="parallel-view", externalPathA/B props）
+- **差分モード / 分割ビューアー（v3.9.0〜）**: 統合ビューアーから撤去 → 検版ツール（`InspectionToolView`）へ移動
 - **全画面表示**: PSD/画像はCSS object-containで自動リサイズ（再取得不要）。PDFはisFullscreen依存のuseEffectでcanvas再描画
 - 条件レンダリング: タブ切替で毎回マウント/アンマウント（検A/B propsを確実に反映）
 - **検A/検B連携**: TopNavの検A/Bで選択したフォルダパスをexternalPathA/B propsで渡し、KenbanApp内でuseEffectで自動読み込み（filesA/B + parallelFilesA/B 両方にセット）。PDF/PSD/TIFF自動判定
@@ -749,7 +870,8 @@ G:\共有ドライブ\CLLENN\編集部フォルダ\編集企画部\編集企画_
 ### レイアウト
 - **TopNav** (h-14): WF（左端）| ツールメニュー（ホバー表示、300ms遅延クローズ）+ 設定 | リセットボタン（確認ダイアログ付き、テキスト/JSON/検A・Bも全クリア）| ナビバー（左寄せ）| flex-1 | テキスト/作品情報/校正JSON/差分分割/A・B統合ボタン（右寄せ、300ms遅延クローズ、**v3.7.1: ホバーで読込中フォルダ名/ファイル名/タイトルをツールチップ表示**）| ファイル数+OK/NG | バージョン。全画面時は非表示
 - **GlobalAddressBar**: 戻る/進む/上/フォルダ参照/再読み込み | アドレスバー/×クリア。全画面時は非表示
-- **ツールメニュー**: ホバーで自動表示。全タブ + ProGen3モード
+- **ツールメニュー**: ホバーで自動表示。全タブ + ProGen3モード + 検版ツール2モード（v3.9.0: 差分モード/分割ビューアー、ProGen直下にセクション形式で配置）
+- **ナビバー（v3.9.0デフォルト）**: ホーム → ビューアー → 検版ツール（盾アイコン） → ProGen（Sparklesアイコン） → スキャナー → レイヤー構造。`settingsStore.migrateNavBar()` で既存ユーザーは `unifiedViewer` 直後に `inspection` + `progen` を自動挿入
 - **A/B統合ボタン**: ホバーでA（青）/B（橙）の選択ドロップダウン。フォルダ/ファイル選択、パス表示、クリア。`validateAndSetABPath`で検証（ファイルなし/テキストのみは静かにスキップ、複数拡張子混在はconfirm）。差替え/合成のDropZoneはマウント時にkenbanPathA/Bを自動参照
 - **D&D時A自動セット**: Aが未セットの場合のみ検証付きで自動セット。巻数はJSONのvolumeを無視しフォルダ名から検出
 - **ViewRouter + viewStore**: タブベースのビュー切替管理。AppView型:
@@ -757,9 +879,11 @@ G:\共有ドライブ\CLLENN\編集部フォルダ\編集企画部\編集企画_
   export type AppView =
     | "specCheck" | "layers" | "split" | "replace" | "compose"
     | "rename" | "tiff" | "scanPsd" | "typesetting"
-    | "progen" | "unifiedViewer";
+    | "progen" | "unifiedViewer"
+    | "folderSetup" | "requestPrep"
+    | "inspection";  // v3.9.0で追加（検版ツール）
   ```
-  progen と unifiedViewer は状態保持型マウント（display切替）。typesettingは隔離中（マウント無効化）
+  progen / unifiedViewer / inspection は状態保持型マウント（display切替）。typesettingは隔離中（マウント無効化）
 - **AppLayout**: TopNav + GlobalAddressBar + ViewRouter構成。グローバルD&Dリスナー（useGlobalDragDrop）。全画面時はTopNav/GlobalAddressBar非表示
 - **D&Dオーバーレイ**: ファイルをドラッグ中にホーム画面を暗くし「ドラッグして読み込み」を表示（Tauri `onDragDropEvent` enter/leave監視）
 - **DropZone（空状態）**: ファイル未読み込み時、中央エリアをクリックするとフォルダ選択ダイアログを表示。D&Dも対応
@@ -788,10 +912,9 @@ G:\共有ドライブ\CLLENN\編集部フォルダ\編集企画部\編集企画_
   - リスト表示複数選択: Shift+クリックで範囲選択（selectRange）、Ctrl+クリックで個別トグル
   - 折りたたみトグル: 全セクション（MetadataPanel/GuideSectionPanel/FolderBreadcrumbTree）のシェブロンアイコンを右側に配置
   - 左サイドバー構成: 原稿仕様（ガイド線+カラーモード/ビット深度/αチャンネル/キャンバスサイズ/トンボ）+ レイヤー（LayerSectionPanel、デフォルト閉じ）
-  - リロード: psdStoreのrefreshCounter + triggerRefresh()でfolderContents強制更新。contentLockedに依存しない
-  - PSDなしフォルダ: D&D読み込み時にPSDがなければcontentLockしない
+  - リロード: psdStoreのrefreshCounter + triggerRefresh()でfolderContents強制更新
   - ビューアー連動: 拡大表示中のファイル→ビューアー切替時に同じファイルを自動表示
-  - 中央コンテンツロック: 仕様バーにロックボタン。ロック中はアドレス変更でファイルリスト更新しない。D&D時は自動ロック
+  - （※ v3.8.2 でコンテンツロック機能は削除済 — アドレス変更・D&D 時は常に最新のファイルリストに追従）
   - メイン画面でtxt/jsonクリック: txtは右プレビューに表示、jsonは校正JSON/作品情報として自動判定して読み込み
   - MetadataPanel: 各セクション折りたたみ可能。テキストのみ表示チェック
   - PSDフィルタ / PDF表示切替（ページごと/ファイル単位）/ ソート（名前/サイズ/DPI/チェック結果）
@@ -804,7 +927,7 @@ G:\共有ドライブ\CLLENN\編集部フォルダ\編集企画部\編集企画_
 - **SplitView**: 見開き分割
 - **RenameView**: リネーム（レイヤーリネーム / ファイルリネーム）
 - **TiffView**: TIFF化（3カラム: TiffSettingsPanel | TiffFileList | Center(プレビュー/一覧/ビューアータブ切替)）。TiffFileListヘッダーとTiffBatchQueueヘッダーにサブフォルダチェックを配置
-- **ScanPsdView**: Scan PSD（2カラム: ScanPsdPanel(5タブ) | ScanPsdContent(モード選択/スキャン/サマリー)）。JSON編集時に未登録フォントアラート表示。フォント帳を独立セクションとして追加（モーダル表示）
+- **ScanPsdView（v3.9.0改修）**: モード選択後は **常に `ScanPsdEditView`**（3カラム全画面: 作品情報 / フォント種類等 / サイズ統計）で表示。旧2カラム split layout（ScanPsdPanel + ScanPsdContent）は撤去（ファイルは残存）。追加スキャン/巻数管理/保存はヘッダー右の固定ボタンから。JSON編集時に未登録フォントアラート表示。フォント帳を独立セクションとして追加（モーダル表示）
 - **(KenbanView 削除済み)** — v3.5.0で差分・分割ビューアーをReactネイティブ移植完了
 - **ProgenView**: React画面ルーター。progenStore.screenで6画面切替。viewStore.progenModeから自動初期化。状態保持型マウント（display切替）
 - **UnifiedViewerView**: 統合ビューアー + 差分モード + 分割ビューアーの3タブ。統合ビューアーは3カラム（全タブ共通パネル）。unifiedViewerStore独立管理。psdStoreとdoSync+loadImageRefで自動同期。PDF表示はpdf.jsで描画（isPdf/pdfPath/pdfPageを正しくマッピング）
@@ -888,12 +1011,13 @@ src/
 │   │   ├── SplitView.tsx         # 見開き分割ビュー
 │   │   ├── RenameView.tsx        # リネームビュー（fileEntries→psdStore自動同期）
 │   │   ├── TiffView.tsx          # TIFF化ビュー（3カラム: FileList|Center|Settings）
-│   │   ├── ScanPsdView.tsx      # Scan PSDビュー（ScanPsdPanel + ScanPsdContent）
+│   │   ├── ScanPsdView.tsx      # Scan PSDビュー（v3.9.0: モード選択後は常にScanPsdEditView全画面）
 │   │   ├── FolderSetupView.tsx  # フォルダセットアップ（原稿コピー+構造作成）
 │   │   ├── RequestPrepView.tsx  # 依頼準備（ZIP圧縮、3モード、内容チェック）
 │   │   # KenbanView.tsx 削除済み（v3.5.0）
 │   │   ├── ProgenView.tsx       # ProGen画面ルーター（React native、6画面切替）
-│   │   └── UnifiedViewerView.tsx # 統合ビューアー（6サブタブ）
+│   │   ├── UnifiedViewerView.tsx # 統合ビューアー（v3.9.0: 単一画面、サブタブ撤去）
+│   │   └── InspectionToolView.tsx # 検版ツール（v3.9.0新設: 差分モード/分割ビューアー2サブタブ）
 │   ├── metadata/          # メタデータ表示
 │   │   ├── MetadataPanel.tsx
 │   │   └── LayerTree.tsx
@@ -1434,49 +1558,78 @@ pdfium-renderによるPDFプレビュー/サムネイル生成:
 - ビット深度: 8bit
 - αチャンネル: なし
 
-## UIテーマ: Editorial Precision (v3.6.3〜)
+## UIテーマ: Daidori Blue (v3.8.2〜) — 旧 Editorial Precision (v3.6.3〜v3.8.1)
 
-**コンセプト**: 編集部の静謐さ（Notion的な温中性グレー）× Figma的な骨格（直線的な精密ツール感）のハイブリッド。プロ編集者が1日8時間作業しても疲れない「引き算のデザイン」。
+**コンセプト**: 台割マネージャー（daidori-manager-tauri）の Light Mode に合わせた **クールホワイト基調 + ブルー系グラデーション + 白文字** の清潔感ある統合ツール UI。Indigo 系から Blue 系に全面移行（v3.8.2）。
 
 ### 設計原則
 1. **Subtract, don't add** — 色・装飾を極力削る
 2. **Color = Meaning, not decoration** — 色は意味（成功/警告/エラー）にのみ使う
-3. **Single Accent Discipline** — メインアクセントは Indigo 1色に集約
+3. **Single Accent Discipline** — メインアクセントは Blue 1色に集約（旧: Indigo）
+4. **Gradient = Blue + White Text** — グラデーションは全て `from-accent to-accent-hover` の青→深青に統一
 
-### カラーパレット
+### カラーパレット（v3.8.2〜）
 ```javascript
-// 背景（クリームホワイト維持 + 温中性tertiary）
-bg-primary:   "#fbfaf7"  // クリームホワイト（メイン背景）
+// 背景（台割マネージャー準拠のクール中性、白ベース）
+bg-primary:   "#f8f9fc"  // クールホワイト（メイン背景）
 bg-secondary: "#ffffff"  // 純白（パネル・モーダル）
-bg-tertiary:  "#ebeae5"  // 温中性薄グレー（カード・非アクティブ）
+bg-tertiary:  "#f0f2f5"  // クール薄グレー（カード・非アクティブ）
 bg-elevated:  "#ffffff"  // 浮き上がり要素
 
-// テキスト（AAA/AAA/AA 準拠）
-text-primary:   "#1a1a24"  // 主要 (17.8:1 AAA)
+// テキスト（深いネイビー系）
+text-primary:   "#1a1a2e"  // 主要（台割マネージャー準拠）
 text-secondary: "#4a4a5a"  // 副次 (9.6:1 AAA)
 text-muted:     "#6b6b7a"  // 控えめ (5.5:1 AA)
 
-// アクセント（単一Indigo原則、徹底引き算）
-accent:           "#4f46e5"  // Indigo (6.3:1) 主要操作
-accent-hover:     "#4338ca"  // Deep Indigo (8.2:1)
-accent-secondary: "#a16207"  // Amber (5.9:1) 編集朱入れ（使用最小限）
-accent-tertiary:  "#0e7490"  // Teal (6.1:1) 情報リンク
-accent-warm:      "#b45309"  // Burnt Orange (5.4:1) 注意喚起
+// アクセント（単一Blue原則、v3.8.2〜 secondary/tertiary/warm も全てブルー系へ）
+accent:           "#3a7bd5"  // Blue 主要操作
+accent-hover:     "#0078d4"  // Deep Blue（ホバー時・グラデ終点）
+accent-glow:      "rgba(58, 123, 213, 0.20)"
+accent-secondary: "#0078d4"  // Deep Blue（from-accent to-accent-secondary グラデ用に再定義）
+accent-tertiary:  "#1e90ff"  // Dodger Blue（情報ハイライト・グラデのバリエーション）
+accent-warm:      "#1e6bb8"  // Steel Blue（旧 warm → 落ち着いたブルー）
 
 // ステータス（印刷インク調、全AA）
 success: "#15803d"  // 緑 (5.5:1)
-warning: "#a16207"  // オレンジブラウン (5.9:1)
+warning: "#a16207"  // オレンジブラウン (5.9:1) — 警告トースト/個別オーバーライド等の意味的用途のみ
 error:   "#b91c1c"  // 赤 (6.4:1)
+
+// ガイド線
+guide-h: "#dc2626"  // 水平ガイド
+guide-v: "#0891b2"  // 垂直ガイド
+
+// フォルダアイコン: Windows風マニラフォルダ（オレンジよりの黄色）
+folder:        "#f5b73d"  // マニラフォルダ基調
+folder-hover:  "#ffc857"  // ホバー時
+folder-dark:   "#d49a2b"  // 縁・影表現
 
 // 漫画装飾カラー: 事実上廃止（ほぼ無彩色、globals.cssで強制上書き）
 manga-pink: "#f5ecec", manga-mint: "#eaf0eb",
 manga-lavender: "#ecebf0", manga-peach: "#f2ede4",
 manga-sky: "#e8ecf0", manga-yellow: "#f3f0e4"
 
-// ボーダー（温中性）
-border:       "#d9d7d0"  // 明確な区切り
-border-light: "#e9e7e0"  // 薄い区切り
+// ボーダー（クール中性）
+border:       "#d5d9e0"  // 明確な区切り
+border-light: "#e5e7ec"  // 薄い区切り
 ```
+
+### グラデーション運用ルール（v3.8.2）
+- **全ての CTA ボタン**（ワークフロー・実行・差替え・スキャン・リネーム・校正・ProGen 等）は `bg-gradient-to-r from-accent to-accent-hover text-white` で統一
+- `from-accent to-accent-secondary` パターンは accent-secondary を Deep Blue に再定義したため自動的に青グラデに変換
+- 旧ホットピンク `rgba(255,90,138,*)` / パープル `rgba(124,92,255,*)` / ミント `rgba(0,212,170,*)` のシャドウ・グロー類は全て `rgba(58,123,213,*)` / `rgba(0,120,212,*)` に置換済
+- TIFF 系ボタンの `from-accent-warm to-accent`（旧オレンジ系）も accent-warm を Steel Blue 化で自動的に青系へ
+- `from-[#31A8FF] to-[#0066CC]` の Photoshop ブランドブルー、分割ビューアの `from-[#00bcd4] to-[#00e5ff]` L/R 識別シアンは **意味的用途** として維持
+- `bg-[#1a1a1e]` のダークモード反転用黒背景は `dark-mode-invert` 下で相殺されるため維持（globals.css 参照）
+
+### フォルダアイコン適用箇所（v3.8.2）
+ファイルシステム上のフォルダを示す SVG には全て `text-folder` を使用:
+- SpecCheckView メインファイルブラウザ・フォルダ階層ツリー
+- JsonFileBrowser / ProgenJsonBrowser / ProgenCalibrationSave
+- ScanPsdContent の登録フォルダリスト
+- CompactFileList / TiffFileList / TiffBatchQueue のサブフォルダヘッダー
+- FileBrowser の現在パス表示、DropZone の空状態大アイコン
+
+PSD レイヤーグループアイコン（`text-manga-lavender`）はフォルダではなく **レイヤー意味的用途** なので維持。
 
 ### フォント（v3.6.3〜 刷新）
 - **UI本文**: Inter + Noto Sans JP + Yu Gothic UI fallback
@@ -1519,7 +1672,7 @@ td, th { overflow: hidden; text-overflow: ellipsis; }
 ### 【機能カラー化】metadata バッジの色剥奪（globals.css）
 装飾色を完全に廃止し、色は意味（semantic）のみに使用:
 ```css
-[class*="bg-manga-"]   { background-color: #ebeae5 !important; /* bg-tertiary */ }
+[class*="bg-manga-"]   { background-color: #f0f2f5 !important; /* bg-tertiary */ }
 [class*="text-manga-"] { color: #4a4a5a !important;            /* text-secondary */ }
 ```
 - 原稿仕様パネル等の「8bit」「350 dpi」「RGB」バッジは自動的にニュートラル化
@@ -1535,8 +1688,8 @@ td, th { overflow: hidden; text-overflow: ellipsis; }
 
 ### TopNav 左タブの視認性（globals.css）
 ```css
-nav button.text-text-secondary { color: #1a1a24 !important; }
-nav button.text-text-secondary:hover { color: #4f46e5 !important; }
+nav button.text-text-secondary { color: #1a1a2e !important; }
+nav button.text-text-secondary:hover { color: #3a7bd5 !important; }
 nav button.text-text-secondary:focus::after { /* 下線演出 */ }
 ```
 - 背景・枠線は付与せず、色のみ濃色化してミニマルなフラットデザインを維持
@@ -1544,13 +1697,13 @@ nav button.text-text-secondary:focus::after { /* 下線演出 */ }
 
 ### デザイン要素
 - **角丸**: xl=12px / 2xl=16px / 3xl=20px（中間値、ソフト感維持）
-- **影**: ドロップシャドウ維持（`soft`/`card`/`elevated`、rgba(26,26,36)ベース）
-- **グロー**: 3色変種（`glow-pink`/`glow-purple`/`glow-mint`）全てIndigo系に統一
-- **グラデーション**: 同系色のみ（Indigo→Deep Indigo等、pink/purple系は廃止）
-- **スクロールバー**: 10px幅、温中性グレー（#c4bfb3 → #a8a396）
-- **フォーカスリング**: 2px solid #4f46e5
-- **選択色**: 半透明Indigo（rgba(79,70,229,0.2)）
-- **プレビュー背景**: SpecCheckViewの右パネルプレビュー（`FilePreviewImage`）は`bg-bg-primary`に統一（従来の`#1a1a1e`黒背景を廃止、ファイル未選択時・表示時ともにクリーム背景）
+- **影**: ドロップシャドウ維持（`soft`/`card`/`elevated`、rgba(26,26,46)ベース）
+- **グロー**: 3色変種（`glow-pink`/`glow-purple`/`glow-mint`）全て Blue 系に統一（旧 Indigo）
+- **グラデーション**: 同系色のみ（Blue → Deep Blue、`from-accent to-accent-hover`）
+- **スクロールバー**: 10px幅、クール中性グレー（#c2c7d0 → #9da4b0）
+- **フォーカスリング**: 2px solid #3a7bd5
+- **選択色**: 半透明 Blue（rgba(58,123,213,0.2)）
+- **プレビュー背景**: SpecCheckViewの右パネルプレビュー（`FilePreviewImage`）は `bg-bg-primary` に統一（ファイル未選択時・表示時ともにクールホワイト背景）
 
 ## 主要依存関係
 
@@ -1738,3 +1891,332 @@ textLogFolderPath: string      // テキストログフォルダパス
 - **画面ルーター**: `ProgenView.tsx` で `progenStore.screen` に基づき6画面を切替
 - **状態保持型マウント**: KENBANと同様にdisplay切替で状態保持
 - Rust側: progen.rs に26コマンドを集約（変更なし）
+
+## 最近の変更（テキストエディタビュー・校正編集ワークフロー）
+
+### 概要
+
+ヘッダー「ProGen」の右に新ビュー **「テキストエディタ」** を追加し、ProGen-tauri のテキスト編集機能を移植。ビューアーと同一ストア（`useUnifiedViewerStore`）を共有しつつ、校正ワークフロー専用のレイアウト / プリセットを持つ。併せて UnifiedViewer 側のパネル UI、上部ツールバー、ナビゲーション UX を整理した。
+
+### ヘッダー（TopNav）
+- `ALL_NAV_BUTTONS`（[src/store/settingsStore.ts](src/store/settingsStore.ts)）に `{ id: "textEditor", label: "テキストエディタ", icon: FileEdit }` を ProGen の直後に追加。`migrateNavBar` にも同位置への挿入ロジックを追加（既存ユーザーの localStorage 対応）。
+- `AppView`（[src/store/viewStore.ts](src/store/viewStore.ts)）union に `"textEditor"` を追加。
+- `NavBarButtons`（[src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx)）で現在の `activeView` / `specViewMode` に応じたアクティブマーカー（`bg-accent/15 text-accent ring-1 ring-accent/40` + `aria-current="page"`）を常時表示。
+
+### TextEditor ビュー
+- 新ラッパー [src/components/views/TextEditorView.tsx](src/components/views/TextEditorView.tsx) は `<UnifiedViewer textEditorMode />` を描画するだけの軽量ビュー。
+- UnifiedViewer は `textEditorMode?: boolean` props を受け、true の時:
+  - タブセレクタから `files` / `layers` / `spec` / `editor` を除外し、`突き合わせ` / `校正編集` のプリセット 2 ボタンだけ表示
+  - 画像表示は 校正編集 時に格納（プリセットで制御）
+- ViewRouter（[src/components/layout/ViewRouter.tsx](src/components/layout/ViewRouter.tsx)）に `textEditorMounted` を追加、`display: contents` トグルで state 保持型 mount。
+- UnifiedViewer は両ビューから同時 mount される前提のため、activeView 同期 useEffect を `textEditorMode ? "textEditor" : "unifiedViewer"` で分岐。
+
+### パネル分割（`src/components/unified-viewer/panels/`）
+- **[hooks/useTextDiff.ts](src/components/unified-viewer/hooks/useTextDiff.ts)** — PSD テキストレイヤー vs 原稿 COMIC-POT の差分計算フック。UnifiedViewer から diff useEffect + `textDiffResults` state を抽出。
+- **[panels/ProofreadPanel.tsx](src/components/unified-viewer/panels/ProofreadPanel.tsx)** — 校正JSON 表示。`useUnifiedViewerStore` の `checkData` / `checkTabMode` 直接参照。`checkTabMode === "both"`（全て）時は **ProGen の parallel view に倣って 2 カラム** (✅ 正誤チェック ｜ 📝 提案チェック) の横並び表示。
+- **[panels/DiffPanel.tsx](src/components/unified-viewer/panels/DiffPanel.tsx)** — テキスト照合（diff）。`useTextDiff` の結果と `UnifiedDiffDisplay` を組み合わせて描画。diff 表示モード `psd / text` は panel 内 local state。
+- **[panels/TextEditorDropPanel.tsx](src/components/unified-viewer/panels/TextEditorDropPanel.tsx)** — ProGen `cpEditTextArea` 相当:
+  - 上段ツールバー: [開く] [保存] [別名] [コピー] [クリア]
+  - 下段ツールバー（要テキスト）: [// 削除マーク] [ルビ付け]
+  - 中段: HTML5 D&D + `<textarea>`（空時は ドロップメッセージ）
+  - 末尾フッター: 文字数 / 行数 / 未保存ヒント
+  - D&D は `dragDropEnabled: false` 配下の webview D&D（`file.text()` で UTF-8 読込）、path が取れないので別名保存にフォールバック
+  - 「開く」は `@tauri-apps/plugin-dialog.open` + `@tauri-apps/plugin-fs.readFile` + `TextDecoder("utf-8")`
+  - 「保存」は既存 Rust コマンド `write_text_file` を invoke
+  - 改行正規化 (`\r\n/\r → \n`) + BOM 除去を `applyContent` で実施
+  - textarea `onChange` は 500ms debounce で `parseComicPotText` を再実行し store の `textHeader` / `textPages` を更新
+  - 削除マーク: 選択行全体に `//` プレフィックスをトグル、カーソル位置補正 + `scrollTop` 復元
+  - ルビ付け: `showPromptDialog` でふりがな入力 → COMIC-POT 形式 `親（ふりがな）` で置換。ダイアログ前に `scrollTop` 保存 → 置換後に復元（最下段への自動スクロール防止）
+
+### UnifiedViewer 側の UI 整理
+
+**上部ツールバー（`flex-shrink-0 h-7 bg-bg-secondary ...`）**
+- 右端に出ていた `cur.name` / `dims.w × dims.h` 表示を削除
+- 「連動」トグルスイッチを新設 → 後に撤去。`pageSync` は常時 `true` の const に固定
+
+**タブセレクタバー（`h-7 bg-bg-tertiary/50 ...`）**
+- 左端に [ファイル展開/格納トグル]（`＞` / `＜`、`Ctrl+Shift+E` で 'far-left' ⇔ null トグル）
+- 各タブボタンに lucide アイコン（`Folder` / `Layers` / `Ruler` / `Type` / `ClipboardCheck` / `GitCompare` / `FileEdit`）
+- 配置移動 `◀ / ▶` ボタンは削除
+- `textEditorMode` 時は **[突き合わせ] [校正編集] プリセット**のみ表示（その他ボタンは `!textEditorMode` ガード）
+
+**プリセット**
+- **突き合わせ**: `text → far-right`、`proofread / diff / editor → null`、`files → far-left`、`viewerVisible=true`
+- **校正編集**: `proofread → left-sub`、`editor → far-right`、`text / diff / files → null`、`viewerVisible=false`
+- `isMatchMode` / `isProofMode` は tabPositions から排他的に判定してボタンをハイライト
+
+**メインエリアレイアウト**
+- 中央ページリスト（`w-8 flex-shrink-0 bg-bg-secondary border-r border-border/30 ...`）は削除
+- センター画像ビューアーは `textEditorMode && !viewerVisible` 時に `hidden` クラスで display:none
+- `textEditorMode && !viewerVisible`（校正編集）時は **専用 2 カラムレイアウト**: `left-sub` / `far-left` タブを左 50%、`far-right` / `right-sub` タブを右 50% に描画。中央画像をスキップし 50/50 を保証。それ以外では従来の LEFT / CENTER / RIGHT 3 カラム。
+- 左右サイドパネルは `leftPanelWidth` / `rightPanelWidth` の state（min 150 / max 600 / 初期 272）でリサイズ可能。境界ハンドルの mousedown で `resizeStart.current = {x, width}` を保存、window mousemove で delta 計算して更新。
+- 左右パネルヘッダ（`h-5 bg-bg-tertiary/30 ...`）から `PANEL_POSITION_LABELS`（「左端」「左サブ」「右サブ」「右端」）を削除、タブ名と✕のみ表示。
+
+### store 側の調整
+- [unifiedViewerStore.ts](src/store/unifiedViewerStore.ts) `PanelTab` union に `"editor"` 追加、初期 `tabPositions` は `{ files: "far-left", text: "right-sub" }`。
+- `setTabPosition` に位置制約ルール:
+  - `files` は `"far-left"` または `null` のみ許可（他は強制的に `"far-left"` に振替）
+  - `text` / `proofread` / `diff` は `"far-left"` を拒否し `null` に振替
+- ビューアー view（`!textEditorMode`）では activeView 切替時に `proofread` が `far-right` 以外なら `far-right` に自動移動、`editor` が非 null なら `null` に退避。
+
+### 開発時の小改修
+- `CONTEXT_MENU_ENABLED = false`（[UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx) / [SpecCheckView.tsx](src/components/views/SpecCheckView.tsx)）で右クリック独自コンテキストメニューを無効化（WebView2 の Inspect を使いやすくする目的、再有効化は `true` に戻すだけ）。
+
+### 主要再利用ユーティリティ
+| 用途 | 参照先 |
+| --- | --- |
+| COMIC-POT パーサ | [utils.ts:33](src/components/unified-viewer/utils.ts) `parseComicPotText` |
+| 校正JSONブラウザ | [UnifiedSubComponents.tsx](src/components/unified-viewer/UnifiedSubComponents.tsx) `CheckJsonBrowser` |
+| diff 表示 | [UnifiedSubComponents.tsx](src/components/unified-viewer/UnifiedSubComponents.tsx) `UnifiedDiffDisplay` |
+| テキスト正規化 | [kenban-utils/textExtract.ts](src/kenban-utils/textExtract.ts) `normalizeTextForComparison` |
+| プロンプトダイアログ | [viewStore.ts](src/store/viewStore.ts) `showPromptDialog` |
+| 保存コマンド | Rust `write_text_file`（既存、ProGen と共通） |
+
+### ProGen-tauri 側の関連変更（`C:\Users\noguchi-kosei\Desktop\ネイティブデータ\ProGen-tauri`）
+`proofreadingTxtManageModal`（校正ページのセリフTXTファイル管理モーダル）の「＋ ファイルを追加」ボタンの **左にレーベル選択ボタン + 選択中表示** を追加。
+- `src/index.html` — モーダル内ボタン行を flex 横並びにし、`<button class="btn btn-label" onclick="openLabelSelectModal('proofreading')">レーベル選択</button>` と `#proofreadingTxtManageLabelText` span を挿入。「すべてクリア」は `margin-left:auto` で右端固定。
+- `src/js/progen-proofreading.js`:
+  - `changeProofreadingLabel()` で新 span も同期更新
+  - `openProofreadingTxtManageModal()` 冒頭で、メインヘッダの `proofreadingLabelSelectorText` からモーダル側表示へコピー
+
+既存のレーベル選択モーダル（`openLabelSelectModal('proofreading')`）とルール読込（`loadLabelRulesForProofreading`）は変更なし — モーダル内のボタンは同じハンドラを呼ぶだけ。
+
+---
+
+## 最近の変更（ProGen 準拠 UI 整理・View 独立化・Explorer 風リスト）
+
+前節（「テキストエディタビュー・校正編集ワークフロー」）で導入した統合ビューアー / テキストエディタ View をさらに整理した。主なテーマは **ProGen との UI 整合性向上 / ビューアーとテキストエディタの完全独立 / 不要 UI の撤去 / リスト表示の Explorer 化**。
+
+### 1. 校正チェック項目の ProGen 準拠化
+[ProgenProofreadingView.tsx](src/components/progen/ProgenProofreadingView.tsx)
+- **正誤チェック (simple)**: 3 項目 → ProGen と同じ **7 項目 + 統一表記ルール** に刷新（誤字・脱字 / 人名ルビ / 常用外漢字 / 熟字訓 / 単位の誤り / 伏字チェック / 人物名チェック + divider + 統一表記ルール反映確認）。
+- **提案チェック (variation)**: 10 項目を ProGen に合わせて差し替え（漢字/ひらがな統一 / カタカナ表記 / 送り仮名の違い / 長音記号 / 中黒 / イコール / 巻またぎ / 固有名詞・商標 / 専門用語・事実 / 未成年表現）。
+- アイコンを文字ワンポイントから `<SVG>` ヘルパー + 共通 props の Lucide ライクな線画に変更。`CheckItem.icon: ReactNode` へ型拡張。
+- ヘッダー文言を `"チェック項目（N項目 × 5パス）"` → `"正誤チェック項目（7項目 + ルール確認）"` / `"提案チェック項目（10項目）"` に統一。
+
+### 2. 突き合わせモードの左ファイル一覧パネルを削除
+[UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx)
+- `applyMatch`（突き合わせプリセット）で `files` 位置を `"far-left"` → `null` に変更 → 突き合わせ時はファイル一覧を表示しない。
+- textEditorMode 進入時の useEffect 分岐で、`files` が `"far-left"` に残っている場合は `null` に退避する処理を追加（既定 store が `files: "far-left"` だった頃の持ち越し対策）。
+
+### 3. 校正編集に ProGen の並び替えツールを移植
+[utils.ts](src/components/unified-viewer/utils.ts) + [panels/TextRearrangeView.tsx](src/components/unified-viewer/panels/TextRearrangeView.tsx) + [panels/TextEditorDropPanel.tsx](src/components/unified-viewer/panels/TextEditorDropPanel.tsx)
+- `utils.ts` にチャンク系ヘルパーを追加（ProGen の `cpParseTextToChunks` / `cpReconstructText` / `cpExtractComicPotHeader` 相当）
+  - `parseTextToChunks(inputText)`: dialogue（空行区切り）と separator（`<<NPage>>` / `[N巻]` / `----------`）に分割
+  - `reconstructTextFromChunks(chunks, header)`: separator 隣接は 1 行、dialogue 同士は 2 行で再結合
+  - `extractComicPotHeader(content)`: `[COMIC-POT(:xxx)]` ヘッダー行の抽出
+  - 型: `TextChunk = { content: string; type: "dialogue" | "separator" }`
+- **TextRearrangeView**（新規）: ProGen の `cpRenderSelectMode` を React 移植
+  - `<pre>` にチャンクを inline span で配置し、改行ギャップは prev/next が separator かで `\n` or `\n\n` を挿入
+  - クリック選択で黄色ハイライト（`!bg-yellow-300 !text-black`、ProGen `#fde047` 相当）、`//` 先頭セリフは赤＋取り消し線、`[親](ふりがな)` を検出してルビ表示
+  - ドラッグ中は `opacity-30 scale-[0.97]`、ドロップ位置はセル上半/下半で before/after 判定 + `.cp-drop-indicator` 相当のアクセント線
+  - ミニツールバー: [上へ] / [下へ] / [削除] / [編集] + `N セリフ / 選択中: M` カウンタ
+  - キーボード: `↑/↓` で dialogue 間選択、`Ctrl+↑/↓` で順序入替、`Del/Backspace` で削除、`Esc` で選択解除、ダブルクリックで編集モード復帰
+  - 順序変更時は `reconstructTextFromChunks` で再構築し親 `onChange` で store の `textContent` を更新 → textarea に切り替えても同期
+- **TextEditorDropPanel** にモード切替を追加
+  - 内部 state `mode: "edit" | "rearrange"`
+  - Toolbar row 2 に [編集] / [並び替え] トグル（Pencil / ArrowUpDown アイコン、アクティブはアクセント塗り）
+  - `mode === "edit"` でのみ `//削除マーク` / `ルビ付け` を表示、`mode === "rearrange"` 時は `<TextRearrangeView />` が textarea の代わりに描画
+
+### 4. ビューアーとテキストエディタの state 独立化
+[unifiedViewerStore.ts](src/store/unifiedViewerStore.ts) + [UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx) + [useViewerFileOps.ts](src/components/unified-viewer/useViewerFileOps.ts) + panels
+
+**背景**: ビューアーとテキストエディタで同一 `useUnifiedViewerStore` を共有していたため、ビューアーで項目変更（ファイル切替 / タブ配置 / テキスト内容）するとテキストエディタ側の表示が上書きされる問題があった。
+
+- **store をファクトリ化**: `create(...)` 直書きを `createUnifiedViewerStore(): UnifiedViewerStore` に抽出。2 インスタンス生成:
+  - `useUnifiedViewerStore` … ビューアー View（外部からの参照先はこちら維持）
+  - `useTextEditorViewerStore` … テキストエディタ View 専用
+- **スコープ伝播コンテキスト**: `ScopedViewerStoreProvider` + `useScopedViewerStore()` / `useScopedViewerStoreApi()` を追加。Provider は React Context で現在のスコープ store を注入、フックは `zustand/useStore` 経由で state / API を返す。
+- **UnifiedViewer を 2 層分割**:
+  - 外側 `UnifiedViewer`: `textEditorMode` から store インスタンスを選び `<ScopedViewerStoreProvider store=...>` で包むだけの薄いラッパー
+  - 内側 `UnifiedViewerInner`: `useScopedViewerStore()` / `useScopedViewerStoreApi()` を利用。既存の `useUnifiedViewerStore.getState()` × 9 箇所を `storeApi.getState()` に置換
+- **配下の直接参照も置換**:
+  - [useViewerFileOps.ts](src/components/unified-viewer/useViewerFileOps.ts): `useUnifiedViewerStore()` → `useScopedViewerStore()`
+  - [panels/TextEditorDropPanel.tsx](src/components/unified-viewer/panels/TextEditorDropPanel.tsx): 全 import / 呼出しを `useScopedViewerStore` に置換
+  - [panels/ProofreadPanel.tsx](src/components/unified-viewer/panels/ProofreadPanel.tsx): 同上
+- **共有されるもの**: `psdStore`（アプリ全体で共有の PSD ファイル群）。各 View の `doSync()` が psdStore.files から自分の store にコピーするため、同じ元データから独立した派生 state を持つ形。
+- **独立化される state**: `tabPositions` / `displacedTabs` / `currentFileIndex` / `textContent` / `textFilePath` / `textHeader` / `textPages` / `isDirty` / `checkData` / `checkTabMode` / `checkSearchQuery` / `fontPresets` / `editMode` / `selectedBlockIds`
+
+### 5. フォルダパス入力バー / フォルダ階層ツリーの撤去
+[GlobalAddressBar.tsx](src/components/layout/GlobalAddressBar.tsx) + [SpecCheckView.tsx](src/components/views/SpecCheckView.tsx)
+
+- **GlobalAddressBar を骨抜き**: 戻る / 進む / 上へ / 再読込 / リセット / パス入力フォーム を全て削除。ワークフロー実行中のみ `<WorkflowDescriptionBar />` を返し、それ以外は `null`。未使用 import（`usePsdStore` / `useUnifiedViewerStore` / `useViewStore` / `usePsdLoader` / `dialogOpen` / `createPortal` / React hooks）を削除。
+- **SpecCheckView の左詳細パネル**:
+  - `<FolderBreadcrumbTree>` 呼び出しを 2 箇所（ファイル選択時 / 未選択時）削除
+  - パネル見出しを `"フォルダ階層"` → `"詳細"` に変更
+  - ファイル未選択時は「ファイルを選択すると詳細が表示されます」プレースホルダを表示
+  - `FolderBreadcrumbTree` 関数定義を削除、未使用になった `desktopPath` state / `useEffect` / `useSettingsStore` import も撤去
+
+### 6. 並び替えドロップダウン（種類 / 昇順 / 降順）の削除
+[SpecCheckView.tsx](src/components/views/SpecCheckView.tsx)
+- ツールバーから **sort key dropdown**（名前 / 更新日 / 種類）と **sort direction dropdown**（昇順 / 降順）を両方削除。
+- `sortKey` / `sortAsc` state / setter を撤去。並び順は **名前・昇順固定**。
+- `sortedFiles` useMemo は `[...files]` にシンプル化、`PsdFileListView` に渡す `fileSorter` も `(arr) => [...arr]` の恒等関数。
+- 種類ドロップダウンの右にある **ファイル種別フィルタ**（全て / PSD / PDF / 画像 / テキスト）と `PdfModeButton` は残置。
+
+### 7. リスト表示のカラムを Explorer 風にリサイズ可能化
+[SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) `PsdFileListView`
+- **カラム定義**: `LIST_COLS: ListCol[]` を定義（9 列: 結果 / ファイル名 / 種類 / カラー / サイズ / DPI / Bit / テキスト / ガイド）。各列に `id / label / defaultW / minW / align` を持つ。整列は Tailwind JIT 抽出のため `LIST_COL_ALIGN_CLS` で `"text-left" | "text-center" | "text-right"` を静的マッピング。
+- **永続化**: `LIST_COL_WIDTHS_LS_KEY = "speccheck.listColWidths.v1"` で `localStorage` に保存 / 復元（`loadListColWidths()`）。
+- **リサイズ実装**: `startColResize(colId, e)` が `pointermove` + `pointerup` を window に付与し、`startW + (clientX - startX)` を `minW` でクランプして更新。`pointerdown` 時に `document.body.style.cursor = "col-resize" / userSelect = "none"` で誤選択防止。`resetColWidths()` は全列既定幅へ復帰（ダブルクリック）。
+- **レンダリング**:
+  - `<table className="text-[11px] w-full" style={{ tableLayout: "fixed" }}>` + `<colgroup>` で各列幅を指定（末尾に `<col />` のスペーサー追加）
+  - 各 `<th>` は `border-r border-border/70` で常時見える区切り線、右端 8px 幅の絶対配置ハンドル（`-right-1 w-2 z-20 cursor-col-resize`）の中央に 1px グリップ線（`bg-text-muted/60`、hover/active で `bg-accent` に変化し `w-0.5` に太く）
+  - tbody 各 `<tr>` 末尾にも `<td aria-hidden className="p-0" />` スペーサー追加 → 列幅合計が親 `.flex-1 overflow-hidden relative` より小さい時は右側余白として吸収、大きい時は `listRef` の `overflow-auto` で横スクロール
+- **ファイル名セル** の `max-w-[200px]` を撤去し `overflow-hidden + truncate` のみ。列幅に完全追従。
+
+### 8. Photoshop ボタンを「Ps」アイコン風に
+[SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) 詳細パネルのファイル名ヘッダー
+- 単文字 "P" → **"Ps"** に変更。Photoshop 公式配色に寄せて `text-[#31A8FF]` + `border-[#31A8FF]/60`。
+- サイズを `w-6 h-6` → `w-[18px] h-[18px]`、角丸 `rounded` → `rounded-[3px]`、文字サイズ `text-sm` → `text-[8px]`、`tracking-tight select-none` 追加。
+- 背景色 `bg-[#001E36]` は要望により **無し**。ホバー時のみうっすらシアン（`hover:bg-[#31A8FF]/15`）が乗る。`aria-label="Photoshopで開く"` 追加。
+
+### 9. 「右サブ」「右端」パネル位置ラベルの撤去
+[unifiedViewerStore.ts](src/store/unifiedViewerStore.ts) + [UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx)
+
+- **`PanelPosition` 型から `"right-sub"` を削除** → `"far-left" | "left-sub" | "far-right"` の 3 値に。`PANEL_POSITIONS` 配列と `PANEL_POSITION_LABELS` からも削除。
+- 既定 `tabPositions` を `text: "right-sub"` → `text: "far-right"` に変更。`setTabPosition` 冒頭で `"right-sub"` が渡されたら `"far-right"` に正規化（永続化されていた旧値の後方互換）。
+- UnifiedViewer 側で右側パネルレンダラーが舐めていた `["right-sub", "far-right"]` を `["far-right"]` のみに、校正編集レイアウトの `rightTab` lookup からも `"right-sub"` フォールバックを削除。
+- **タブボタン右の位置ラベル** `{PANEL_POSITION_LABELS[pos]}`（「右端」「左サブ」等）を削除、`PANEL_POSITION_LABELS` import も除去。
+
+### 10. 左サイドバーのファイル一覧を削除
+[utils.ts](src/components/unified-viewer/utils.ts) + [UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx) + [unifiedViewerStore.ts](src/store/unifiedViewerStore.ts)
+
+- **`ALL_PANEL_TABS` から `files` エントリを削除**（これでタブセレクタに載らない）。未使用になった `Folder` アイコンの import を utils.ts から撤去。
+- 既定 `tabPositions` から `files: "far-left"` を削除 → `{ text: "far-right" }` のみ。
+- `renderTabContent` から `case "files":`（「フォルダを開く」ボタン + ファイルリストを描画していた JSX）を削除。
+- 上部タブセレクタバー左端の **「ファイル展開/格納トグル」ボタン** を削除。
+- `ALL_PANEL_TABS.filter` 内の `t.id === "files"` 除外条件を削除（元々入っていないため）。
+- `Ctrl+Shift+E` のファイルパネル表示トグルショートカットを削除。
+- 左右パネルヘッダ ✕ ボタンの `tab === "files"` 特殊 title / 分岐を削除。
+- `useViewerFileOps` の destructure から未使用の `openFolder` を除去。
+- 残った `setTabPosition("files", null)` 呼び出しは、localStorage 等に残った古い state を掃除する no-op セーフガードとして保持。
+
+### 11. ホームのカード選択トグル
+[PreviewGrid.tsx](src/components/preview/PreviewGrid.tsx)
+- 修飾キーなしのクリックで `selectFile(fileId)` を呼んでいた箇所に、**選択中の単一カードを再クリックしたら `clearSelection()`** する分岐を追加。
+- 判定条件: `selectedFileIds.length === 1 && selectedFileIds[0] === fileId`。
+- Ctrl/Cmd の多選択トグルと Shift の範囲選択は従来どおり、別カードへの選び直しも従来どおり。
+
+### 主要ファイル一覧（この節で追加/変更）
+| 区分 | パス | 備考 |
+| --- | --- | --- |
+| 新規 | [src/components/unified-viewer/panels/TextRearrangeView.tsx](src/components/unified-viewer/panels/TextRearrangeView.tsx) | ProGen 並び替えツールの React 移植 |
+| 改修 | [src/components/unified-viewer/utils.ts](src/components/unified-viewer/utils.ts) | `parseTextToChunks` 等 + `ALL_PANEL_TABS` から files 削除 |
+| 改修 | [src/components/unified-viewer/panels/TextEditorDropPanel.tsx](src/components/unified-viewer/panels/TextEditorDropPanel.tsx) | 編集/並び替えモード切替 + scoped store |
+| 改修 | [src/components/unified-viewer/panels/ProofreadPanel.tsx](src/components/unified-viewer/panels/ProofreadPanel.tsx) | scoped store |
+| 改修 | [src/components/unified-viewer/UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx) | 2 層分割 / scoped store / 右サブ撤去 / files UI 削除 / 位置ラベル削除 |
+| 改修 | [src/components/unified-viewer/useViewerFileOps.ts](src/components/unified-viewer/useViewerFileOps.ts) | scoped store |
+| 改修 | [src/store/unifiedViewerStore.ts](src/store/unifiedViewerStore.ts) | ファクトリ化 / Provider / scoped hooks / 右サブ削除 / files 既定削除 |
+| 改修 | [src/components/progen/ProgenProofreadingView.tsx](src/components/progen/ProgenProofreadingView.tsx) | 校正チェック項目 ProGen 準拠 |
+| 改修 | [src/components/layout/GlobalAddressBar.tsx](src/components/layout/GlobalAddressBar.tsx) | パス入力バー全撤去、WF 説明バーのみ |
+| 改修 | [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) | フォルダ階層ツリー撤去 / 並び替えドロップ撤去 / Explorer 風リスト / Ps ボタン |
+| 改修 | [src/components/preview/PreviewGrid.tsx](src/components/preview/PreviewGrid.tsx) | カード選択トグル |
+
+---
+
+## Comic-Bridge DEMO リブランド & UI 簡素化 (DEMO 向け整理)
+
+本節はツール名を「Comic-Bridge DEMO」にリブランドした際の一連の UI/UX 簡素化をまとめる。方針は「アイコン中心のコンパクト表示」「ダイアログとエラー経路の統一」「重複パネルの整理」。
+
+### 1. ツール名を「Comic-Bridge DEMO」に変更
+- [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json): `productName`（`COMIC-Bridge-Integrated`→`Comic-Bridge DEMO`）、ウィンドウ `title`（`COMIC-Bridge 統合版`→`Comic-Bridge DEMO`）。
+- [index.html](index.html): ブラウザ `<title>` を `Comic-Bridge DEMO`。
+- [src/components/spec-checker/SpecViewerPanel.tsx](src/components/spec-checker/SpecViewerPanel.tsx): 画面内ウォーターマーク文字を `Comic-Bridge DEMO`。
+- 内部識別子（`package.json` の `name`、Rust 側パス／コメント）はストレージ互換のため未変更。
+
+### 2. TopNav の刷新 — ナビ/ツール/データ読み込み
+[src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) + [src/store/settingsStore.ts](src/store/settingsStore.ts)
+
+- **ナビバーボタンをアイコン専用**（`w-7 h-7 flex items-center justify-center`）に変更。`title` 属性でラベルをツールチップとして残す。
+- `ALL_NAV_BUTTONS` のうちアイコンがなかった項目に lucide-react アイコンを割当: `layerControl`→`SlidersHorizontal`、`replace`→`Replace`、`compose`→`Combine`、`tiff`→`FileImage`、`split`→`Columns2`、`folderSetup`→`FolderCog`、`requestPrep`→`Package`。
+- 新規インストールのデフォルト順序を `["specCheck", "layers", ...]` に変更。既存ユーザー向けに `localStorage` フラグ `comic_bridge_migration_layers_after_home_v1` で「`layers` を `specCheck` の直後へ 1 回だけ移動」するワンタイム・マイグレーションを追加（以降は設定画面で自由に並べ替え可能）。
+- **データ読み込みアイコン（テキスト / 作品情報JSON / 校正JSON）をラベルからアイコンに置換**。`FileText` / `FileJson` / `ClipboardCheck`（既にインポート済）＋ `Check` を使用。
+  - 読み込み前はグレー背景 (`bg-bg-tertiary`)、読み込み後はブルー背景 (`bg-sky-500/15 text-sky-500`) に統一。角丸長方形 (`h-6 px-1.5 rounded-md`)。
+  - 読み込み完了で右隣にチェックマーク（クリックでクリア）。未読み込み時の小さな「○」インジケーターは廃止。
+  - `SmallBtn` の props から `cCls` / `bgCls` を除去。色分岐は `loaded` で内部分岐。
+- **「読み込みリセット」ボタン**をフォルダから開くボタンの右に追加（`RotateCcw`）。`usePsdStore.clearFiles()` に加えて、`useUnifiedViewerStore` と `useTextEditorViewerStore` の両方の `textContent` / `textFilePath` / `textHeader` / `textPages` / `isDirty`、および作品情報JSON（`fontPresets` / `presetJsonPath`）、校正JSON（`checkData`）を一括クリア。ファイル・テキスト・JSON いずれも空なら `disabled`。
+- リセット確認は **Tauri `ask()` で非同期ダイアログ** を使用（`window.confirm` は WebView2 でブロッキングしないケースがあるため）。メッセージ: 「読み込みをリセットします。よろしいですか？」。
+
+### 3. データ読み込みエラーダイアログ
+[src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) + [src-tauri/capabilities/default.json](src-tauri/capabilities/default.json)
+
+- `@tauri-apps/plugin-dialog` の `message()` を `dialogMessage` として import。
+- `handleOpenText`: 拡張子 `.txt` 以外 / `read_text_file` 失敗 / 文字列以外 のそれぞれでエラーダイアログ（`kind: "error"`、タイトル「テキスト読み込みエラー」）。ファイルピッカーに「すべてのファイル」フィルタも併設してエラー経路を確認しやすくした。
+- `handleJsonSelect`: 拡張子 `.json` 以外 / `JSON.parse` 失敗 / 校正モードで `checks` も配列もない / 作品情報モードで `presets` と `workInfo` が両方ない、いずれもエラーダイアログ（校正/作品情報でタイトルを出し分け）。
+- Tauri 2 では `dialog:default` に `message` 系が含まれない環境があるため、`capabilities/default.json` に `dialog:allow-message` / `dialog:allow-ask` / `dialog:allow-confirm` を明示追加。これが未許可だと `message()` は例外を投げず黙って失敗するため、変更後はアプリ再起動が必要。
+
+### 4. ホーム（SpecCheckView）の詳細パネル整理
+[src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) + [src/components/metadata/MetadataPanel.tsx](src/components/metadata/MetadataPanel.tsx)
+
+- 左詳細パネルから **「レイヤー」`CollapsibleSidebarSection`** を除去（後に `LayerSectionPanel` として別形で復活 → 下記）。
+- 「原稿仕様」見出しの **左側のテキスト/ドキュメントアイコン**（`icon={<svg …/>}`）を削除。
+- `CollapsibleSidebarSection` のトグルボタン式 (`w-full flex items-center gap-1.5 px-3 py-2 …`) を廃止し、常時展開の `div` にインライン化。未使用になった関数定義・「原稿仕様」文字列も併せて削除。
+- `MetadataPanel` のトンボあり/なしチップの文言を **「トンボレイヤーあり」「トンボレイヤーなし」** に変更（ラベルが省略されていたので内容が自明化）。
+- **最終構成**: `詳細 > ガイド情報 (GuideSectionPanel) → レイヤー情報 (LayerSectionPanel)`。`MetadataPanel`（原稿仕様ブロック）の描画は後に撤去し、import も除去。
+
+### 5. ホームのリスト表示とカード操作
+[src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx)
+
+- 上部ツールバーから **リスト/サムネイル切替アイコンボタン** 2 個＋区切り線を削除（サイズドロップダウンで代用）。
+- 表のテキスト列の「なし」を **「テキストレイヤーなし」** に（「あり」はそのまま）。
+- サムネイル／リスト行の **ダブルクリック→拡大表示 (`setExpandedFile`)** を削除。サムネイル側 `onDoubleClickFile`、リスト行 `onOpenFile` を両方撤去し、`PsdFileListView` の `onOpenFile` prop も削除。フォルダのダブルクリック（階層移動）は別操作のため維持。
+
+### 6. レイヤー構造ビュー（SpecLayerGrid）
+[src/components/spec-checker/SpecLayerGrid.tsx](src/components/spec-checker/SpecLayerGrid.tsx) + [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx)
+
+- レイヤー構造表示は **詳細サイドバーの `LayerSectionPanel` に一元化**。各ファイルカード (`border rounded-xl … bg-bg-secondary/50 hover:bg-bg-secondary/80 …`) は写植仕様（テキストレイヤー詳細）のみを表示。`LayerTree` 描画を各カードから削除。
+- `LayerSectionPanel` を `MetadataPanel.tsx` から再 export し、詳細サイドバーの `GuideSectionPanel` の下に配置。
+- 試行錯誤の過程で一時追加した「左サイドバー（選択中ファイルの `LayerTree`）」は撤去し、`useState` / `LayerTree` import も整理。カード内の「写植仕様のみ表示」チェックボックス＆`textOnly` state は機能を失ったため削除。
+- **グリッド/リスト切替**を追加。ドロップダウン（`グリッド` / `リスト`）を SpecCheckView の上部ツールバー (`flex-shrink-0 px-2 py-1 bg-bg-tertiary/30 border-b border-border/30 flex items-center gap-2`) に配置し、`viewMode === "layers"` のときだけ表示。
+- `layerLayoutMode` state は SpecCheckView が保持し、`localStorage` キー `speccheck.layerLayoutMode.v1` と同期。`<SpecLayerGrid layoutMode={layerLayoutMode} />` で props として渡す。`LayerLayoutMode` 型は SpecLayerGrid から export。
+- リスト時は新規 `SpecLayerRow` を使用（1 行にファイル名／`nL`／`nT`／主フォント／使用 pt を表示。選択時はアクセントボーダー）。
+
+### 7. ガイド編集モーダル
+[src/components/guide-editor/GuideCanvas.tsx](src/components/guide-editor/GuideCanvas.tsx) + [src/components/guide-editor/GuideEditorModal.tsx](src/components/guide-editor/GuideEditorModal.tsx)
+
+- 左下の操作ヒントオーバーレイ (`absolute bottom-2 left-2 z-40 …`) を削除。
+- 右下のズーム率オーバーレイを削除し、**モーダルヘッダー「元に戻す」ボタンの左にズーム率を表示**。`GuideCanvas` に `onZoomChange?: (zoom: number) => void` prop を追加し、内部 `zoom` の useEffect で親へ通知。`GuideEditorModal` は `canvasZoom` state を保持し、ヘッダーに `{Math.round(canvasZoom * 100)}%` のピル表示。
+
+### 8. レイヤー制御ビュー
+[src/components/views/LayerControlView.tsx](src/components/views/LayerControlView.tsx) + [src/components/layer-control/LayerControlPanel.tsx](src/components/layer-control/LayerControlPanel.tsx)
+
+- **ビューアー（`LayerPreviewPanel`）と上に重ねていた `TextExtractButton` を削除**。未使用 import（`LayerPreviewPanel` / `useOpenInPhotoshop` / `TextExtractButton`）も撤去。設定パネル `LayerControlPanel` は元の `w-[272px] flex-shrink-0 border-r border-border` のサイドバー表示に戻し、右側は空白領域（`flex-1`）。
+- `ModeButton` の内部レイアウトを **`flex flex-col items-center justify-center gap-1`** に変更（アイコン上・ラベル下の縦積み）。
+
+### 9. ProGen サイドバー＆プロンプト生成ボタン
+[src/components/progen/ProgenRuleView.tsx](src/components/progen/ProgenRuleView.tsx) + [src/components/progen/ProgenAdminView.tsx](src/components/progen/ProgenAdminView.tsx)
+
+- サイドバーのカテゴリ一覧 (`flex-1 overflow-y-auto`) を **3 列グリッドタイル** に再構成。`aspect-square px-1.5 py-2 rounded-lg border` の正方形ボタンに、アイコン（`text-sky-500`）→カテゴリ名→件数 (`active/total`) の縦積み。アクティブ時は `border-accent/40 bg-accent/15 text-accent font-medium`。
+- **プロンプト生成ボタン（抽出 / 整形 / 正誤 / 提案）** を拡大 (`px-5 py-2 text-sm rounded-md`) し、lucide-react アイコンを付与: `ScanText` / `Wand2` / `SpellCheck` / `Lightbulb`。
+
+### 10. CompactFileList サイドバーの廃止
+[src/components/views/LayerControlView.tsx](src/components/views/LayerControlView.tsx), [src/components/views/SplitView.tsx](src/components/views/SplitView.tsx), [src/components/views/TypsettingView.tsx](src/components/views/TypsettingView.tsx)
+
+- 3 ビューで共通に使われていた `<CompactFileList className="w-52 flex-shrink-0 border-r border-border" />` を全撤去。未使用 import も整理。
+
+### 主要ファイル一覧（この節で追加/変更）
+| 区分 | パス | 備考 |
+| --- | --- | --- |
+| 改修 | [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json) | productName / title → Comic-Bridge DEMO |
+| 改修 | [src-tauri/capabilities/default.json](src-tauri/capabilities/default.json) | dialog:allow-message / ask / confirm 追加 |
+| 改修 | [index.html](index.html) | `<title>` Comic-Bridge DEMO |
+| 改修 | [src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) | ナビ/データボタンのアイコン化、読み込みリセット、エラーダイアログ |
+| 改修 | [src/store/settingsStore.ts](src/store/settingsStore.ts) | ALL_NAV_BUTTONS アイコン追加、layers 配置マイグレーション |
+| 改修 | [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) | 詳細簡素化、原稿仕様/レイヤー切替トグル撤去、リスト/サムネイルボタン削除、DblClick 拡大削除、グリッド/リスト切替追加 |
+| 改修 | [src/components/metadata/MetadataPanel.tsx](src/components/metadata/MetadataPanel.tsx) | トンボ表示のラベル化 |
+| 改修 | [src/components/spec-checker/SpecLayerGrid.tsx](src/components/spec-checker/SpecLayerGrid.tsx) | カードから LayerTree 除去、SpecLayerRow 追加、layoutMode prop 化 |
+| 改修 | [src/components/guide-editor/GuideCanvas.tsx](src/components/guide-editor/GuideCanvas.tsx) | 操作ヒント/ズーム率オーバーレイ削除、onZoomChange 追加 |
+| 改修 | [src/components/guide-editor/GuideEditorModal.tsx](src/components/guide-editor/GuideEditorModal.tsx) | ヘッダーにズーム率 pill を表示 |
+| 改修 | [src/components/views/LayerControlView.tsx](src/components/views/LayerControlView.tsx) | ビューアー/ファイルリスト削除 |
+| 改修 | [src/components/layer-control/LayerControlPanel.tsx](src/components/layer-control/LayerControlPanel.tsx) | ModeButton を縦積み化 |
+| 改修 | [src/components/progen/ProgenRuleView.tsx](src/components/progen/ProgenRuleView.tsx) | カテゴリ 3 列タイル化、プロンプトボタン拡大＋アイコン |
+| 改修 | [src/components/progen/ProgenAdminView.tsx](src/components/progen/ProgenAdminView.tsx) | カテゴリ 3 列タイル化 |
+| 改修 | [src/components/views/SplitView.tsx](src/components/views/SplitView.tsx) | CompactFileList 撤去 |
+| 改修 | [src/components/views/TypsettingView.tsx](src/components/views/TypsettingView.tsx) | CompactFileList 撤去 |
+| 改修 | [src/components/spec-checker/SpecViewerPanel.tsx](src/components/spec-checker/SpecViewerPanel.tsx) | ウォーターマーク文字列更新 |
+
+### 注意事項
+- ダイアログ権限（`dialog:allow-message` 等）は Tauri の capabilities 変更なので、**dev サーバー＋Tauri 再起動**が必須。
+- `productName` 変更で生成バイナリ名が変わるため、古い `src-tauri/target` の成果物は一度クリーンにするのが安全。
+- `navBarButtons` の 1 回限りリオーダーは `localStorage` キー `comic_bridge_migration_layers_after_home_v1` で制御。再実行したい場合は当該キーを削除してからアプリを起動する。

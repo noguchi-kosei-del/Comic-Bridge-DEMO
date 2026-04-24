@@ -15,9 +15,9 @@ interface PopButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantStyles: Record<ButtonVariant, string> = {
   primary: `
     text-white
-    bg-gradient-to-r from-accent to-accent-secondary
-    shadow-[0_4px_15px_rgba(255,107,157,0.3)]
-    hover:shadow-[0_6px_20px_rgba(255,107,157,0.4)]
+    bg-gradient-to-r from-accent to-accent-hover
+    shadow-[0_4px_15px_rgba(58,123,213,0.3)]
+    hover:shadow-[0_6px_20px_rgba(58,123,213,0.4)]
     hover:-translate-y-0.5
   `,
   secondary: `
@@ -36,9 +36,9 @@ const variantStyles: Record<ButtonVariant, string> = {
   `,
   success: `
     text-white
-    bg-gradient-to-r from-accent-tertiary to-accent-secondary
-    shadow-[0_4px_15px_rgba(0,212,170,0.3)]
-    hover:shadow-[0_6px_20px_rgba(0,212,170,0.4)]
+    bg-gradient-to-r from-success to-accent-tertiary
+    shadow-[0_4px_15px_rgba(21,128,61,0.3)]
+    hover:shadow-[0_6px_20px_rgba(21,128,61,0.4)]
     hover:-translate-y-0.5
   `,
 };

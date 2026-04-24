@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+import { FolderOpen, FileText, X as XIcon, ClipboardList, AlertTriangle, Search, Pencil } from "lucide-react";
 import { usePsdStore } from "../../store/psdStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useProgenStore } from "../../store/progenStore";
@@ -126,8 +127,8 @@ function AddCopySection({ checkedFolder, onRescan }: { checkedFolder: string; on
     <div className="space-y-2">
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-text-muted">コピー先に追加:</span>
-        <button onClick={addFolder} className="px-2 py-0.5 text-[9px] rounded bg-bg-tertiary text-text-secondary hover:text-accent border border-border/50 transition-colors">📁 フォルダ</button>
-        <button onClick={addFiles} className="px-2 py-0.5 text-[9px] rounded bg-bg-tertiary text-text-secondary hover:text-accent border border-border/50 transition-colors">📄 ファイル</button>
+        <button onClick={addFolder} className="px-2 py-0.5 text-[9px] rounded bg-bg-tertiary text-text-secondary hover:text-accent border border-border/50 transition-colors inline-flex items-center gap-1"><FolderOpen className="w-3 h-3" />フォルダ</button>
+        <button onClick={addFiles} className="px-2 py-0.5 text-[9px] rounded bg-bg-tertiary text-text-secondary hover:text-accent border border-border/50 transition-colors inline-flex items-center gap-1"><FileText className="w-3 h-3" />ファイル</button>
       </div>
       {staged.length > 0 && (
         <div className="space-y-1">
@@ -135,7 +136,7 @@ function AddCopySection({ checkedFolder, onRescan }: { checkedFolder: string; on
           <div className="max-h-24 overflow-auto space-y-0.5">
             {staged.map((s, i) => (
               <div key={i} className="flex items-center gap-1 text-[9px] px-2 py-0.5 bg-bg-tertiary rounded">
-                <span>{s.type === "folder" ? "📁" : "📄"}</span>
+                {s.type === "folder" ? <FolderOpen className="w-3 h-3 text-folder" /> : <FileText className="w-3 h-3" />}
                 <span className="truncate flex-1 text-text-primary">{s.name}</span>
                 <button onClick={() => setStaged((p) => p.filter((_, j) => j !== i))} className="text-text-muted/40 hover:text-error">✕</button>
               </div>
@@ -475,7 +476,6 @@ export function FolderSetupView() {
       if (psdFolderPath && scanResult.hasPsd) {
         try {
           usePsdStore.getState().setCurrentFolderPath(psdFolderPath);
-          usePsdStore.getState().setContentLocked(true);
           await loadFolder(psdFolderPath);
         } catch (e) {
           console.error("PSD auto-load error:", e);
@@ -693,7 +693,7 @@ export function FolderSetupView() {
                   <div className="space-y-0.5 max-h-24 overflow-y-auto">
                     {additionalItems.map((item, i) => (
                       <div key={i} className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] bg-bg-tertiary">
-                        <span className="text-[10px]">{item.isFolder ? "📁" : "📄"}</span>
+                        {item.isFolder ? <FolderOpen className="w-3 h-3 text-folder" /> : <FileText className="w-3 h-3" />}
                         <span className="text-text-primary truncate flex-1">{item.name}</span>
                         <span className="text-text-muted/60 truncate max-w-[200px] text-[8px]">{item.path}</span>
                         <button onClick={() => handleRemoveAdditional(i)} className="w-3.5 h-3.5 flex items-center justify-center text-text-muted/40 hover:text-error rounded">
@@ -719,7 +719,7 @@ export function FolderSetupView() {
                     const baseName = src.replace(/\\/g, "/").split("/").pop() || "";
                     return (
                       <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded text-[9px] bg-bg-tertiary">
-                        <span className="text-[10px]">📁</span>
+                        <FolderOpen className="w-3 h-3 text-folder" />
                         <span className="text-text-primary font-medium truncate">{baseName}</span>
                         <span className="text-text-muted/60 truncate max-w-[260px] text-[8px]">{src}</span>
                         <button onClick={() => handleRemoveMultipleSource(i)} className="ml-auto w-3.5 h-3.5 flex items-center justify-center text-text-muted/40 hover:text-error rounded">
@@ -926,8 +926,8 @@ export function FolderSetupView() {
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-[2px]" onClick={() => setFileCheck(null)}>
           <div className="bg-bg-secondary border border-border rounded-2xl shadow-2xl w-[480px] p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <div className="text-[12px] font-bold text-text-primary">📋 コピー先のファイル確認</div>
-              <button onClick={() => setFileCheck(null)} className="text-text-muted hover:text-text-primary text-lg">✕</button>
+              <div className="text-[12px] font-bold text-text-primary flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5" />コピー先のファイル確認</div>
+              <button onClick={() => setFileCheck(null)} className="text-text-muted hover:text-text-primary"><XIcon className="w-4 h-4" /></button>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className={`p-3 rounded-lg border text-center ${fileCheck.hasPsd ? "bg-success/5 border-success/20" : "bg-error/5 border-error/20"}`}>
@@ -947,7 +947,7 @@ export function FolderSetupView() {
               </div>
             </div>
             {/* 追加コピー */}
-            {(!fileCheck.hasPsd || !fileCheck.hasPdfOrImage) && <div className="text-[9px] text-warning">⚠ 不足データがあります</div>}
+            {(!fileCheck.hasPsd || !fileCheck.hasPdfOrImage) && <div className="text-[9px] text-warning flex items-center gap-1"><AlertTriangle className="w-3 h-3" />不足データがあります</div>}
             <AddCopySection checkedFolder={fileCheck.checkedFolder} onRescan={async () => {
               const r = await invoke<string[]>("list_all_files", { folderPath: fileCheck.checkedFolder });
               const psd = r.filter((f: string) => /\.(psd|psb)$/i.test(f)).length;
@@ -1019,8 +1019,12 @@ export function FolderSetupView() {
             </div>
             {/* ProGenモード */}
             <div className="p-2.5 bg-accent/5 border border-accent/15 rounded-lg">
-              <div className="text-[10px] text-accent font-medium">
-                {fileCheck.hasText ? "📝 テキストあり → ProGen「整形」" : "🔍 テキストなし → ProGen「抽出」"}
+              <div className="text-[10px] text-accent font-medium flex items-center gap-1">
+                {fileCheck.hasText ? (
+                  <><Pencil className="w-3 h-3" />テキストあり → ProGen「整形」</>
+                ) : (
+                  <><Search className="w-3 h-3" />テキストなし → ProGen「抽出」</>
+                )}
               </div>
             </div>
             {/* 確認完了 / WF次へ進む */}
@@ -1030,8 +1034,8 @@ export function FolderSetupView() {
               return isWf ? (
                 <>
                   {!fileCheck.hasPdfOrImage && (
-                    <div className="px-2.5 py-1.5 rounded-lg bg-warning/10 border border-warning/30 text-[9px] text-warning">
-                      ⚠ 画像/PDFが見つかりませんが、このまま進めます
+                    <div className="px-2.5 py-1.5 rounded-lg bg-warning/10 border border-warning/30 text-[9px] text-warning flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />画像/PDFが見つかりませんが、このまま進めます
                     </div>
                   )}
                   <button

@@ -317,7 +317,7 @@ export function SplitResultDialog() {
           )}
           <button
             onClick={close}
-            className="px-6 py-2.5 text-sm font-medium rounded-xl text-white bg-gradient-to-r from-accent-tertiary to-accent-secondary shadow-[0_4px_15px_rgba(0,212,170,0.3)] hover:-translate-y-0.5 transition-all duration-200"
+            className="px-6 py-2.5 text-sm font-medium rounded-xl text-white bg-gradient-to-r from-accent to-accent-hover shadow-[0_4px_15px_rgba(58,123,213,0.3)] hover:-translate-y-0.5 transition-all duration-200"
           >
             閉じる
           </button>

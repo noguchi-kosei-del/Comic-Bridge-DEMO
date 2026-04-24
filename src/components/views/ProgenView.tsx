@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { desktopDir } from "@tauri-apps/api/path";
+import { FileEdit, Search, CheckCircle2, AlertTriangle, Lightbulb, Pencil } from "lucide-react";
 import { useProgenStore } from "../../store/progenStore";
 import { useViewStore } from "../../store/viewStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
@@ -703,7 +704,7 @@ function LandingScreen() {
                 onClick={() => handleGo("extraction")}
                 className="w-80 px-6 py-5 rounded-xl border-2 border-blue-500/40 bg-blue-500/5 hover:bg-blue-500/10 transition-all cursor-pointer text-center"
               >
-                <div className="text-lg font-bold text-blue-500">📝 整形プロンプト</div>
+                <div className="text-lg font-bold text-blue-500 flex items-center justify-center gap-2"><FileEdit className="w-5 h-5" />整形プロンプト</div>
                 <div className="text-[10px] text-text-muted mt-1">テキストが読み込まれています — 統一表記ルールを適用して整形</div>
               </button>
             ) : (
@@ -711,7 +712,7 @@ function LandingScreen() {
                 onClick={() => handleGo("extraction")}
                 className="w-80 px-6 py-5 rounded-xl border-2 border-orange-500/40 bg-orange-500/5 hover:bg-orange-500/10 transition-all cursor-pointer text-center"
               >
-                <div className="text-lg font-bold text-orange-500">🔍 抽出プロンプト</div>
+                <div className="text-lg font-bold text-orange-500 flex items-center justify-center gap-2"><Search className="w-5 h-5" />抽出プロンプト</div>
                 <div className="text-[10px] text-text-muted mt-1">テキスト未読み込み — PDF/画像からセリフを抽出</div>
               </button>
             )}
@@ -721,7 +722,7 @@ function LandingScreen() {
               onClick={() => handleGo("proofreading")}
               className="w-80 px-4 py-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 transition-all cursor-pointer text-center"
             >
-              <div className="text-sm font-medium text-emerald-500">✓ 校正プロンプト</div>
+              <div className="text-sm font-medium text-emerald-500 flex items-center justify-center gap-2"><CheckCircle2 className="w-4 h-4" />校正プロンプト</div>
               <div className="text-[9px] text-text-muted mt-0.5">正誤チェック・提案チェック</div>
             </button>
           </div>
@@ -848,7 +849,7 @@ function ProgenViewInner() {
               {toolMode === "proofreading" && !hasText ? (
                 /* 校正モードだがテキスト未読み込み → エラー表示 */
                 <div className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-error text-white shadow-xl shadow-error/30">
-                  <span className="text-2xl">⚠</span>
+                  <AlertTriangle className="w-6 h-6" />
                   <div className="text-left flex-1">
                     <div className="text-sm font-bold">テキストが読み込まれていません</div>
                     <div className="text-[10px] opacity-90">校正プロンプトを使うには、TopNavの「テキスト」ボタンからテキストを読み込んでください</div>
@@ -884,7 +885,7 @@ function ProgenViewInner() {
                     }}
                     className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105"
                   >
-                    <span className="text-2xl">✓</span>
+                    <CheckCircle2 className="w-6 h-6" />
                     <div className="text-left">
                       <div className="text-sm font-bold">正誤チェック</div>
                       <div className="text-[10px] opacity-80">誤字・脱字・人名ルビ</div>
@@ -908,7 +909,7 @@ function ProgenViewInner() {
                     }}
                     className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white shadow-xl shadow-orange-500/30 transition-all hover:scale-105"
                   >
-                    <span className="text-2xl">💡</span>
+                    <Lightbulb className="w-6 h-6" />
                     <div className="text-left">
                       <div className="text-sm font-bold">提案チェック</div>
                       <div className="text-[10px] opacity-80">表記ゆれ・固有名詞等</div>
@@ -918,7 +919,7 @@ function ProgenViewInner() {
               ) : toolMode === "formatting" && !hasText ? (
                 /* 整形モードだがテキスト未読み込み → エラー表示 */
                 <div className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-error text-white shadow-xl shadow-error/30">
-                  <span className="text-2xl">⚠</span>
+                  <AlertTriangle className="w-6 h-6" />
                   <div className="text-left flex-1">
                     <div className="text-sm font-bold">テキストが読み込まれていません</div>
                     <div className="text-[10px] opacity-90">整形プロンプトを使うには、TopNavの「テキスト」ボタンからテキストを読み込んでください</div>
@@ -956,7 +957,7 @@ function ProgenViewInner() {
                   }}
                   className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white shadow-xl shadow-blue-500/30 transition-all hover:scale-105"
                 >
-                  <span className="text-2xl">📝</span>
+                  <Pencil className="w-6 h-6" />
                   <div className="text-left">
                     <div className="text-sm font-bold">整形プロンプトをコピーして Gemini を開く</div>
                     <div className="text-[10px] opacity-80">テキストを統一表記ルールで整形</div>
@@ -980,7 +981,7 @@ function ProgenViewInner() {
                   }}
                   className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white shadow-xl shadow-orange-500/30 transition-all hover:scale-105"
                 >
-                  <span className="text-2xl">🔍</span>
+                  <Search className="w-6 h-6" />
                   <div className="text-left">
                     <div className="text-sm font-bold">抽出プロンプトをコピーして Gemini を開く</div>
                     <div className="text-[10px] opacity-80">画像を送信してセリフを抽出</div>
@@ -1006,7 +1007,7 @@ function ProgenViewInner() {
                   }}
                   className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white shadow-xl shadow-orange-500/30 transition-all hover:scale-105"
                 >
-                  <span className="text-2xl">💡</span>
+                  <Lightbulb className="w-6 h-6" />
                   <div className="text-left">
                     <div className="text-sm font-bold">提案チェックプロンプトをコピーして Gemini を開く</div>
                     <div className="text-[10px] opacity-80">文字種・送り仮名・外来語・数字・略称・異体字 等</div>
@@ -1060,7 +1061,7 @@ function ProgenViewInner() {
                   }}
                   className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white shadow-xl shadow-blue-500/30 transition-all hover:scale-105"
                 >
-                  <span className="text-2xl">📝</span>
+                  <Pencil className="w-6 h-6" />
                   <div className="text-left">
                     <div className="text-sm font-bold">整形プロンプトをコピーして Gemini を開く</div>
                     <div className="text-[10px] opacity-80">テキストが読み込まれています</div>
@@ -1083,7 +1084,7 @@ function ProgenViewInner() {
                   }}
                   className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white shadow-xl shadow-orange-500/30 transition-all hover:scale-105"
                 >
-                  <span className="text-2xl">🔍</span>
+                  <Search className="w-6 h-6" />
                   <div className="text-left">
                     <div className="text-sm font-bold">抽出プロンプトをコピーして Gemini を開く</div>
                     <div className="text-[10px] opacity-80">画像を送信してセリフを抽出</div>

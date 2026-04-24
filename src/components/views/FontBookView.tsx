@@ -532,7 +532,7 @@ export function FontBookView({ onNavigateToViewer }: FontBookViewProps = {}) {
       {/* Main content: sidebar + cards */}
       <div className="flex-1 flex overflow-hidden">
         {/* Font sidebar */}
-        <div className="w-[200px] flex-shrink-0 border-r border-border overflow-y-auto select-none">
+        <div className="w-[272px] flex-shrink-0 border-r border-border overflow-y-auto select-none">
           <div className="py-1">
             {filteredGroups.map((group) => {
               const palette = group.font.subName ? SUB_NAME_PALETTE[group.font.subName] : undefined;

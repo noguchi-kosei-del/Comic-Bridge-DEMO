@@ -14,6 +14,10 @@ target/
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# Personal notes
+comicbridge改善案.txt
 
 # Logs
 *.log

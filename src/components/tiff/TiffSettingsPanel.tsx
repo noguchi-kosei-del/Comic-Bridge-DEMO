@@ -1186,7 +1186,7 @@ export function TiffSettingsPanel() {
             <button
               onClick={() => setShowAutoScanDialog("all")}
               disabled={files.length === 0}
-              className="flex-1 px-3 py-3 text-sm font-medium rounded-xl text-white bg-gradient-to-r from-accent-warm to-accent shadow-[0_3px_12px_rgba(255,177,66,0.25)] hover:shadow-[0_5px_16px_rgba(255,177,66,0.35)] hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+              className="flex-1 px-3 py-3 text-sm font-medium rounded-xl text-white bg-gradient-to-r from-accent to-accent-hover shadow-[0_3px_12px_rgba(58,123,213,0.3)] hover:shadow-[0_5px_16px_rgba(58,123,213,0.4)] hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
             >
               <svg
                 className="w-4 h-4"

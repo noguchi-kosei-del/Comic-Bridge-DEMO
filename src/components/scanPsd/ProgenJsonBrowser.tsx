@@ -9,11 +9,11 @@ interface MasterRuleData { proofRules?: { symbol?: SymbolRule[]; proof?: ProofRu
 
 const CATEGORIES = [
   { key: "symbol", name: "記号・句読点", icon: "⋮" },
-  { key: "notation", name: "表記変更", icon: "✏️", subCategories: ["basic", "recommended"] },
+  { key: "notation", name: "表記変更", icon: "表", subCategories: ["basic", "recommended"] },
   { key: "difficult", name: "難読文字", icon: "字" },
   { key: "number", name: "数字", icon: "#" },
-  { key: "pronoun", name: "人称", icon: "👤" },
-  { key: "character", name: "人物名", icon: "🏷️" },
+  { key: "pronoun", name: "人称", icon: "人" },
+  { key: "character", name: "人物名", icon: "名" },
 ];
 
 export function ProgenJsonBrowser() {

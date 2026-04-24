@@ -207,13 +207,13 @@ export function TextRubyTab() {
           <div
             className="rounded-xl p-3 text-center"
             style={{
-              background: "linear-gradient(135deg, rgba(77,184,255,0.08), rgba(124,92,255,0.06))",
+              background: "linear-gradient(135deg, rgba(58,123,213,0.10), rgba(0,120,212,0.08))",
             }}
           >
             <span
               className="text-xl font-black font-display"
               style={{
-                background: "linear-gradient(135deg, #4db8ff, #7c5cff)",
+                background: "linear-gradient(135deg, #3a7bd5, #0078d4)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
               }}
@@ -225,13 +225,13 @@ export function TextRubyTab() {
           <div
             className="rounded-xl p-3 text-center"
             style={{
-              background: "linear-gradient(135deg, rgba(0,201,167,0.08), rgba(77,184,255,0.06))",
+              background: "linear-gradient(135deg, rgba(14,116,144,0.10), rgba(58,123,213,0.08))",
             }}
           >
             <span
               className="text-xl font-black font-display"
               style={{
-                background: "linear-gradient(135deg, #00c9a7, #4db8ff)",
+                background: "linear-gradient(135deg, #0e7490, #3a7bd5)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
               }}
@@ -348,7 +348,7 @@ export function TextRubyTab() {
               <button
                 onClick={editingId ? handleUpdate : handleAdd}
                 className="flex-1 py-1.5 text-[10px] font-bold text-white rounded-lg transition-all"
-                style={{ background: "linear-gradient(135deg, #ff5a8a, #7c5cff)" }}
+                style={{ background: "linear-gradient(135deg, #3a7bd5, #0078d4)" }}
               >
                 {editingId ? "更新" : "追加"}
               </button>

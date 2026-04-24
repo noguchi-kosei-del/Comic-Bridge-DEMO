@@ -361,9 +361,9 @@ export function FileRenamePanel() {
           disabled={!canExecute}
           className="
             w-full px-4 py-3 text-sm font-medium rounded-xl text-white
-            bg-gradient-to-r from-accent-secondary to-accent-tertiary
-            shadow-[0_4px_15px_rgba(0,212,170,0.3)]
-            hover:shadow-[0_6px_20px_rgba(0,212,170,0.4)]
+            bg-gradient-to-r from-accent to-accent-hover
+            shadow-[0_4px_15px_rgba(58,123,213,0.3)]
+            hover:shadow-[0_6px_20px_rgba(58,123,213,0.4)]
             hover:-translate-y-0.5
             transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none

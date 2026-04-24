@@ -1,0 +1,106 @@
+import { useEffect } from "react";
+import { useViewStore } from "../../store/viewStore";
+import { DiffViewerView } from "../diff-viewer/DiffViewerView";
+import { ParallelViewerView } from "../parallel-viewer/ParallelViewerView";
+import { useDiffStore, computeCompareMode } from "../../store/diffStore";
+import { useParallelStore } from "../../store/parallelStore";
+
+type InspectionMode = "diff" | "parallel";
+
+const SUB_TABS: { id: InspectionMode; label: string }[] = [
+  { id: "diff", label: "差分モード" },
+  { id: "parallel", label: "分割ビューアー" },
+];
+
+export function InspectionToolView() {
+  const activeMode = useViewStore((s) => s.kenbanViewMode);
+  const setActiveMode = useViewStore((s) => s.setKenbanViewMode);
+  const isFullscreen = useViewStore((s) => s.isViewerFullscreen);
+  const kenbanPathA = useViewStore((s) => s.kenbanPathA);
+  const kenbanPathB = useViewStore((s) => s.kenbanPathB);
+
+  // 差分タブ移動時: A/B両方揃っている場合のみファイル読み込み + compareMode 自動判定
+  useEffect(() => {
+    if (activeMode !== "diff") return;
+    if (!kenbanPathA || !kenbanPathB) return;
+
+    const setupDiffTab = async () => {
+      const diffState = useDiffStore.getState();
+      const getExt = (p: string) => p.substring(p.lastIndexOf(".") + 1).toLowerCase();
+
+      const loadPromises: Promise<void>[] = [];
+      if (diffState.folderA !== kenbanPathA) {
+        loadPromises.push(diffState.loadFolderSide(kenbanPathA, "A"));
+      }
+      if (diffState.folderB !== kenbanPathB) {
+        loadPromises.push(diffState.loadFolderSide(kenbanPathB, "B"));
+      }
+      await Promise.all(loadPromises);
+
+      const after = useDiffStore.getState();
+      const extA = after.filesA[0] ? getExt(after.filesA[0].filePath) : "";
+      const extB = after.filesB[0] ? getExt(after.filesB[0].filePath) : "";
+      const mode = computeCompareMode(extA, extB);
+      if (mode && mode !== after.compareMode) {
+        after.setCompareMode(mode);
+      }
+    };
+
+    setupDiffTab();
+  }, [activeMode, kenbanPathA, kenbanPathB]);
+
+  // 分割タブ移動時: A/B両方揃っている場合のみファイル読み込み
+  useEffect(() => {
+    if (activeMode !== "parallel") return;
+    if (!kenbanPathA || !kenbanPathB) return;
+    const ps = useParallelStore.getState();
+    if (ps.A.folder !== kenbanPathA) {
+      ps.loadFolderSide("A", kenbanPathA);
+    }
+    if (ps.B.folder !== kenbanPathB) {
+      ps.loadFolderSide("B", kenbanPathB);
+    }
+  }, [activeMode, kenbanPathA, kenbanPathB]);
+
+  return (
+    <div className="flex-1 h-full overflow-hidden flex flex-col">
+      {/* Sub-mode selector bar — 全画面時は非表示 */}
+      {!isFullscreen && (
+        <div className="flex-shrink-0 h-9 bg-bg-secondary border-b border-border flex items-center px-3 gap-1">
+          {SUB_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              className={`
+                flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-md
+                transition-all duration-150 flex-shrink-0
+                ${
+                  activeMode === tab.id
+                    ? "text-white bg-gradient-to-r from-accent to-accent-secondary shadow-sm"
+                    : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
+                }
+              `}
+              onClick={() => setActiveMode(tab.id)}
+            >
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Content area — タブ切替で毎回マウント（検A/B propsを確実に反映） */}
+      <div className="flex-1 overflow-hidden relative">
+        {activeMode === "diff" && (
+          <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
+            <DiffViewerView externalPathA={kenbanPathA} externalPathB={kenbanPathB} />
+          </div>
+        )}
+
+        {activeMode === "parallel" && (
+          <div className="flex h-full w-full overflow-hidden" style={{ position: "absolute", inset: 0 }}>
+            <ParallelViewerView externalPathA={kenbanPathA} externalPathB={kenbanPathB} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

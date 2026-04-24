@@ -280,7 +280,7 @@ export function RenameView() {
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* Left settings panel */}
-        <div className="w-[360px] flex-shrink-0 border-r border-border overflow-hidden">
+        <div className="w-[272px] flex-shrink-0 border-r border-border overflow-hidden">
           {subMode === "layer" ? <LayerRenamePanel /> : <FileRenamePanel />}
         </div>
 

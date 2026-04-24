@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { invoke } from "@tauri-apps/api/core";
+import { FolderOpen, FileText } from "lucide-react";
 import type { LayerNode } from "../../types";
 import type { TextBlock } from "../../store/unifiedViewerStore";
 import type { UnifiedDiffEntry } from "../../kenban-utils/textExtract";
@@ -62,7 +63,7 @@ export function LayerTreeView({ nodes, depth = 0, _counter }: { nodes: LayerNode
               }`}
               style={{
                 paddingLeft: depth * 12 + 4,
-                backgroundColor: rowIdx % 2 === 0 ? "#ffffff" : "#f0f8f0",
+                backgroundColor: rowIdx % 2 === 0 ? "#ffffff" : "#eaf2fb",
               }}
             >
               <span className={`w-3 text-center text-[9px] ${
@@ -363,14 +364,14 @@ export function CheckJsonBrowser({ onSelect, onCancel }: { onSelect: (path: stri
           <p className="p-4 text-xs text-text-muted text-center">レーベルフォルダがありません</p>
         ) : labels.map((label) => (
           <div key={label} className="px-3 py-2 text-xs cursor-pointer hover:bg-bg-tertiary transition-colors flex items-center gap-2" onDoubleClick={() => selectLabel(label)}>
-            <span className="text-accent-secondary">📁</span><span className="text-text-primary">{label}</span>
+            <FolderOpen className="w-3.5 h-3.5 text-folder" /><span className="text-text-primary">{label}</span>
           </div>
         )))}
         {step === "title" && (titles.length === 0 ? (
           <p className="p-4 text-xs text-text-muted text-center">タイトルフォルダがありません</p>
         ) : titles.map((title) => (
           <div key={title} className="px-3 py-2 text-xs cursor-pointer hover:bg-bg-tertiary transition-colors flex items-center gap-2" onDoubleClick={() => selectTitle(title)}>
-            <span className="text-accent-secondary">📁</span><span className="text-text-primary">{title}</span>
+            <FolderOpen className="w-3.5 h-3.5 text-folder" /><span className="text-text-primary">{title}</span>
           </div>
         )))}
         {step === "files" && (jsonFiles.length === 0 ? (
@@ -381,7 +382,7 @@ export function CheckJsonBrowser({ onSelect, onCancel }: { onSelect: (path: stri
           return (
             <div key={fp} className={`px-3 py-2 text-xs cursor-pointer transition-colors flex items-center gap-2 ${isSelected ? "bg-accent/10 text-accent" : "hover:bg-bg-tertiary text-text-secondary"}`}
               onClick={() => setSelectedFile(fp)} onDoubleClick={() => onSelect(fp)}>
-              <span className="opacity-60">📄</span><span>{name}</span>
+              <FileText className="w-3.5 h-3.5 opacity-60" /><span>{name}</span>
             </div>
           );
         }))}

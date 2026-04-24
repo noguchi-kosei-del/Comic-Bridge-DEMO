@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen, save as dialogSave } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import {
-  useUnifiedViewerStore,
+  useScopedViewerStore,
   type ViewerFile,
   type FontPresetEntry,
 } from "../../store/unifiedViewerStore";
@@ -32,7 +32,7 @@ export function useViewerFileOps({
   jsonBrowserMode,
   setJsonBrowserMode,
 }: UseViewerFileOpsOptions) {
-  const store = useUnifiedViewerStore();
+  const store = useScopedViewerStore();
 
   const openFolder = useCallback(async () => {
     const folderPath = await dialogOpen({ directory: true, multiple: false });

@@ -26,9 +26,9 @@
     Menlo,
     monospace;
 
-  /* グラデーション（同系色のみ） */
-  --gradient-pop:   linear-gradient(135deg, #4f46e5, #4338ca);
-  --gradient-fresh: linear-gradient(135deg, #0e7490, #4f46e5);
+  /* グラデーション（ブルー基調、白文字前提） */
+  --gradient-pop:   linear-gradient(135deg, #3a7bd5, #0078d4);
+  --gradient-fresh: linear-gradient(135deg, #0e7490, #3a7bd5);
   --gradient-warm:  linear-gradient(135deg, #b45309, #a16207);
 
   /* ベースタイポグラフィ */
@@ -39,8 +39,8 @@
   letter-spacing: 0.003em;
   font-feature-settings: "palt", "calt";
 
-  color: #1a1a24;
-  background-color: #fbfaf7;
+  color: #1a1a2e;
+  background-color: #f8f9fc;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -66,7 +66,7 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: #1a1a24;
+  color: #1a1a2e;
 }
 
 code, pre, kbd, samp {
@@ -78,8 +78,8 @@ code, pre, kbd, samp {
    主要テキストの可読性保証
    ============================================================ */
 body, #root {
-  color: #1a1a24;
-  background-color: #fbfaf7;
+  color: #1a1a2e;
+  background-color: #f8f9fc;
 }
 
 button, a, label, [role="button"] {
@@ -128,7 +128,7 @@ td, th {
    「装飾色」を「機能色」に絞り込む
    ============================================================ */
 [class*="bg-manga-"] {
-  background-color: #ebeae5 !important;  /* bg-tertiary */
+  background-color: #f0f2f5 !important;  /* bg-tertiary */
 }
 [class*="text-manga-"] {
   color: #4a4a5a !important;  /* text-secondary */
@@ -139,15 +139,15 @@ td, th {
    背景や枠線は付与せず、色のみ濃色化してミニマル維持
    ============================================================ */
 nav button.text-text-secondary {
-  color: #1a1a24 !important;
+  color: #1a1a2e !important;
   position: relative;
   transition: color 0.15s ease;
 }
 nav button.text-text-secondary:hover {
-  color: #4f46e5 !important;
+  color: #3a7bd5 !important;
 }
 nav button.text-text-secondary:focus {
-  color: #4f46e5 !important;
+  color: #3a7bd5 !important;
 }
 nav button.text-text-secondary:focus::after {
   content: "";
@@ -156,7 +156,7 @@ nav button.text-text-secondary:focus::after {
   left: 12%;
   right: 12%;
   height: 2px;
-  background: #4f46e5;
+  background: #3a7bd5;
   border-radius: 1px;
 }
 
@@ -173,22 +173,22 @@ nav button.text-text-secondary:focus::after {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c4bfb3;
+  background: #c2c7d0;
   border-radius: 5px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a396;
+  background: #9da4b0;
   background-clip: padding-box;
   border: 2px solid transparent;
 }
 
 /* ===== 選択時のスタイル ===== */
 ::selection {
-  background: rgba(79, 70, 229, 0.2);
-  color: #1a1a24;
+  background: rgba(58, 123, 213, 0.2);
+  color: #1a1a2e;
 }
 
 /* ===== ドラッグ無効化 ===== */
@@ -199,7 +199,7 @@ img {
 
 /* ===== フォーカスリング ===== */
 :focus-visible {
-  outline: 2px solid #4f46e5;
+  outline: 2px solid #3a7bd5;
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -217,12 +217,12 @@ img {
 
   .btn-primary {
     @apply text-white;
-    background: linear-gradient(135deg, #4f46e5, #4338ca);
-    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.28);
+    background: linear-gradient(135deg, #3a7bd5, #0078d4);
+    box-shadow: 0 4px 15px rgba(58, 123, 213, 0.28);
   }
 
   .btn-primary:hover {
-    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.38);
+    box-shadow: 0 6px 20px rgba(58, 123, 213, 0.38);
     transform: translateY(-2px);
   }
 
@@ -248,6 +248,13 @@ img {
     box-shadow: 0 4px 15px rgba(21, 128, 61, 0.28);
   }
 
+  /* 青系グラデーション+白文字ボタン（プライマリ同系、意味的に「進行」用途） */
+  .btn-blue {
+    @apply text-white;
+    background: linear-gradient(135deg, #3a7bd5, #0078d4);
+    box-shadow: 0 4px 15px rgba(58, 123, 213, 0.28);
+  }
+
   /* ===== アイコンボタン ===== */
   .btn-icon {
     @apply p-2 rounded-xl transition-all duration-200;
@@ -262,13 +269,13 @@ img {
   .panel {
     @apply bg-bg-secondary rounded-2xl;
     @apply border border-border;
-    box-shadow: 0 2px 12px rgba(26, 26, 36, 0.05);
+    box-shadow: 0 2px 12px rgba(26, 26, 46, 0.05);
   }
 
   .panel-elevated {
     @apply bg-bg-tertiary rounded-2xl;
     @apply border border-border;
-    box-shadow: 0 4px 20px rgba(26, 26, 36, 0.08);
+    box-shadow: 0 4px 20px rgba(26, 26, 46, 0.08);
   }
 
   /* ===== カード（グロー効果付き）===== */
@@ -280,13 +287,13 @@ img {
 
   .card:hover {
     @apply border-accent/30;
-    box-shadow: 0 4px 16px rgba(79, 70, 229, 0.10);
+    box-shadow: 0 4px 16px rgba(58, 123, 213, 0.10);
     transform: translateY(-2px);
   }
 
   .card-selected {
     @apply border-accent;
-    box-shadow: 0 0 16px rgba(79, 70, 229, 0.18);
+    box-shadow: 0 0 16px rgba(58, 123, 213, 0.18);
   }
 
   /* ===== 入力フィールド ===== */
@@ -299,7 +306,7 @@ img {
 
   .input:focus {
     @apply border-accent outline-none;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.18);
+    box-shadow: 0 0 0 3px rgba(58, 123, 213, 0.18);
   }
 
   /* ===== バッジ（4種固定：Success/Warning/Error/Neutral） ===== */
@@ -342,7 +349,7 @@ img {
 
   .tab-active {
     @apply text-white;
-    background: linear-gradient(135deg, #4f46e5, #4338ca);
+    background: linear-gradient(135deg, #3a7bd5, #0078d4);
   }
 
   /* ===== ツールチップ ===== */
@@ -350,7 +357,7 @@ img {
     @apply absolute z-50 px-3 py-2 text-sm rounded-xl;
     @apply bg-bg-elevated text-text-primary;
     @apply border border-border;
-    box-shadow: 0 4px 16px rgba(26, 26, 36, 0.08);
+    box-shadow: 0 4px 16px rgba(26, 26, 46, 0.08);
     @apply animate-slide-up;
   }
 
@@ -363,7 +370,7 @@ img {
 
   .dropzone-active {
     @apply border-accent bg-accent/5;
-    box-shadow: inset 0 0 30px rgba(79, 70, 229, 0.10);
+    box-shadow: inset 0 0 30px rgba(58, 123, 213, 0.10);
   }
 
   /* ===== プログレスバー ===== */
@@ -373,7 +380,7 @@ img {
 
   .progress-bar-fill {
     @apply h-full rounded-full transition-all duration-300;
-    background: linear-gradient(90deg, #4f46e5, #4338ca);
+    background: linear-gradient(90deg, #3a7bd5, #0078d4);
   }
 
   /* ===== モーダル ===== */
@@ -387,14 +394,14 @@ img {
     @apply bg-bg-secondary rounded-2xl;
     @apply border border-border;
     @apply animate-slide-up;
-    box-shadow: 0 16px 48px rgba(26, 26, 36, 0.14);
+    box-shadow: 0 16px 48px rgba(26, 26, 46, 0.14);
   }
 
   /* ===== 吹き出し ===== */
   .speech-bubble {
     @apply relative bg-bg-elevated rounded-2xl px-4 py-3;
     @apply border border-border;
-    box-shadow: 0 2px 12px rgba(26, 26, 36, 0.06);
+    box-shadow: 0 2px 12px rgba(26, 26, 46, 0.06);
   }
 
   .speech-bubble::after {
@@ -442,13 +449,13 @@ img {
     opacity: 0.05;
   }
 
-  /* ===== グロー効果（Indigo系に統一） ===== */
+  /* ===== グロー効果（ブルー系に統一） ===== */
   .glow-pink {
-    box-shadow: 0 0 20px rgba(79, 70, 229, 0.22);
+    box-shadow: 0 0 20px rgba(58, 123, 213, 0.22);
   }
 
   .glow-purple {
-    box-shadow: 0 0 20px rgba(67, 56, 202, 0.22);
+    box-shadow: 0 0 20px rgba(0, 120, 212, 0.22);
   }
 
   .glow-mint {
@@ -475,18 +482,18 @@ img {
   }
 
   .hover-glow:hover {
-    box-shadow: 0 0 20px rgba(79, 70, 229, 0.22);
+    box-shadow: 0 0 20px rgba(58, 123, 213, 0.22);
   }
 
   /* スクリーントーン風背景 */
   .bg-tone {
-    background-image: radial-gradient(circle, rgba(26, 26, 36, 0.03) 1px, transparent 1px);
+    background-image: radial-gradient(circle, rgba(26, 26, 46, 0.03) 1px, transparent 1px);
     background-size: 4px 4px;
   }
 
   /* グラデーションテキスト */
   .text-gradient-pop {
-    background: linear-gradient(135deg, #4f46e5, #4338ca);
+    background: linear-gradient(135deg, #3a7bd5, #0078d4);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

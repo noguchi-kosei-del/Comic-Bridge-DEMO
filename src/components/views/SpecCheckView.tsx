@@ -13,10 +13,10 @@ import { usePsdLoader } from "../../hooks/usePsdLoader";
 
 import { usePageNumberCheck } from "../../hooks/usePageNumberCheck";
 import { PreviewGrid } from "../preview/PreviewGrid";
-import { MetadataPanel, LayerSectionPanel } from "../metadata/MetadataPanel";
+import { LayerSectionPanel } from "../metadata/MetadataPanel";
 import { FixGuidePanel } from "../spec-checker/FixGuidePanel";
 import { GuideSectionPanel } from "../spec-checker/GuideSectionPanel";
-import { SpecLayerGrid } from "../spec-checker/SpecLayerGrid";
+import { SpecLayerGrid, type LayerLayoutMode } from "../spec-checker/SpecLayerGrid";
 // LayerSeparationPanel は隔離中 — 統合完了後に削除予定
 // import { LayerSeparationPanel } from "../spec-checker/LayerSeparationPanel";
 import { DropZone } from "../file-browser/DropZone";
@@ -28,12 +28,15 @@ import { useTextExtract } from "../../hooks/useTextExtract";
 import { useHighResPreview } from "../../hooks/useHighResPreview";
 import { detectPaperSize } from "../../lib/paperSize";
 import { showPromptDialog } from "../../store/viewStore";
-import { useSettingsStore } from "../../store/settingsStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 // useScanPsdStore は SpecScanJsonDialog 内で使用
 // JsonFileBrowser / PresetJsonData は JSON登録（SpecScanJsonDialog）に統合済み
 import { SpecScanJsonDialog } from "../spec-checker/SpecScanJsonDialog";
 import { FileContextMenu } from "../common/FileContextMenu";
+
+// 開発モード時は右クリックでの独自コンテキストメニュー表示を無効化して、
+// ネイティブの「検証」メニュー（DevTools）を使えるようにする。戻す時は true に。
+const CONTEXT_MENU_ENABLED = false;
 
 // DOT_MENU_TABSはGlobalAddressBarに移動済み
 
@@ -60,8 +63,19 @@ export function SpecCheckView() {
   const [showGuidePrompt, setShowGuidePrompt] = useState(false);
   const viewMode = usePsdStore((s) => s.specViewMode);
   const setViewMode = usePsdStore((s) => s.setSpecViewMode);
+  const LAYER_LAYOUT_LS_KEY = "speccheck.layerLayoutMode.v1";
+  const [layerLayoutMode, setLayerLayoutModeRaw] = useState<LayerLayoutMode>(() => {
+    try { return (localStorage.getItem(LAYER_LAYOUT_LS_KEY) as LayerLayoutMode) || "grid"; }
+    catch { return "grid"; }
+  });
+  const setLayerLayoutMode = (m: LayerLayoutMode) => {
+    setLayerLayoutModeRaw(m);
+    try { localStorage.setItem(LAYER_LAYOUT_LS_KEY, m); } catch { /* ignore */ }
+  };
   const [tachimiError, setTachimiError] = useState<string | null>(null);
   const [showPreviewPanel, setShowPreviewPanel] = useState(true);
+  const [showDetailPanel, setShowDetailPanel] = useState(true);
+  const [showActionBar, setShowActionBar] = useState(true);
   const [showScanJsonInPanel, setShowScanJsonInPanel] = useState(false);
   const [showTextExtractInPanel, setShowTextExtractInPanel] = useState(false);
   const textExtract = useTextExtract();
@@ -86,16 +100,8 @@ export function SpecCheckView() {
     return () => { unlisten?.(); clearTimeout(timer); };
   }, []);
   const [expandedFile, setExpandedFile] = useState<typeof activeFile>(null);
-  const settingsDefaultFolder = useSettingsStore((s) => s.defaultFolderPath);
-  const [desktopPath, setDesktopPath] = useState("C:\\Users");
-  useEffect(() => {
-    if (settingsDefaultFolder) { setDesktopPath(settingsDefaultFolder); return; }
-    import("@tauri-apps/api/path").then(({ desktopDir }) => desktopDir().then((p) => setDesktopPath(p))).catch(() => {});
-  }, [settingsDefaultFolder]);
   // ドットメニューはGlobalAddressBarに移動済み
-  const [sortKey, setSortKey] = useState<"name" | "modified" | "type">("name");
-  const [sortAsc, setSortAsc] = useState(true);
-  // sortMode removed — sortKey + sortAsc used directly
+  // 並び替え UI は廃止（既定で「名前・昇順」固定のため state 不要）。
   // setActiveViewはGlobalAddressBarに移動済み
   const [lockedFile, setLockedFile] = useState<typeof activeFile>(null);
   const [lockedTextFile, setLockedTextFile] = useState<{ name: string; path: string; content: string } | null>(null);
@@ -117,11 +123,11 @@ export function SpecCheckView() {
 
   const guidePromptRef = useRef<HTMLDivElement>(null);
 
-  const { checkAllFiles, isChecking } = useSpecChecker();
+  useSpecChecker();
   const { isPhotoshopInstalled, isConverting } = usePhotoshopConverter();
   const { isProcessing, prepareFiles } = usePreparePsd();
   const { openFileInPhotoshop } = useOpenInPhotoshop();
-  const { revealFiles } = useOpenFolder();
+  useOpenFolder();
   const { outlierFileIds } = useCanvasSizeCheck();
   usePageNumberCheck();
 
@@ -139,7 +145,6 @@ export function SpecCheckView() {
     }
   }, []);
 
-  const contentLocked = usePsdStore((s) => s.contentLocked);
   const refreshCounter = usePsdStore((s) => s.refreshCounter);
 
   // Load explorer on folder change, or when refresh is triggered
@@ -156,7 +161,6 @@ export function SpecCheckView() {
   // Enter subfolder (single click)
   const handleEnterFolder = useCallback(async (folderName: string) => {
     if (!currentFolderPath) return;
-    if (usePsdStore.getState().contentLocked) return; // ロック中はスキップ
     const newPath = `${currentFolderPath}\\${folderName}`;
     setCurrentFolderPath(newPath);
     usePsdStore.getState().setSingleFolderDrop(null);
@@ -311,14 +315,6 @@ export function SpecCheckView() {
     return { passed, failed, unchecked, noGuides, hasTombo, noTombo, caution };
   }, [files, checkResults, outlierFileIds, hasTomboMix]);
 
-  // 手動再チェック
-  const handleRecheck = () => {
-    const enabledSpecs = specifications.filter((s) => s.enabled);
-    if (enabledSpecs.length > 0) {
-      checkAllFiles(enabledSpecs);
-    }
-  };
-
   // Tachimi起動（PDF化連携）
   const handleLaunchTachimi = async () => {
     setTachimiError(null);
@@ -349,23 +345,8 @@ export function SpecCheckView() {
   const hasChecked = checkResults.size > 0;
   const allPassed = hasChecked && stats.failed === 0 && stats.unchecked === 0;
 
-  // Sorted files
-  const sortedFiles = useMemo(() => {
-    const sorted = [...files];
-    const dir = sortAsc ? 1 : -1;
-    switch (sortKey) {
-      case "name":
-        return sortAsc ? sorted : sorted.reverse();
-      case "modified":
-        return sorted.sort((a, b) => dir * ((a.modifiedTime || 0) - (b.modifiedTime || 0)));
-      case "type": {
-        const getExt = (f: typeof files[0]) => f.fileName.substring(f.fileName.lastIndexOf(".")).toLowerCase();
-        return sorted.sort((a, b) => dir * getExt(a).localeCompare(getExt(b)));
-      }
-      default:
-        return sorted;
-    }
-  }, [files, sortKey, sortAsc]);
+  // 既定: 名前・昇順固定
+  const sortedFiles = useMemo(() => [...files], [files]);
 
   // ファイルフィルタ適用
   const filteredFiles = useMemo(() => {
@@ -446,18 +427,37 @@ export function SpecCheckView() {
       {/* Main 3-column layout */}
       <div className="flex-1 flex overflow-hidden" data-tool-panel>
 
-        {/* ═══ LEFT PANEL: Detail ═══ */}
+        {/* ═══ LEFT PANEL: Detail（アニメーション付き折りたたみ） ═══ */}
         {viewMode !== "layerCheck" && (
-          <div className="w-[320px] flex-shrink-0 border-r border-border overflow-hidden flex flex-col bg-bg-secondary">
+          <div className={`flex-shrink-0 border-r border-border overflow-hidden flex flex-col bg-bg-secondary relative transition-[width] duration-300 ease-out ${showDetailPanel ? "w-[272px]" : "w-8"}`}>
+            {/* ヘッダー帯（折りたたみトグル） */}
+            <div className="flex-shrink-0 h-8 border-b border-border/50 flex items-center px-2 gap-1">
+              {showDetailPanel && (
+                <span className="text-[11px] text-text-primary font-medium truncate flex-1">詳細</span>
+              )}
+              <button
+                onClick={() => setShowDetailPanel((v) => !v)}
+                className="w-5 h-5 flex items-center justify-center text-text-muted hover:text-text-primary rounded hover:bg-bg-tertiary"
+                title={showDetailPanel ? "詳細パネルを格納" : "詳細パネルを展開"}
+              >
+                {showDetailPanel ? (
+                  /* 二重シェブロン左向き（パネルを左に格納） */
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="11 17 6 12 11 7" />
+                    <polyline points="18 17 13 12 18 7" />
+                  </svg>
+                ) : (
+                  /* 二重シェブロン右向き（パネルを右へ引き出す） */
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 17 11 12 6 7" />
+                    <polyline points="13 17 18 12 13 7" />
+                  </svg>
+                )}
+              </button>
+            </div>
+            {showDetailPanel && (<>
             {activeFile ? (
               <>
-                {/* フォルダ階層ツリー */}
-                <FolderBreadcrumbTree currentPath={currentFolderPath || desktopPath} onNavigate={(path) => {
-                  if (usePsdStore.getState().contentLocked) return;
-                  usePsdStore.getState().setCurrentFolderPath(path);
-                  loadFolder(path).catch(() => {});
-                }} />
-
                 {/* ファイル名ヘッダー（ダブルクリックでリネーム） */}
                 <div className="px-3 py-2 border-b border-border flex items-center gap-2 flex-shrink-0">
                   <span
@@ -488,33 +488,14 @@ export function SpecCheckView() {
                   >
                     {activeFile.fileName}
                   </span>
-                  {activeFile.filePath && (
-                    <button
-                      className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded transition-all text-text-muted hover:text-text-primary hover:bg-bg-tertiary active:scale-95"
-                      onClick={() => {
-                        if (selectedFileIds.length > 1) {
-                          const paths = selectedFileIds
-                            .map((id) => files.find((f) => f.id === id)?.filePath)
-                            .filter((p): p is string => !!p);
-                          revealFiles(paths);
-                        } else {
-                          invoke("open_folder_in_explorer", { folderPath: currentFolderPath || activeFile.filePath.substring(0, activeFile.filePath.lastIndexOf("\\")) }).catch(() => {});
-                        }
-                      }}
-                      title="フォルダを開く (F)"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                      </svg>
-                    </button>
-                  )}
                   {isPhotoshopInstalled && activeFile.filePath && (
                     <button
-                      className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded transition-all text-[#31A8FF] hover:bg-[#31A8FF]/15 active:scale-95"
+                      className="flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center rounded-[3px] transition-all hover:bg-[#31A8FF]/15 active:scale-95 border border-[#31A8FF]/60"
                       onClick={() => openFileInPhotoshop(activeFile.filePath)}
                       title="Photoshopで開く (P)"
+                      aria-label="Photoshopで開く"
                     >
-                      <span className="text-sm font-bold leading-none">P</span>
+                      <span className="text-[8px] font-bold leading-none text-[#31A8FF] tracking-tight select-none">Ps</span>
                     </button>
                   )}
                 </div>
@@ -534,112 +515,58 @@ export function SpecCheckView() {
                       </>
                     );
                   })()}
-                  <CollapsibleSidebarSection title="原稿仕様" icon={<svg className="w-3.5 h-3.5 text-accent-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}>
+                  <div className="px-3 py-3 border-b border-border">
                     <GuideSectionPanel file={activeFile} />
                     <div className="border-t border-border/20 mt-2 pt-2" />
-                    <MetadataPanel file={activeFile} />
-                  </CollapsibleSidebarSection>
-                  <CollapsibleSidebarSection title="レイヤー" defaultOpen={false} icon={<svg className="w-3.5 h-3.5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>}>
                     <LayerSectionPanel file={activeFile} />
-                  </CollapsibleSidebarSection>
+                  </div>
                 </div>
               </>
             ) : (
-              <div className="flex-1 overflow-auto">
-                {/* フォルダ階層ツリー（ファイル未選択時） */}
-                <FolderBreadcrumbTree currentPath={currentFolderPath || desktopPath} onNavigate={(path) => {
-                  if (usePsdStore.getState().contentLocked) return;
-                  usePsdStore.getState().setCurrentFolderPath(path);
-                  loadFolder(path).catch(() => {});
-                }} />
+              <div className="flex-1 overflow-auto flex items-center justify-center text-[10px] text-text-muted px-3 text-center">
+                ファイルを選択すると詳細が表示されます
               </div>
             )}
+            </>)}
           </div>
         )}
 
         {/* ═══ CENTER COLUMN ═══ */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-          {/* Bar 1: View controls */}
-          <div className="flex-shrink-0 px-2 py-1 bg-bg-secondary border-b border-border/40 flex items-center gap-2">
-            <div className="flex bg-bg-elevated rounded-md p-0.5 border border-white/5 flex-shrink-0">
-            </div>
-            <div className="flex-1" />
-            {/* ドットメニューはGlobalAddressBarに移動済み */}
-          </div>
-
           {/* Bar 2: Spec selection + Size dropdown */}
           <div className="flex-shrink-0 px-2 py-1 bg-bg-tertiary/30 border-b border-border/30 flex items-center gap-2">
-            <button
-              onClick={() => usePsdStore.getState().setContentLocked(!contentLocked)}
-              className={`w-5 h-5 flex items-center justify-center rounded transition-colors flex-shrink-0 ${
-                contentLocked ? "text-warning bg-warning/10" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
-              }`}
-              title={contentLocked ? "ロック中（クリックで解除）" : "コンテンツロック"}
-            >
-              <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                {contentLocked ? (
-                  <><rect x="3.5" y="7" width="9" height="7" rx="1" /><path d="M5.5 7V5a2.5 2.5 0 015 0v2" /></>
-                ) : (
-                  <><rect x="3.5" y="7" width="9" height="7" rx="1" /><path d="M5.5 7V5a2.5 2.5 0 015 0" /></>
-                )}
-              </svg>
-            </button>
-            <span className="text-[10px] text-text-muted flex-shrink-0">仕様:</span>
             {specifications.length > 0 && (
-              <button
-                className={`px-3 py-0.5 text-[10px] font-medium rounded transition-all ${
-                  activeSpecId
-                    ? "text-white bg-gradient-to-r from-accent to-accent-secondary shadow-sm"
-                    : "text-text-secondary bg-bg-tertiary hover:text-text-primary border border-border/50"
-                }`}
-                onClick={() => {
-                  if (!activeSpecId) {
-                    // 未選択 → 最初の仕様を選択
-                    selectSpecAndCheck(specifications[0].id);
-                  } else {
-                    // 次の仕様に切り替え（ループ）
-                    const currentIdx = specifications.findIndex((s) => s.id === activeSpecId);
-                    const nextIdx = (currentIdx + 1) % specifications.length;
-                    selectSpecAndCheck(specifications[nextIdx].id);
-                  }
-                }}
-              >
-                {activeSpecId
-                  ? specifications.find((s) => s.id === activeSpecId)?.name || "—"
-                  : "クリックで選択"}
-              </button>
+              <div className="inline-flex items-center bg-bg-tertiary rounded-full p-0.5 border border-border/50 flex-shrink-0" role="group" aria-label="原稿仕様切替">
+                {[
+                  { id: "mono-spec", label: "モノクロ" },
+                  { id: "color-spec", label: "カラー" },
+                ].map((opt) => {
+                  const active = activeSpecId === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      onClick={() => selectSpecAndCheck(opt.id)}
+                      className={`px-3 py-0.5 text-[10px] font-medium rounded-full transition-all ${
+                        active
+                          ? "bg-gradient-to-r from-accent to-accent-hover text-white shadow-sm"
+                          : "text-text-secondary hover:text-text-primary"
+                      }`}
+                      aria-pressed={active}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             )}
             {hasChecked && (
               <>
                 <div className="w-px h-3 bg-border/40 mx-0.5" />
-                <span className="text-[10px] text-success font-medium">{stats.passed}OK</span>
-                <span className="text-[10px] text-error font-medium">{stats.failed}NG</span>
                 {stats.caution > 0 && <span className="text-[10px] text-warning font-medium">{stats.caution}注意</span>}
-                <button onClick={handleRecheck} disabled={isChecking} className="p-0.5 rounded text-text-muted hover:text-text-primary disabled:opacity-50" title="再チェック">
-                  <svg className={`w-3 h-3 ${isChecking ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
               </>
             )}
             <div className="flex-1" />
-            {/* View shortcuts + filters */}
-            <button
-              onClick={() => setViewMode("list")}
-              className={`w-5 h-5 flex items-center justify-center rounded transition-colors flex-shrink-0 ${viewMode === "list" ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"}`}
-              title="リスト表示"
-            >
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
-            </button>
-            <button
-              onClick={() => { setViewMode("thumbnails"); setThumbnailSize("medium"); }}
-              className={`w-5 h-5 flex items-center justify-center rounded transition-colors flex-shrink-0 ${viewMode === "thumbnails" ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"}`}
-              title="サムネイル表示（中）"
-            >
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
-            </button>
-            <div className="w-px h-3 bg-border/40" />
             {/* Size dropdown */}
             {(viewMode === "thumbnails" || viewMode === "list") && (
               <select
@@ -657,29 +584,17 @@ export function SpecCheckView() {
                 ))}
               </select>
             )}
-            {/* Sort: key dropdown + asc/desc button */}
-            <select
-              className="bg-bg-tertiary border border-border/50 rounded text-[10px] py-0.5 px-1.5 text-text-primary outline-none flex-shrink-0"
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as typeof sortKey)}
-            >
-              <option value="name">名前</option>
-              <option value="modified">更新日</option>
-              <option value="type">種類</option>
-            </select>
-            <button
-              onClick={() => setSortAsc(!sortAsc)}
-              className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-primary rounded hover:bg-bg-tertiary flex-shrink-0"
-              title={sortAsc ? "昇順 → 降順" : "降順 → 昇順"}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                {sortAsc ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                )}
-              </svg>
-            </button>
+            {/* レイヤー構造の表示切替 */}
+            {viewMode === "layers" && (
+              <select
+                className="bg-bg-tertiary border border-border/50 rounded text-[10px] py-0.5 px-1.5 text-text-primary outline-none flex-shrink-0"
+                value={layerLayoutMode}
+                onChange={(e) => setLayerLayoutMode(e.target.value as LayerLayoutMode)}
+              >
+                <option value="grid">グリッド</option>
+                <option value="list">リスト</option>
+              </select>
+            )}
             <select
               className="bg-bg-tertiary border border-border/50 rounded text-[10px] py-0.5 px-1 text-text-primary outline-none flex-shrink-0"
               value={fileTypeFilter}
@@ -741,6 +656,7 @@ export function SpecCheckView() {
             }}
             onClick={() => { if (selectedNonPsdItem) setSelectedNonPsdItem(null); }}
             onContextMenu={(e) => {
+              if (!CONTEXT_MENU_ENABLED) return;
               e.preventDefault();
               setContextMenu({ x: e.clientX, y: e.clientY });
             }}
@@ -824,6 +740,7 @@ export function SpecCheckView() {
                       }}
                       onDoubleClick={() => handleEnterFolder(folder)}
                       onContextMenu={(e) => {
+                        if (!CONTEXT_MENU_ENABLED) return;
                         e.preventDefault();
                         e.stopPropagation();
                         setSelectedNonPsdItem(`folder:${folder}`);
@@ -832,7 +749,7 @@ export function SpecCheckView() {
                         setContextMenu({ x: e.clientX, y: e.clientY });
                       }}
                     >
-                      <svg className={`text-warning/70 flex-shrink-0 ${hasFiles ? "w-3.5 h-3.5" : "w-5 h-5"}`} viewBox="0 0 24 24" fill="currentColor">
+                      <svg className={`text-folder flex-shrink-0 ${hasFiles ? "w-3.5 h-3.5" : "w-5 h-5"}`} viewBox="0 0 24 24" fill="currentColor">
                         <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
                       </svg>
                       <span className="text-text-primary truncate">{folder}</span>
@@ -871,6 +788,7 @@ export function SpecCheckView() {
                           handleOpenFile(file);
                         }}
                         onContextMenu={(e) => {
+                          if (!CONTEXT_MENU_ENABLED) return;
                           e.preventDefault();
                           if (!selectedTextFile || selectedTextFile.name !== file) handleOpenFile(file);
                           setSelectedNonPsdItem(`file:${file}`);
@@ -902,24 +820,7 @@ export function SpecCheckView() {
                       default: return true;
                     }
                   }) : undefined}
-                  fileSorter={(arr) => {
-                    const sorted = [...arr];
-                    const dir = sortAsc ? 1 : -1;
-                    switch (sortKey) {
-                      case "name": return sortAsc ? sorted : sorted.reverse();
-                      case "modified": return sorted.sort((a: any, b: any) => dir * ((a.modifiedTime || 0) - (b.modifiedTime || 0)));
-                      case "type": return sorted.sort((a: any, b: any) => {
-                        const ea = a.fileName.substring(a.fileName.lastIndexOf(".")).toLowerCase();
-                        const eb = b.fileName.substring(b.fileName.lastIndexOf(".")).toLowerCase();
-                        return dir * ea.localeCompare(eb);
-                      });
-                      default: return sorted;
-                    }
-                  }}
-                  onDoubleClickFile={(id) => {
-                    const f = files.find((ff) => ff.id === id);
-                    if (f) setExpandedFile(f);
-                  }}
+                  fileSorter={(arr) => [...arr]}
                 />
               )}
             </div>
@@ -936,22 +837,47 @@ export function SpecCheckView() {
                 allFiles={fileTypeFilter !== "all" ? [] : (folderContents?.allFiles || [])}
                 onEnterFolder={handleEnterFolder}
                 onSelectFile={(id) => { usePsdStore.getState().selectFile(id); setSelectedTextFile(null); setSelectedNonPsdItem(null); }}
-                onOpenFile={(id) => {
-                  const f = files.find((ff) => ff.filePath === id || ff.id === id);
-                  if (f) setExpandedFile(f);
-                }}
                 onOpenExternalFile={handleOpenFile}
               />
             </>
           )}
-          {viewMode === "layers" && <SpecLayerGrid />}
+          {viewMode === "layers" && <SpecLayerGrid layoutMode={layerLayoutMode} />}
           {/* layerCheck は隔離中 — コードを実行しない */}
 
-          {/* Floating Action Buttons (offset right when preview open) */}
-          <div className="absolute bottom-6 right-6 flex flex-row flex-wrap items-end justify-end gap-3 z-10">
+          {/* 下部ボタン領域の白背景（展開時: 横幅いっぱい h-16、折りたたみ時: ボタンサイズの小片） */}
+          <div
+            className={`pointer-events-none absolute bottom-0 bg-white border-t border-border z-[5] transition-all duration-200 ease-out ${
+              showActionBar
+                ? "left-0 right-[12px] h-16 rounded-none"
+                : "right-[12px] h-7 w-9 rounded-tl-md border-l"
+            }`}
+          />
+
+          {/* 折りたたみトグル用の縦区切り線（展開時のみ） */}
+          {showActionBar && (
+            <div className="pointer-events-none absolute bottom-3 right-11 w-px h-8 bg-border z-20" />
+          )}
+
+          {/* 折りたたみトグル（右下端、常時表示） */}
+          <button
+            onClick={() => setShowActionBar((v) => !v)}
+            className="absolute bottom-1 right-3 z-20 w-6 h-5 flex items-center justify-center text-text-muted hover:text-text-primary rounded hover:bg-bg-tertiary/80 transition-colors"
+            title={showActionBar ? "アクションバーを折りたたむ" : "アクションバーを展開"}
+          >
+            {/* 二重シェブロン: 展開時=下向き（格納）/ 折りたたみ時=上向き（展開） */}
+            <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${showActionBar ? "" : "rotate-180"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 8 12 14 18 8" />
+              <polyline points="6 14 12 20 18 14" />
+            </svg>
+          </button>
+
+          {/* Floating Action Buttons (offset right when preview open) — 折りたたみ可能 */}
+          <div className={`absolute bottom-3 right-14 flex flex-row flex-nowrap items-end justify-end gap-3 z-10 transition-opacity duration-150 ${
+            showActionBar ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}>
             {viewMode === "thumbnails" && stats.noGuides > 0 && (
               <button
-                className="h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary border-2 border-guide-v/50 text-guide-v hover:bg-bg-elevated hover:border-guide-v/70 hover:shadow-[0_8px_30px_rgba(0,188,212,0.25)] active:scale-[0.97]"
+                className="h-10 px-4 text-base font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1.5 bg-bg-secondary border-2 border-guide-v/50 text-guide-v hover:bg-bg-elevated hover:border-guide-v/70 hover:shadow-[0_8px_30px_rgba(0,188,212,0.25)] active:scale-[0.97] whitespace-nowrap"
                 onClick={openEditor}
               >
                 <svg
@@ -968,9 +894,6 @@ export function SpecCheckView() {
                   />
                 </svg>
                 ガイドを編集
-                <span className="px-2 py-1 rounded-lg bg-warning/15 text-warning text-sm font-bold">
-                  {stats.noGuides}
-                </span>
               </button>
             )}
             {viewMode === "thumbnails" && stats.failed > 0 && isPhotoshopInstalled && (
@@ -1030,7 +953,7 @@ export function SpecCheckView() {
                   </div>
                 )}
                 <button
-                  className="h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 text-white bg-gradient-to-r from-[#31A8FF] to-[#0066CC] shadow-[0_4px_16px_rgba(49,168,255,0.4)] hover:shadow-[0_6px_24px_rgba(49,168,255,0.55)] hover:brightness-110 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="h-10 px-4 text-base font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1.5 text-white bg-gradient-to-r from-[#31A8FF] to-[#0066CC] shadow-[0_4px_16px_rgba(49,168,255,0.4)] hover:shadow-[0_6px_24px_rgba(49,168,255,0.55)] hover:brightness-110 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   onClick={() => {
                     if (stats.noGuides > 0 && guides.length === 0) {
                       setShowGuidePrompt(true);
@@ -1065,7 +988,7 @@ export function SpecCheckView() {
               <>
                 {/* PDF化ボタン（Tachimi連携） */}
                 <button
-                  className={`h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary active:scale-[0.97] ${
+                  className={`h-10 px-4 text-base font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1.5 bg-bg-secondary active:scale-[0.97] whitespace-nowrap ${
                     allPassed
                       ? "border-2 border-[#ff8a6b]/60 text-[#ff8a6b] hover:bg-bg-elevated hover:border-[#ff8a6b]/80 hover:shadow-[0_6px_20px_rgba(255,138,107,0.25)]"
                       : "border-2 border-[#c8806a]/30 text-[#c8806a]/70 hover:bg-bg-elevated hover:border-[#c8806a]/50 hover:text-[#c8806a]"
@@ -1087,13 +1010,6 @@ export function SpecCheckView() {
                     />
                   </svg>
                   PDF化
-                  <span
-                    className={`px-2 py-1 rounded-lg text-sm font-bold ${
-                      allPassed ? "bg-[#ff8a6b]/15" : "bg-[#c8806a]/10"
-                    }`}
-                  >
-                    {filteredFiles.length}
-                  </span>
                 </button>
                 {/* Tachimi起動エラー */}
                 {tachimiError && (
@@ -1109,7 +1025,7 @@ export function SpecCheckView() {
             {/* 簡易スキャン（JSON登録）ボタン */}
             {filteredFiles.length > 0 && (
               <button
-                className="h-16 min-w-[220px] px-8 text-lg font-bold rounded-2xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-3 bg-bg-secondary border-2 border-[#0e7490]/50 text-[#0e7490] hover:bg-bg-elevated hover:border-[#0e7490]/70 hover:shadow-[0_6px_20px_rgba(14,116,144,0.25)] active:scale-[0.97]"
+                className="h-10 px-4 text-base font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1.5 bg-bg-secondary border-2 border-[#0e7490]/50 text-[#0e7490] hover:bg-bg-elevated hover:border-[#0e7490]/70 hover:shadow-[0_6px_20px_rgba(14,116,144,0.25)] active:scale-[0.97] whitespace-nowrap"
                 onClick={() => setShowScanJsonInPanel(true)}
                 title="読み込み中のPSDからフォント・ガイド・テキスト情報をJSONに登録"
               >
@@ -1117,9 +1033,6 @@ export function SpecCheckView() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 簡易スキャン
-                <span className="px-2 py-1 rounded-lg bg-[#0e7490]/10 text-sm font-bold">
-                  {filteredFiles.length}
-                </span>
               </button>
             )}
             {/* テキスト抽出ボタン（常時表示） */}
@@ -1129,13 +1042,14 @@ export function SpecCheckView() {
         </div>
         {/* ═══ end CENTER COLUMN ═══ */}
 
-        {/* ═══ RIGHT PANEL: Preview (closable, lockable) ═══ */}
+        {/* ═══ RIGHT PANEL: Preview (closable, lockable, アニメーション付き) ═══ */}
+        <div className={`flex-shrink-0 border-l border-border flex flex-col overflow-hidden bg-bg-secondary relative transition-[width] duration-300 ease-out ${showPreviewPanel ? "w-[272px]" : "w-8"}`}>
         {showPreviewPanel && (() => {
           // Determine which file to preview (locked or active)
           const previewFile = previewLocked ? lockedFile : activeFile;
           const previewText = previewLocked ? lockedTextFile : selectedTextFile;
           return (
-          <div className="w-[320px] flex-shrink-0 border-l border-border flex flex-col overflow-hidden bg-bg-secondary relative">
+          <>
             {/* Preview header */}
             <div className="flex-shrink-0 h-8 border-b border-border/50 flex items-center px-2 gap-1">
               <span className="text-[11px] text-text-primary font-medium truncate flex-1">
@@ -1203,10 +1117,12 @@ export function SpecCheckView() {
               <button
                 onClick={() => setShowPreviewPanel(false)}
                 className="w-5 h-5 flex items-center justify-center text-text-muted hover:text-text-primary rounded hover:bg-bg-tertiary"
-                title="プレビューを閉じる"
+                title="プレビューを格納"
               >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                {/* 二重シェブロン右向き（パネルを右に格納） */}
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 17 11 12 6 7" />
+                  <polyline points="13 17 18 12 13 7" />
                 </svg>
               </button>
             </div>
@@ -1365,21 +1281,26 @@ export function SpecCheckView() {
               </div>
             )}
             {/* === 作成モード — アクション統合時に非表示 === */}
-          </div>
+          </>
           );
         })()}
-        {/* Preview toggle button (when panel is closed) */}
+        {/* Preview collapsed strip (header only) */}
         {!showPreviewPanel && (
-          <button
-            onClick={() => setShowPreviewPanel(true)}
-            className="flex-shrink-0 w-6 border-l border-border flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-            title="プレビューを開く"
-          >
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+          <div className="flex-shrink-0 h-8 border-b border-border/50 flex items-center px-2 gap-1">
+            <button
+              onClick={() => setShowPreviewPanel(true)}
+              className="w-5 h-5 flex items-center justify-center text-text-muted hover:text-text-primary rounded hover:bg-bg-tertiary"
+              title="プレビューを展開"
+            >
+              {/* 二重シェブロン左向き（パネルを左へ引き出す） */}
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="11 17 6 12 11 7" />
+                <polyline points="18 17 13 12 18 7" />
+              </svg>
+            </button>
+          </div>
         )}
+        </div>
       </div>
       {/* Right-click context menu */}
       {contextMenu && (
@@ -1580,6 +1501,37 @@ function FilePropertiesPanel({ file, checkResult }: { file: PsdFile; checkResult
 
 // ═══ PSD File List View (リスト表示) ═════════════════
 
+// Explorer 風リサイズ可能カラム定義
+type ListColAlign = "left" | "center" | "right";
+// Tailwind JIT が静的抽出できるよう明示マップ
+const LIST_COL_ALIGN_CLS: Record<ListColAlign, string> = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+interface ListCol { id: string; label: string; defaultW: number; minW: number; align: ListColAlign }
+const LIST_COLS: ListCol[] = [
+  { id: "result", label: "",       defaultW: 44,  minW: 32, align: "center" },
+  { id: "name",   label: "ファイル名", defaultW: 260, minW: 80, align: "left"  },
+  { id: "ext",    label: "種類",    defaultW: 56,  minW: 40, align: "center" },
+  { id: "color",  label: "カラー",   defaultW: 64,  minW: 44, align: "center" },
+  { id: "size",   label: "サイズ",   defaultW: 96,  minW: 60, align: "right"  },
+  { id: "dpi",    label: "DPI",    defaultW: 52,  minW: 36, align: "right"  },
+  { id: "bit",    label: "Bit",    defaultW: 44,  minW: 32, align: "center" },
+  { id: "text",   label: "テキスト", defaultW: 60,  minW: 40, align: "center" },
+  { id: "guide",  label: "ガイド",   defaultW: 60,  minW: 40, align: "center" },
+];
+const LIST_COL_WIDTHS_LS_KEY = "speccheck.listColWidths.v1";
+
+function loadListColWidths(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(LIST_COL_WIDTHS_LS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, number> : {};
+  } catch { return {}; }
+}
+
 function PsdFileListView({
   files,
   selectedFileIds,
@@ -1590,7 +1542,6 @@ function PsdFileListView({
   allFiles = [],
   onEnterFolder,
   onSelectFile,
-  onOpenFile,
   onOpenExternalFile,
 }: {
   files: PsdFile[];
@@ -1602,7 +1553,6 @@ function PsdFileListView({
   allFiles?: string[];
   onEnterFolder: (name: string) => void;
   onSelectFile: (id: string, multi?: boolean) => void;
-  onOpenFile: (path: string) => void;
   onOpenExternalFile?: (name: string) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -1612,6 +1562,46 @@ function PsdFileListView({
     const el = listRef.current.querySelector(`[data-file-id="${activeId}"]`);
     if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeId]);
+
+  // ─ Explorer 風カラム幅（localStorage 永続化） ─
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    const stored = loadListColWidths();
+    const init: Record<string, number> = {};
+    for (const c of LIST_COLS) init[c.id] = stored[c.id] ?? c.defaultW;
+    return init;
+  });
+  useEffect(() => {
+    try { localStorage.setItem(LIST_COL_WIDTHS_LS_KEY, JSON.stringify(colWidths)); } catch { /* noop */ }
+  }, [colWidths]);
+
+  const startColResize = useCallback((colId: string, e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const col = LIST_COLS.find((c) => c.id === colId);
+    if (!col) return;
+    const startX = e.clientX;
+    const startW = colWidths[colId] ?? col.defaultW;
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.max(col.minW, startW + (ev.clientX - startX));
+      setColWidths((prev) => (prev[colId] === next ? prev : { ...prev, [colId]: next }));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [colWidths]);
+
+  const resetColWidths = useCallback(() => {
+    const init: Record<string, number> = {};
+    for (const c of LIST_COLS) init[c.id] = c.defaultW;
+    setColWidths(init);
+  }, []);
 
   return (
     <div ref={listRef} className="h-full overflow-auto select-none">
@@ -1624,7 +1614,7 @@ function PsdFileListView({
               className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-bg-tertiary transition-colors"
               onDoubleClick={() => onEnterFolder(folder)}
             >
-              <svg className="w-4 h-4 text-warning/70 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="w-4 h-4 text-folder flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
               </svg>
               <span className="text-text-primary truncate">{folder}</span>
@@ -1635,19 +1625,38 @@ function PsdFileListView({
           ))}
         </div>
       )}
-      {/* PSD file list — 列順: 結果, ファイル名, 拡張子, カラー, サイズ, DPI, Bit, テキスト, ガイド */}
-      <table className="w-full text-[11px]">
+      {/* PSD file list — 列順: 結果, ファイル名, 拡張子, カラー, サイズ, DPI, Bit, テキスト, ガイド
+          Explorer 風: 各ヘッダー右端のハンドルをドラッグで列幅リサイズ / ダブルクリックで既定幅復帰。
+          末尾にスペーサー列を置くことで、定義列の合計がコンテナ幅より小さい時は右側に余白として吸収し、
+          親 `.flex-1 overflow-hidden relative` の幅ぴったりまでヘッダー罫線を伸ばす。 */}
+      <table className="text-[11px] w-full" style={{ tableLayout: "fixed" }}>
+        <colgroup>
+          {LIST_COLS.map((c) => (
+            <col key={c.id} style={{ width: colWidths[c.id] ?? c.defaultW }} />
+          ))}
+          <col />
+        </colgroup>
         <thead className="sticky top-0 bg-bg-secondary z-10">
           <tr className="text-text-muted border-b border-border">
-            <th className="text-center px-1.5 py-1.5 font-medium w-8"></th>
-            <th className="text-left px-2 py-1.5 font-medium">ファイル名</th>
-            <th className="text-center px-1 py-1.5 font-medium w-10">種類</th>
-            <th className="text-center px-2 py-1.5 font-medium w-12">カラー</th>
-            <th className="text-right px-2 py-1.5 font-medium w-20">サイズ</th>
-            <th className="text-right px-2 py-1.5 font-medium w-10">DPI</th>
-            <th className="text-center px-1 py-1.5 font-medium w-8">Bit</th>
-            <th className="text-center px-1 py-1.5 font-medium w-10">テキスト</th>
-            <th className="text-center px-1 py-1.5 font-medium w-10">ガイド</th>
+            {LIST_COLS.map((c) => (
+              <th
+                key={c.id}
+                className={`px-2 py-1.5 font-medium relative overflow-hidden border-r border-border/70 ${LIST_COL_ALIGN_CLS[c.align]}`}
+              >
+                <span className="truncate block">{c.label}</span>
+                {/* リサイズハンドル: 常時うっすら見えるグリップ線 + ホバー/ドラッグでアクセント色に。
+                    ヒット領域は 8px 幅で、セル境界にまたがるよう -right-1 で半分ずつ配置。 */}
+                <span
+                  onPointerDown={(e) => startColResize(c.id, e)}
+                  onDoubleClick={resetColWidths}
+                  className="group absolute top-0 -right-1 h-full w-2 cursor-col-resize flex items-center justify-center z-20"
+                  title="ドラッグで列幅変更 / ダブルクリックで既定に戻す"
+                >
+                  <span className="block h-3/5 w-px bg-text-muted/60 group-hover:w-0.5 group-hover:bg-accent group-active:w-0.5 group-active:bg-accent transition-all" />
+                </span>
+              </th>
+            ))}
+            <th aria-hidden className="p-0" />
           </tr>
         </thead>
         <tbody>
@@ -1684,7 +1693,6 @@ function PsdFileListView({
                   if (e.shiftKey) { usePsdStore.getState().selectRange(file.id); }
                   else { onSelectFile(file.id, e.ctrlKey || e.metaKey); }
                 }}
-                onDoubleClick={() => onOpenFile(file.filePath)}
               >
                 {/* 結果 */}
                 <td className="text-center px-1.5 py-1.5">
@@ -1699,8 +1707,8 @@ function PsdFileListView({
                   )}
                 </td>
                 {/* ファイル名（拡張子非表示） */}
-                <td className="px-2 py-1.5 text-text-primary font-medium">
-                  <div className="truncate max-w-[200px]">{file.fileName.replace(/\.[^.]+$/, "")}</div>
+                <td className="px-2 py-1.5 text-text-primary font-medium overflow-hidden">
+                  <div className="truncate">{file.fileName.replace(/\.[^.]+$/, "")}</div>
                 </td>
                 {/* 拡張子アイコン */}
                 <td className="text-center px-1 py-1.5">
@@ -1731,7 +1739,7 @@ function PsdFileListView({
                   {hasText ? (
                     <span className="text-accent-tertiary text-[9px]">あり</span>
                   ) : (
-                    <span className="text-text-muted/30 text-[9px]">なし</span>
+                    <span className="text-text-muted/30 text-[9px]">テキストレイヤーなし</span>
                   )}
                 </td>
                 {/* ガイド */}
@@ -1742,6 +1750,8 @@ function PsdFileListView({
                     <span className="text-text-muted/30 text-[9px]">なし</span>
                   )}
                 </td>
+                {/* スペーサー: ヘッダーのスペーサー列と対応 */}
+                <td aria-hidden className="p-0" />
               </tr>
             );
           })}
@@ -1851,91 +1861,3 @@ function PdfModeButton() {
   );
 }
 
-/** 左サイドバー折りたたみセクション */
-function CollapsibleSidebarSection({ title, icon, children, defaultOpen = true }: { title: string; icon?: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="border-b border-border">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-1.5 px-3 py-2 text-[10px] text-text-muted hover:text-text-primary">
-        {icon}
-        <span className="text-xs font-medium flex-1">{title}</span>
-        <svg className={`w-3 h-3 transition-transform flex-shrink-0 ${open ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-      {open && <div className="px-3 pb-3">{children}</div>}
-    </div>
-  );
-}
-
-/** ファイル階層ツリー（折りたたみ可能、サブフォルダ表示） */
-function FolderBreadcrumbTree({ currentPath, onNavigate }: { currentPath: string; onNavigate: (path: string) => void }) {
-  const [open, setOpen] = useState(true);
-  const [subFolders, setSubFolders] = useState<string[]>([]);
-  const rawParts = currentPath.replace(/\//g, "\\").split("\\").filter(Boolean);
-  // ドライブレター修正: "C" → "C:"
-  const parts = rawParts.map((p, i) => i === 0 && /^[A-Za-z]$/.test(p) ? p + ":" : p);
-
-  // 現在フォルダのサブフォルダを取得
-  useEffect(() => {
-    if (!currentPath) { setSubFolders([]); return; }
-    invoke<string[]>("list_subfolders", { folderPath: currentPath })
-      .then((folders) => setSubFolders(folders.sort()))
-      .catch(() => setSubFolders([]));
-  }, [currentPath]);
-
-  return (
-    <div className="border-t border-border/40">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1.5 px-4 py-2 text-[10px] text-text-muted hover:text-text-primary"
-      >
-        <span className="flex-1 text-left">フォルダ階層</span>
-        <svg className={`w-3 h-3 transition-transform flex-shrink-0 ${open ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-      {open && (
-        <div className="px-4 pb-3">
-          {/* 親階層 */}
-          {parts.map((part, i) => {
-            const fullPath = parts.slice(0, i + 1).join("\\");
-            const isLast = i === parts.length - 1;
-            return (
-              <div key={i} style={{ paddingLeft: `${i * 6}px` }}>
-                <button
-                  onClick={() => !isLast && onNavigate(fullPath)}
-                  className={`flex items-center gap-1 text-[10px] py-0.5 rounded transition-colors ${
-                    isLast ? "text-accent font-medium cursor-default" : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary cursor-pointer"
-                  }`}
-                >
-                  <svg className="w-3 h-3 text-warning/70 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
-                  </svg>
-                  {part}
-                </button>
-              </div>
-            );
-          })}
-          {/* サブフォルダ */}
-          {subFolders.map((sub) => {
-            const subName = sub.split("\\").pop() || sub;
-            return (
-            <div key={sub} style={{ paddingLeft: `${parts.length * 6}px` }}>
-              <button
-                onClick={() => onNavigate(sub)}
-                className="flex items-center gap-1 text-[10px] py-0.5 rounded text-text-muted hover:text-text-primary hover:bg-bg-tertiary cursor-pointer transition-colors"
-              >
-                <svg className="w-3 h-3 text-warning/40 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
-                </svg>
-                {subName}
-              </button>
-            </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}

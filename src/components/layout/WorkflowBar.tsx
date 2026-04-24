@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as tauriDialogOpen } from "@tauri-apps/plugin-dialog";
+import { ClipboardList, X as XIcon } from "lucide-react";
 import { useViewStore } from "../../store/viewStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
@@ -831,8 +832,8 @@ function ProofLoadOverlay({ onClose, onProceed }: { onClose: () => void; onProce
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
       <div className="bg-bg-secondary border border-border rounded-2xl shadow-2xl w-[480px] p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <div className="text-[12px] font-bold text-text-primary">📋 初校データ 読み込み</div>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary text-lg">✕</button>
+          <div className="text-[12px] font-bold text-text-primary flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5" />初校データ 読み込み</div>
+          <button onClick={onClose} className="text-text-muted hover:text-text-primary"><XIcon className="w-4 h-4" /></button>
         </div>
 
         {/* データ選択 */}

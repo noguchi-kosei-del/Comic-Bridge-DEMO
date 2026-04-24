@@ -13,8 +13,10 @@ import { ScanPsdView } from "../views/ScanPsdView";
 // KENBAN は完全削除済み（差分・分割は統合ビューアーへReact移植完了）
 import { ProgenView } from "../views/ProgenView";
 import { UnifiedViewerView } from "../views/UnifiedViewerView";
+import { TextEditorView } from "../views/TextEditorView";
 import { FolderSetupView } from "../views/FolderSetupView";
 import { RequestPrepView } from "../views/RequestPrepView";
+import { InspectionToolView } from "../views/InspectionToolView";
 
 export function ViewRouter() {
   const activeView = useViewStore((s) => s.activeView);
@@ -22,10 +24,14 @@ export function ViewRouter() {
   // State-preserving mount for heavy tabs (once mounted, never unmount)
   const [progenMounted, setProgenMounted] = useState(false);
   const [unifiedViewerMounted, setUnifiedViewerMounted] = useState(false);
+  const [textEditorMounted, setTextEditorMounted] = useState(false);
+  const [inspectionMounted, setInspectionMounted] = useState(false);
 
   useEffect(() => {
     if (activeView === "progen") setProgenMounted(true);
     if (activeView === "unifiedViewer") setUnifiedViewerMounted(true);
+    if (activeView === "textEditor") setTextEditorMounted(true);
+    if (activeView === "inspection") setInspectionMounted(true);
   }, [activeView]);
 
   return (
@@ -55,6 +61,20 @@ export function ViewRouter() {
       {unifiedViewerMounted && (
         <div style={{ display: activeView === "unifiedViewer" ? "contents" : "none" }}>
           <UnifiedViewerView />
+        </div>
+      )}
+
+      {/* Text Editor: display toggle for state preservation */}
+      {textEditorMounted && (
+        <div style={{ display: activeView === "textEditor" ? "contents" : "none" }}>
+          <TextEditorView />
+        </div>
+      )}
+
+      {/* Inspection Tool: display toggle for state preservation (差分計算結果を保持) */}
+      {inspectionMounted && (
+        <div style={{ display: activeView === "inspection" ? "contents" : "none" }}>
+          <InspectionToolView />
         </div>
       )}
     </div>
