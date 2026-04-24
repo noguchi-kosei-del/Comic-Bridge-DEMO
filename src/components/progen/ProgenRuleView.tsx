@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
-import { FolderOpen, ScanText, Wand2, SpellCheck, Lightbulb } from "lucide-react";
+import { FolderOpen, ScanText, Wand2, SpellCheck, Lightbulb, FileEdit } from "lucide-react";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useProgenStore } from "../../store/progenStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
@@ -14,6 +14,7 @@ import type { SymbolRule, ProofRule } from "../../types/progen";
 import { showPromptDialog } from "../../store/viewStore";
 import { openExternalUrl } from "../../hooks/useProgenTauri";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
+import { useViewStore } from "../../store/viewStore";
 import { generateSimpleCheckPrompt, generateVariationCheckPrompt, generateExtractionPrompt, generateFormattingPrompt } from "../../lib/progenPrompts";
 
 // ═══ メインコンポーネント ═══
@@ -137,26 +138,16 @@ export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}
 
       {/* メインエリア */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* プロンプト生成バー（横並び） */}
+        {/* 上部バー（左: テキストエディタへジャンプ / 右: ドロップダウン2つ） */}
         <div className="flex-shrink-0 px-3 py-2 border-b border-border/30 bg-bg-tertiary/20 flex items-center gap-2">
-          <span className="text-[10px] font-medium text-text-muted flex-shrink-0">プロンプト生成</span>
-          <button onClick={extraction} className="px-5 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 transition-colors inline-flex items-center gap-1.5">
-            <ScanText className="w-4 h-4" />
-            抽出
+          <button
+            onClick={() => useViewStore.getState().setActiveView("textEditor")}
+            className="px-3 py-1.5 text-xs font-medium rounded-md bg-bg-secondary border border-border text-text-primary hover:bg-bg-elevated hover:border-accent/40 transition-colors inline-flex items-center gap-1.5"
+            title="テキストエディタへ移動"
+          >
+            <FileEdit className="w-3.5 h-3.5" />
+            テキストエディタ
           </button>
-          <button onClick={formatting} className="px-5 py-2 text-sm font-medium text-white bg-blue-500 rounded-md hover:bg-blue-600 transition-colors inline-flex items-center gap-1.5">
-            <Wand2 className="w-4 h-4" />
-            整形
-          </button>
-          <button onClick={correctness} className="px-5 py-2 text-sm font-medium text-white bg-emerald-500 rounded-md hover:bg-emerald-600 transition-colors inline-flex items-center gap-1.5">
-            <SpellCheck className="w-4 h-4" />
-            正誤
-          </button>
-          <button onClick={proposal} className="px-5 py-2 text-sm font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600 transition-colors inline-flex items-center gap-1.5">
-            <Lightbulb className="w-4 h-4" />
-            提案
-          </button>
-          {copied && <span className="text-[10px] text-success ml-1">{copied} コピー済</span>}
 
           {/* 右寄せ: ドロップダウン2つ */}
           <div className="flex-1" />
@@ -230,6 +221,44 @@ export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}
           ) : (
             <ProofRulePanel category={store.currentEditCategory} searchText={searchText} listMode={listMode} />
           )}
+        </div>
+
+        {/* 下部: プロンプト生成ボタン（大きな横一列） */}
+        <div className="flex-shrink-0 px-4 py-3 border-t border-border/30 bg-bg-tertiary/20">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11px] font-semibold text-text-muted">プロンプト生成</span>
+            {copied && <span className="text-[11px] text-success font-medium">{copied} コピー済</span>}
+          </div>
+          <div className="flex items-stretch gap-3">
+            <button
+              onClick={extraction}
+              className="flex-1 h-14 px-4 text-base font-bold text-white bg-blue-500 rounded-xl hover:bg-blue-600 active:scale-[0.98] transition-all shadow-sm hover:shadow-md inline-flex items-center justify-center gap-2"
+            >
+              <ScanText className="w-5 h-5" />
+              抽出
+            </button>
+            <button
+              onClick={formatting}
+              className="flex-1 h-14 px-4 text-base font-bold text-white bg-blue-500 rounded-xl hover:bg-blue-600 active:scale-[0.98] transition-all shadow-sm hover:shadow-md inline-flex items-center justify-center gap-2"
+            >
+              <Wand2 className="w-5 h-5" />
+              整形
+            </button>
+            <button
+              onClick={correctness}
+              className="flex-1 h-14 px-4 text-base font-bold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 active:scale-[0.98] transition-all shadow-sm hover:shadow-md inline-flex items-center justify-center gap-2"
+            >
+              <SpellCheck className="w-5 h-5" />
+              正誤
+            </button>
+            <button
+              onClick={proposal}
+              className="flex-1 h-14 px-4 text-base font-bold text-white bg-orange-500 rounded-xl hover:bg-orange-600 active:scale-[0.98] transition-all shadow-sm hover:shadow-md inline-flex items-center justify-center gap-2"
+            >
+              <Lightbulb className="w-5 h-5" />
+              提案
+            </button>
+          </div>
         </div>
       </div>
     </div>

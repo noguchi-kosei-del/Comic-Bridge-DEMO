@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Home } from "lucide-react";
 import { usePsdStore } from "../../store/psdStore";
 import { useSpecStore } from "../../store/specStore";
 import { useGuideStore } from "../../store/guideStore";
@@ -23,16 +24,13 @@ import { DropZone } from "../file-browser/DropZone";
 
 import { THUMBNAIL_SIZES, isPsdFile, type ThumbnailSize, type PsdFile, type SpecCheckResult } from "../../types";
 import { invoke } from "@tauri-apps/api/core";
-import { TextExtractButton } from "../common/TextExtractButton";
 import { useTextExtract } from "../../hooks/useTextExtract";
 import { useHighResPreview } from "../../hooks/useHighResPreview";
 import { detectPaperSize } from "../../lib/paperSize";
 import { showPromptDialog } from "../../store/viewStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
-// useScanPsdStore は SpecScanJsonDialog 内で使用
-// JsonFileBrowser / PresetJsonData は JSON登録（SpecScanJsonDialog）に統合済み
-import { SpecScanJsonDialog } from "../spec-checker/SpecScanJsonDialog";
 import { FileContextMenu } from "../common/FileContextMenu";
+import { HomeLayout } from "./HomeLayout";
 
 // 開発モード時は右クリックでの独自コンテキストメニュー表示を無効化して、
 // ネイティブの「検証」メニュー（DevTools）を使えるようにする。戻す時は true に。
@@ -75,8 +73,12 @@ export function SpecCheckView() {
   const [tachimiError, setTachimiError] = useState<string | null>(null);
   const [showPreviewPanel, setShowPreviewPanel] = useState(true);
   const [showDetailPanel, setShowDetailPanel] = useState(true);
+  const [isExitingToHome, setIsExitingToHome] = useState(false);
+  // ホームモードに切り替わったら退場フラグをリセット
+  useEffect(() => {
+    if (viewMode !== "home") setIsExitingToHome(false);
+  }, [viewMode]);
   const [showActionBar, setShowActionBar] = useState(true);
-  const [showScanJsonInPanel, setShowScanJsonInPanel] = useState(false);
   const [showTextExtractInPanel, setShowTextExtractInPanel] = useState(false);
   const textExtract = useTextExtract();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -343,7 +345,6 @@ export function SpecCheckView() {
 
 
   const hasChecked = checkResults.size > 0;
-  const allPassed = hasChecked && stats.failed === 0 && stats.unchecked === 0;
 
   // 既定: 名前・昇順固定
   const sortedFiles = useMemo(() => [...files], [files]);
@@ -422,8 +423,25 @@ export function SpecCheckView() {
     }
   }, [expandedFile, sortedFiles]);
 
+  if (viewMode === "home") {
+    return <HomeLayout />;
+  }
+
+  // ホームへ戻る退場アニメーション（左→右スライド + フェード）
+  const goToHome = () => {
+    if (isExitingToHome) return;
+    setIsExitingToHome(true);
+    window.setTimeout(() => {
+      usePsdStore.getState().setSpecViewMode("home");
+    }, 300);
+  };
+
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div
+      className={`flex flex-col h-full overflow-hidden transition-all duration-300 ease-in ${
+        isExitingToHome ? "translate-x-8 opacity-0" : "translate-x-0 opacity-100"
+      }`}
+    >
       {/* Main 3-column layout */}
       <div className="flex-1 flex overflow-hidden" data-tool-panel>
 
@@ -536,6 +554,16 @@ export function SpecCheckView() {
 
           {/* Bar 2: Spec selection + Size dropdown */}
           <div className="flex-shrink-0 px-2 py-1 bg-bg-tertiary/30 border-b border-border/30 flex items-center gap-2">
+            {/* ホームに戻る */}
+            <button
+              onClick={goToHome}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded bg-bg-tertiary border border-border/50 hover:bg-bg-elevated hover:text-text-primary text-text-secondary transition-colors flex-shrink-0"
+              title="ホームに戻る"
+            >
+              <Home className="w-3 h-3" />
+              <span>ホーム</span>
+            </button>
+            <div className="w-px h-3 bg-border/40 mx-0.5" />
             {specifications.length > 0 && (
               <div className="inline-flex items-center bg-bg-tertiary rounded-full p-0.5 border border-border/50 flex-shrink-0" role="group" aria-label="原稿仕様切替">
                 {[
@@ -875,27 +903,6 @@ export function SpecCheckView() {
           <div className={`absolute bottom-3 right-14 flex flex-row flex-nowrap items-end justify-end gap-3 z-10 transition-opacity duration-150 ${
             showActionBar ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}>
-            {viewMode === "thumbnails" && stats.noGuides > 0 && (
-              <button
-                className="h-10 px-4 text-base font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1.5 bg-bg-secondary border-2 border-guide-v/50 text-guide-v hover:bg-bg-elevated hover:border-guide-v/70 hover:shadow-[0_8px_30px_rgba(0,188,212,0.25)] active:scale-[0.97] whitespace-nowrap"
-                onClick={openEditor}
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                  />
-                </svg>
-                ガイドを編集
-              </button>
-            )}
             {viewMode === "thumbnails" && stats.failed > 0 && isPhotoshopInstalled && (
               <div className="relative">
                 {/* Guide Prompt Popover */}
@@ -984,59 +991,6 @@ export function SpecCheckView() {
                 </button>
               </div>
             )}
-            {viewMode === "thumbnails" && (
-              <>
-                {/* PDF化ボタン（Tachimi連携） */}
-                <button
-                  className={`h-10 px-4 text-base font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1.5 bg-bg-secondary active:scale-[0.97] whitespace-nowrap ${
-                    allPassed
-                      ? "border-2 border-[#ff8a6b]/60 text-[#ff8a6b] hover:bg-bg-elevated hover:border-[#ff8a6b]/80 hover:shadow-[0_6px_20px_rgba(255,138,107,0.25)]"
-                      : "border-2 border-[#c8806a]/30 text-[#c8806a]/70 hover:bg-bg-elevated hover:border-[#c8806a]/50 hover:text-[#c8806a]"
-                  }`}
-                  onClick={handleLaunchTachimi}
-                  title="Tachimiを起動してPDF作成"
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                    />
-                  </svg>
-                  PDF化
-                </button>
-                {/* Tachimi起動エラー */}
-                {tachimiError && (
-                  <div className="px-4 py-2 rounded-xl bg-error/10 border border-error/30 text-xs text-error max-w-xs">
-                    {tachimiError}
-                    <button onClick={() => setTachimiError(null)} className="ml-2 underline">
-                      閉じる
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-            {/* 簡易スキャン（JSON登録）ボタン */}
-            {filteredFiles.length > 0 && (
-              <button
-                className="h-10 px-4 text-base font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1.5 bg-bg-secondary border-2 border-[#0e7490]/50 text-[#0e7490] hover:bg-bg-elevated hover:border-[#0e7490]/70 hover:shadow-[0_6px_20px_rgba(14,116,144,0.25)] active:scale-[0.97] whitespace-nowrap"
-                onClick={() => setShowScanJsonInPanel(true)}
-                title="読み込み中のPSDからフォント・ガイド・テキスト情報をJSONに登録"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                簡易スキャン
-              </button>
-            )}
-            {/* テキスト抽出ボタン（常時表示） */}
-            <TextExtractButton files={filteredFiles} />
           </div>
         </div>
         </div>
@@ -1322,12 +1276,14 @@ export function SpecCheckView() {
         />
       )}
 
-      {/* 簡易スキャン（JSON登録）モーダル */}
-      {showScanJsonInPanel && (
-        <SpecScanJsonDialog
-          onClose={() => setShowScanJsonInPanel(false)}
-          targetFiles={filteredFiles}
-        />
+      {/* Tachimi 起動エラー（FileContextMenu 経由のエラー用、固定トースト） */}
+      {tachimiError && (
+        <div className="fixed bottom-4 right-4 px-4 py-2 rounded-xl bg-error/10 border border-error/30 text-xs text-error max-w-xs z-50 shadow-elevated">
+          {tachimiError}
+          <button onClick={() => setTachimiError(null)} className="ml-2 underline">
+            閉じる
+          </button>
+        </div>
       )}
     </div>
   );

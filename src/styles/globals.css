@@ -491,6 +491,11 @@ img {
     background-size: 4px 4px;
   }
 
+  /* ダークモード時はトーンを薄い白ドットに */
+  html.dark-mode-invert .bg-tone {
+    background-image: radial-gradient(circle, rgba(246, 246, 246, 0.04) 1px, transparent 1px);
+  }
+
   /* グラデーションテキスト */
   .text-gradient-pop {
     background: linear-gradient(135deg, #3a7bd5, #0078d4);
@@ -546,50 +551,181 @@ img {
   animation: fs-splash 0.5s ease-out forwards;
 }
 
-/* ===== Dark Mode（ダークモード反転）=====
- * UI チロームは invert + hue-rotate で暗転させる一方、
- * 画像・動画・Canvas・iframe はもう一度同じ値で反転して元の見た目に戻す。
- * invert(1) × invert(1) = identity、hue-rotate(180deg) × hue-rotate(180deg) = 360° = 0°
- * （数値が完全一致するため、CSS フィルタの合成が数学的に恒等変換になる）
+/* ===== Dark Mode（MojiQ 互換パレット）=====
+ * MojiQ Pro_1.0 の dark-theme CSS 変数に揃えたダークパレット。
+ *   bg-primary:   #1e1e1e  (アプリ背景)
+ *   bg-secondary: #2c2c2c  (パネル/カード)
+ *   bg-tertiary:  #3c3c3c  (補助/チップ)
+ *   bg-elevated:  #4c4c4c  (ホバー)
+ *   text-primary: #f6f6f6
+ *   text-secondary: #aaaaaa
+ *   text-muted:   #888888
+ *   border:       #444444
+ *   border-light: #555555
+ *   accent:       #0078d4 (MojiQ 準拠)
  *
- * 従来は JS querySelectorAll で画像に individual に counter-filter を付与していたが、
- * 後から動的ロードされた画像に反映されず、ビューアー画像が反転する問題があったため CSS 化。
+ * Tailwind が生成する bg-bg-primary / text-text-primary / border-border 等の
+ * 静的色クラスを html.dark-mode-invert スコープで上書きする。
+ * 画像/Canvas 類への counter-filter は不要（filter 反転を廃止したため）。
  */
+
 html.dark-mode-invert {
-  filter: invert(1) hue-rotate(180deg);
-  /* UA デフォルトの白背景が反転で黒になる */
-  background: white;
+  color-scheme: dark;
+  background-color: #1e1e1e;
+  transition: background-color 0.15s ease-out;
 }
 
-/* メディア要素を二重反転で元の表示に戻す */
-html.dark-mode-invert img,
-html.dark-mode-invert video,
-html.dark-mode-invert canvas,
-html.dark-mode-invert iframe,
-/* PDF.js が生成する canvas / div も含む（明示的に data-no-invert を付けたくない場合の保険） */
-html.dark-mode-invert [data-no-invert],
-/* object-fit 系のプレビュー画像（PSD preview 等） */
-html.dark-mode-invert picture,
-html.dark-mode-invert svg image {
-  filter: invert(1) hue-rotate(180deg);
+html.dark-mode-invert body {
+  background-color: #1e1e1e;
+  color: #f6f6f6;
 }
 
-/* ダークモード切替時の再描画を滑らかに（オプション） */
-html.dark-mode-invert,
-html.dark-mode-invert img,
-html.dark-mode-invert video,
-html.dark-mode-invert canvas,
-html.dark-mode-invert iframe {
-  transition: filter 0.15s ease-out;
+/* 背景 */
+html.dark-mode-invert .bg-bg-primary { background-color: #1e1e1e !important; }
+html.dark-mode-invert .bg-bg-secondary { background-color: #2c2c2c !important; }
+html.dark-mode-invert .bg-bg-tertiary { background-color: #3c3c3c !important; }
+html.dark-mode-invert .bg-bg-elevated { background-color: #4c4c4c !important; }
+
+/* 背景（opacity 付き - 主要 0.3 / 0.5 / 0.7） */
+html.dark-mode-invert .bg-bg-tertiary\/30 { background-color: rgb(60 60 60 / 0.3) !important; }
+html.dark-mode-invert .bg-bg-tertiary\/50 { background-color: rgb(60 60 60 / 0.5) !important; }
+html.dark-mode-invert .bg-bg-tertiary\/70 { background-color: rgb(60 60 60 / 0.7) !important; }
+html.dark-mode-invert .bg-bg-tertiary\/80 { background-color: rgb(60 60 60 / 0.8) !important; }
+html.dark-mode-invert .bg-bg-secondary\/90 { background-color: rgb(44 44 44 / 0.9) !important; }
+
+/* テキスト */
+html.dark-mode-invert .text-text-primary { color: #f6f6f6 !important; }
+html.dark-mode-invert .text-text-secondary { color: #aaaaaa !important; }
+html.dark-mode-invert .text-text-muted { color: #888888 !important; }
+
+/* ボーダー */
+html.dark-mode-invert .border-border { border-color: #444444 !important; }
+html.dark-mode-invert .border-border-light { border-color: #555555 !important; }
+html.dark-mode-invert .border-border\/20 { border-color: rgb(68 68 68 / 0.2) !important; }
+html.dark-mode-invert .border-border\/30 { border-color: rgb(68 68 68 / 0.3) !important; }
+html.dark-mode-invert .border-border\/40 { border-color: rgb(68 68 68 / 0.4) !important; }
+html.dark-mode-invert .border-border\/50 { border-color: rgb(68 68 68 / 0.5) !important; }
+
+/* border-b / border-t / border-l / border-r 系（color は上の border-border* が適用される） */
+
+/* アクセント（MojiQ 準拠 #0078d4） */
+html.dark-mode-invert .bg-accent { background-color: #0078d4 !important; }
+html.dark-mode-invert .text-accent { color: #3a9ae6 !important; }
+html.dark-mode-invert .border-accent { border-color: #0078d4 !important; }
+html.dark-mode-invert .bg-accent\/10 { background-color: rgb(0 120 212 / 0.15) !important; }
+html.dark-mode-invert .bg-accent\/15 { background-color: rgb(0 120 212 / 0.2) !important; }
+html.dark-mode-invert .bg-accent\/5 { background-color: rgb(0 120 212 / 0.1) !important; }
+
+/* ─── ボタンシャインエフェクト（Tachimi btn-execute 準拠、ホバー時のみ発火） ─── */
+@keyframes cb-button-shine {
+  0%   { transform: translateX(-100%) rotate(45deg); opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateX(100%) rotate(45deg); opacity: 0; }
 }
 
-/* ビューアー背景 (#1a1a1e) は ダークモード反転後も「黒」に見える必要がある。
- * html 全体に invert(1) hue-rotate(180deg) が掛かっているため、
- * 入力値として invert 済みの色を指定すれば、html レベルの invert で相殺されて
- * 元の #1a1a1e として表示される。
- * #1a1a1e ≒ グレースケール → hue-rotate の影響はほぼなし、
- * invert 相殺のためには pre-inverted 値 #e5e5e1 を入力すればよい。
- */
-html.dark-mode-invert .bg-\[\#1a1a1e\] {
-  background-color: #e5e5e1 !important;
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.btn-shine::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 60%
+  );
+  opacity: 0;
+  transform: translateX(-100%) rotate(45deg);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.btn-shine:hover::before {
+  animation: cb-button-shine 1.6s ease-out;
+}
+
+.btn-shine:disabled::before,
+.btn-shine[aria-disabled="true"]::before {
+  display: none;
+}
+
+/* ─── メニュー三角吹き出し用変数（light / dark 両対応） ─── */
+:root {
+  --cb-border-color: #d5d9e0;
+  --cb-menu-bg: #ffffff;
+}
+html.dark-mode-invert {
+  --cb-border-color: #444444;
+  --cb-menu-bg: #2c2c2c;
+}
+
+/* ─── ホバー / フォーカス / アクティブ variant（MojiQ 準拠ダーク色） ─── */
+
+/* bg hover */
+html.dark-mode-invert .hover\:bg-bg-primary:hover { background-color: #1e1e1e !important; }
+html.dark-mode-invert .hover\:bg-bg-secondary:hover { background-color: #2c2c2c !important; }
+html.dark-mode-invert .hover\:bg-bg-tertiary:hover { background-color: #3c3c3c !important; }
+html.dark-mode-invert .hover\:bg-bg-elevated:hover { background-color: #4c4c4c !important; }
+html.dark-mode-invert .hover\:bg-bg-tertiary\/50:hover { background-color: rgb(60 60 60 / 0.5) !important; }
+html.dark-mode-invert .hover\:bg-bg-tertiary\/70:hover { background-color: rgb(60 60 60 / 0.7) !important; }
+html.dark-mode-invert .hover\:bg-bg-tertiary\/80:hover { background-color: rgb(60 60 60 / 0.8) !important; }
+html.dark-mode-invert .hover\:bg-accent\/5:hover { background-color: rgb(0 120 212 / 0.12) !important; }
+html.dark-mode-invert .hover\:bg-accent\/10:hover { background-color: rgb(0 120 212 / 0.15) !important; }
+html.dark-mode-invert .hover\:bg-accent\/15:hover { background-color: rgb(0 120 212 / 0.2) !important; }
+html.dark-mode-invert .hover\:bg-accent\/20:hover { background-color: rgb(0 120 212 / 0.25) !important; }
+html.dark-mode-invert .hover\:bg-accent\/25:hover { background-color: rgb(0 120 212 / 0.3) !important; }
+
+/* text hover */
+html.dark-mode-invert .hover\:text-text-primary:hover { color: #f6f6f6 !important; }
+html.dark-mode-invert .hover\:text-text-secondary:hover { color: #aaaaaa !important; }
+html.dark-mode-invert .hover\:text-text-muted:hover { color: #888888 !important; }
+html.dark-mode-invert .hover\:text-accent:hover { color: #3a9ae6 !important; }
+
+/* border hover */
+html.dark-mode-invert .hover\:border-border:hover { border-color: #444444 !important; }
+html.dark-mode-invert .hover\:border-border-light:hover { border-color: #555555 !important; }
+html.dark-mode-invert .hover\:border-accent\/30:hover { border-color: rgb(0 120 212 / 0.4) !important; }
+html.dark-mode-invert .hover\:border-accent\/40:hover { border-color: rgb(0 120 212 / 0.5) !important; }
+html.dark-mode-invert .hover\:border-accent\/50:hover { border-color: rgb(0 120 212 / 0.6) !important; }
+
+/* group-hover */
+html.dark-mode-invert .group:hover .group-hover\:bg-bg-tertiary { background-color: #3c3c3c !important; }
+html.dark-mode-invert .group:hover .group-hover\:bg-bg-elevated { background-color: #4c4c4c !important; }
+html.dark-mode-invert .group:hover .group-hover\:text-text-primary { color: #f6f6f6 !important; }
+html.dark-mode-invert .group:hover .group-hover\:text-accent { color: #3a9ae6 !important; }
+html.dark-mode-invert .group:hover .group-hover\:border-accent\/40 { border-color: rgb(0 120 212 / 0.5) !important; }
+
+/* focus / focus-visible / active */
+html.dark-mode-invert .focus\:border-accent:focus { border-color: #0078d4 !important; }
+html.dark-mode-invert .focus\:border-accent\/50:focus { border-color: rgb(0 120 212 / 0.6) !important; }
+html.dark-mode-invert .focus\:bg-bg-tertiary:focus { background-color: #3c3c3c !important; }
+html.dark-mode-invert .active\:bg-bg-tertiary:active { background-color: #3c3c3c !important; }
+
+/* 画像・プレビュー領域は通常通りのまま（filter 反転廃止により自動的に正しい色で表示） */
+
+/* スクロールバー（MojiQ 互換）*/
+html.dark-mode-invert ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html.dark-mode-invert ::-webkit-scrollbar-track { background: #2c2c2c; }
+html.dark-mode-invert ::-webkit-scrollbar-thumb {
+  background: #4c4c4c;
+  border-radius: 5px;
+  border: 2px solid #2c2c2c;
+}
+html.dark-mode-invert ::-webkit-scrollbar-thumb:hover { background: #aaaaaa; }
+html.dark-mode-invert ::-webkit-scrollbar-corner { background: #2c2c2c; }
+html.dark-mode-invert * {
+  scrollbar-width: thin;
+  scrollbar-color: #4c4c4c #2c2c2c;
 }

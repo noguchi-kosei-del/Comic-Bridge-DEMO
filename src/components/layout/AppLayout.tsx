@@ -32,11 +32,9 @@ export function AppLayout() {
 
   // ダークモード + アクセントカラー
   // ダークモードは HTML に dark-mode-invert クラスを付与し、CSS 側で
-  //   html.dark-mode-invert                        { filter: invert(1) hue-rotate(180deg); }
-  //   html.dark-mode-invert img, video, canvas, iframe,
-  //   html.dark-mode-invert [data-no-invert]       { filter: invert(1) hue-rotate(180deg); }
-  // と完全な数値一致（invert(1)×invert(1)=identity）で打ち消す。
-  // JS querySelectorAll では「後から追加される画像」が打ち消されない問題があったため、CSS 全面化。
+  // MojiQ Pro_1.0 互換のダークパレット（#1e1e1e / #2c2c2c / #3c3c3c 等）で
+  // bg-bg-* / text-text-* / border-border* を上書きする。
+  // 旧 filter: invert(1) hue-rotate(180deg) トリックは廃止。画像/Canvas は自然な色で表示される。
   useEffect(() => {
     const root = document.documentElement;
     if (darkMode) {

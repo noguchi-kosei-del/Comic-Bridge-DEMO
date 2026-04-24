@@ -13,7 +13,7 @@ import { globalLoadFolder, globalLoadFiles } from "../../lib/psdLoaderRegistry";
 
 // ═══ ナビゲーション実行ヘルパー ═══
 
-function executeStepNav(step: WorkflowStep) {
+export function executeStepNav(step: WorkflowStep) {
   if (!step.nav) return;
   const vs = useViewStore.getState();
   // WFステップ経由の場合、ツールメニューの toolMode をクリア
@@ -109,6 +109,8 @@ function executeStepNav(step: WorkflowStep) {
   // メイン画面（仕様チェック）に遷移する場合、PSDのみフィルタを自動適用
   if (step.nav === "specCheck") {
     usePsdStore.getState().setFileTypeFilter("psd");
+    // WF 中はホームランチャーではなくサムネグリッド（詳細）を見せる
+    usePsdStore.getState().setSpecViewMode("thumbnails");
     // フォルダセットアップで選択したカラーモードを仕様チェックに反映
     try {
       const specId = localStorage.getItem("folderSetup_specId");
@@ -728,7 +730,7 @@ function resolveShokuchiDir(imgPath: string): string {
 }
 
 // ═══ 初校データ読み込みオーバーレイ ═══
-function ProofLoadOverlay({ onClose, onProceed }: { onClose: () => void; onProceed: () => void }) {
+export function ProofLoadOverlay({ onClose, onProceed }: { onClose: () => void; onProceed: () => void }) {
   const [psdPath, setPsdPath] = useState("");
   const [pendingZipPath, setPendingZipPath] = useState("");
   const [imagePath, setImagePath] = useState("");

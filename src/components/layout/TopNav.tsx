@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { FileText, FileJson, ClipboardCheck, Shield, Check, RotateCcw, type LucideIcon } from "lucide-react";
+import { FileText, FileJson, ClipboardCheck, Shield, Check, RotateCcw, Home, type LucideIcon } from "lucide-react";
 import { useViewStore, validateAndSetABPath } from "../../store/viewStore";
 import { usePsdStore } from "../../store/psdStore";
 import { useSpecStore } from "../../store/specStore";
@@ -9,13 +9,13 @@ import { useAppUpdater } from "../../hooks/useAppUpdater";
 import { useUnifiedViewerStore, useTextEditorViewerStore, type FontPresetEntry } from "../../store/unifiedViewerStore";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useProgenStore } from "../../store/progenStore";
-import { open as dialogOpen, ask as dialogAsk, message as dialogMessage } from "@tauri-apps/plugin-dialog";
+import { open as dialogOpen, message as dialogMessage } from "@tauri-apps/plugin-dialog";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { globalLoadFolder } from "../../lib/psdLoaderRegistry";
 import { invoke } from "@tauri-apps/api/core";
 import type { ProofreadingCheckItem } from "../../types/typesettingCheck";
 import { JsonFileBrowser } from "../scanPsd/JsonFileBrowser";
 import { CheckJsonBrowser } from "../unified-viewer/UnifiedViewer";
-import { WorkflowBar } from "./WorkflowBar";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { SettingsButton } from "./SettingsPanel";
 import { useSettingsStore, ALL_NAV_BUTTONS } from "../../store/settingsStore";
@@ -24,7 +24,6 @@ import { parseComicPotText } from "../unified-viewer/utils";
 export function TopNav() {
   const setActiveView = useViewStore((s) => s.setActiveView);
   const files = usePsdStore((s) => s.files);
-  const checkResults = useSpecStore((s) => s.checkResults);
   const textLoadedForReset = useUnifiedViewerStore((s) => s.textContent.length > 0 || !!s.textFilePath);
   const textEditorLoadedForReset = useTextEditorViewerStore((s) => s.textContent.length > 0 || !!s.textFilePath);
   const presetsLoadedForReset = useUnifiedViewerStore((s) => s.fontPresets.length > 0 || !!s.presetJsonPath);
@@ -35,8 +34,35 @@ export function TopNav() {
   const jsonBrowserMode = useViewStore((s) => s.jsonBrowserMode);
   const setJsonBrowserMode = useViewStore((s) => s.setJsonBrowserMode);
 
-  const passedCount = Array.from(checkResults.values()).filter((r) => r.passed).length;
-  const failedCount = Array.from(checkResults.values()).filter((r) => !r.passed).length;
+  // 読み込みリセット用カスタム確認ダイアログ
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const performReset = useCallback(() => {
+    const ps = usePsdStore.getState();
+    const vs = useUnifiedViewerStore.getState();
+    const ts = useTextEditorViewerStore.getState();
+    const sp = useSpecStore.getState();
+    // PSD フォルダ
+    ps.clearFiles();
+    ps.setCurrentFolderPath(null);
+    ps.triggerRefresh();
+    // テキスト（両方のビューアーインスタンスをクリア）
+    for (const s of [vs, ts]) {
+      s.setTextContent("");
+      s.setTextFilePath(null);
+      s.setTextHeader([]);
+      s.setTextPages([]);
+      s.setIsDirty(false);
+    }
+    // 作品情報JSON
+    vs.setFontPresets([]);
+    vs.setPresetJsonPath(null);
+    // 校正JSON
+    vs.setCheckData(null);
+    // 仕様チェック結果（○/× カウント）
+    sp.clearCheckResults();
+    sp.clearConversionResults();
+  }, []);
 
   // JSON file selection handler
   const handleJsonSelect = useCallback(async (filePath: string) => {
@@ -130,17 +156,32 @@ export function TopNav() {
 
   return (
     <nav
-      className="h-14 flex-shrink-0 bg-bg-secondary border-b border-border flex items-center px-3 gap-2 relative z-20 shadow-soft"
+      className="h-10 flex-shrink-0 bg-bg-secondary border-b border-border flex items-center px-3 gap-2 relative z-20 shadow-soft"
       data-tauri-drag-region
     >
-      {/* WF（左端） — WFアクティブ時は全幅展開（ツール/ナビボタン類を非表示にする） */}
-      <WorkflowBar />
+      {/* アプリアイコン（左端） */}
+      <img
+        src="/app-icon.png"
+        alt="Comic-Bridge"
+        className="w-6 h-6 flex-shrink-0 rounded select-none pointer-events-none"
+        draggable={false}
+      />
+
+      {/* ホーム + ツール選択メニュー（アイコン右） */}
+      {!wfActive && (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <HomeNavButton />
+          <TopNavToolMenu />
+        </div>
+      )}
+
+      {/* 区切り線（ツールメニューの右） */}
+      {!wfActive && <div className="w-px h-5 bg-border flex-shrink-0" />}
 
       {!wfActive && (
         <>
-          {/* ツール + 設定 + フォルダから開く */}
+          {/* 設定 + フォルダから開く + 読み込みリセット */}
           <div className="flex items-center gap-1 flex-shrink-0">
-            <TopNavToolMenu />
             <SettingsButton />
             <button
               onClick={async () => {
@@ -163,7 +204,7 @@ export function TopNav() {
               </svg>
             </button>
             <button
-              onClick={async () => {
+              onClick={() => {
                 const ps = usePsdStore.getState();
                 const vs = useUnifiedViewerStore.getState();
                 const ts = useTextEditorViewerStore.getState();
@@ -177,27 +218,7 @@ export function TopNav() {
                   !!vs.presetJsonPath ||
                   !!vs.checkData;
                 if (!hasAny) return;
-                const ok = await dialogAsk("読み込みをリセットします。よろしいですか？", {
-                  title: "読み込みリセット",
-                  kind: "warning",
-                });
-                if (!ok) return;
-                // PSD フォルダ
-                ps.clearFiles();
-                ps.triggerRefresh();
-                // テキスト（両方のビューアーインスタンスをクリア）
-                for (const s of [vs, ts]) {
-                  s.setTextContent("");
-                  s.setTextFilePath(null);
-                  s.setTextHeader([]);
-                  s.setTextPages([]);
-                  s.setIsDirty(false);
-                }
-                // 作品情報JSON
-                vs.setFontPresets([]);
-                vs.setPresetJsonPath(null);
-                // 校正JSON
-                vs.setCheckData(null);
+                setShowResetConfirm(true);
               }}
               disabled={
                 files.length === 0 &&
@@ -213,41 +234,16 @@ export function TopNav() {
             </button>
           </div>
 
-          <div className="w-px h-8 bg-border flex-shrink-0" />
-
-          {/* ナビボタン（左寄せ） */}
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <NavBarButtons />
-          </div>
-
-          <div className="flex-1" />
+          {/* 区切り線（ツール群とデータボタンの間） */}
+          <div className="w-px h-5 bg-border flex-shrink-0" />
         </>
       )}
 
-      {/* データ読み込みボタン（右寄せ）— WF中も残す */}
+      {/* データ読み込みボタン — WF中も残す */}
       <TopNavDataButtons />
 
-      <div className="w-px h-4 bg-border/50 mx-0.5 flex-shrink-0" />
-
-      {/* Right: ファイル数 + OK/NG — WF中も残す */}
-      {files.length > 0 && (
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-text-muted">{files.length} ファイル</span>
-          {checkResults.size > 0 && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-bg-tertiary">
-              <div className="flex items-center gap-1">
-                <span className="text-xs font-bold text-success leading-none">○</span>
-                <span className="text-xs font-medium text-success">{passedCount}</span>
-              </div>
-              <span className="w-px h-3 bg-border" />
-              <div className="flex items-center gap-1">
-                <span className="text-xs font-bold text-error leading-none">×</span>
-                <span className="text-xs font-medium text-error">{failedCount}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* 右寄せスペーサー（WF 中も有効） */}
+      <div className="flex-1" />
 
       {/* 更新検出時のみ: 更新可用バッジ（バージョン表示は設定パネルへ移設済み） */}
       {updater.phase === "available" && (
@@ -261,6 +257,9 @@ export function TopNav() {
           </button>
         </div>
       )}
+
+      {/* ウインドウコントロール（右端） */}
+      <WindowControls />
 
       {/* Update Prompt Dialog */}
       {updater.showPrompt && updater.updateInfo &&
@@ -323,6 +322,48 @@ export function TopNav() {
           document.body,
         )}
 
+
+      {/* 読み込みリセット確認ダイアログ（カスタム） */}
+      {showResetConfirm &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setShowResetConfirm(false); }}
+          >
+            <div
+              className="bg-bg-secondary border border-error/30 rounded-2xl p-5 shadow-xl w-[340px] space-y-4"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-full bg-error/15 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="flex-1 pt-0.5">
+                  <h3 className="text-sm font-bold text-error">読み込みリセット</h3>
+                  <p className="text-xs text-text-secondary mt-1">読み込み済みの PSD・テキスト・作品情報 JSON・校正 JSON を全て破棄します。よろしいですか？</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowResetConfirm(false)}
+                  className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors"
+                  autoFocus
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={() => { setShowResetConfirm(false); performReset(); }}
+                  className="flex-1 px-3 py-2 text-xs font-medium text-white bg-error rounded-lg hover:bg-error/90 transition-colors shadow-sm shadow-error/30"
+                >
+                  リセット
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* JSON File Browser Modal */}
       {jsonBrowserMode &&
@@ -463,8 +504,9 @@ function SmallBtn({ loaded, icon: Icon, title, clearTitle, onLoad, onClear, tool
     : "bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/70";
   return (
     <div className="flex items-center gap-0.5">
-      <button onClick={onLoad} className={`h-6 px-1.5 flex items-center justify-center rounded-md transition-colors ${bgCls}`} title={tooltip || title}>
-        <Icon className="w-3.5 h-3.5" />
+      <button onClick={onLoad} className={`h-6 px-2 inline-flex items-center gap-1 rounded-md transition-colors ${bgCls}`} title={tooltip || title}>
+        <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+        <span className="text-[10px] font-medium whitespace-nowrap">{title}</span>
       </button>
       {loaded && (
         <button onClick={onClear} className="w-3.5 h-3.5 flex items-center justify-center rounded text-sky-500 hover:bg-sky-500/15 transition-colors" title={clearTitle}>
@@ -594,6 +636,8 @@ const TOOL_INSPECTION_MODES = [
 ];
 
 function TopNavToolMenu() {
+  // 見た目は PsDesign の save-menu 方式（三角吹き出し / ヘッダー付きセクション）、
+  // 開閉はホバー（mouseEnter で開き、mouseLeave でディレイ後に閉じる）
   const [hover, setHover] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const setActiveView = useViewStore((s) => s.setActiveView);
@@ -602,10 +646,24 @@ function TopNavToolMenu() {
   const viewerPresetPath = useUnifiedViewerStore((s) => s.presetJsonPath);
   const hasWorkJson = !!(scanJsonPath || (viewerPresets.length > 0 && viewerPresetPath));
 
+  const itemCls =
+    "flex items-center gap-2.5 w-full px-3.5 py-2 text-[13px] text-text-primary bg-transparent hover:bg-bg-tertiary transition-colors text-left";
+  const sectionHeaderCls =
+    "px-3.5 pt-1 pb-1.5 text-[11px] text-text-muted border-b border-border mb-1 inline-flex items-center gap-1.5 w-full";
+
   return (
-    <div ref={ref} className="relative" onMouseEnter={() => { clearTimeout((ref.current as any)?._hoverTimer); setHover(true); }} onMouseLeave={() => { (ref.current as any)._hoverTimer = setTimeout(() => setHover(false), 300); }}>
+    <div
+      ref={ref}
+      className="relative flex-shrink-0"
+      onMouseEnter={() => { clearTimeout((ref.current as any)?._hoverTimer); setHover(true); }}
+      onMouseLeave={() => { (ref.current as any)._hoverTimer = setTimeout(() => setHover(false), 300); }}
+      aria-haspopup="menu"
+      aria-expanded={hover}
+    >
       <button
-        className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${hover ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"}`}
+        className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
+          hover ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
+        }`}
         title="ツール"
       >
         <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
@@ -615,66 +673,96 @@ function TopNavToolMenu() {
         </svg>
       </button>
       {hover && (
-        <div className="absolute left-0 top-full mt-1 z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[140px]">
-          {useSettingsStore.getState().toolMenuButtons.map((id) => {
-            const btn = ALL_NAV_BUTTONS.find((b) => b.id === id);
-            if (!btn) return null;
-            const Icon = btn.icon;
-            return (
-              <button key={btn.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors inline-flex items-center gap-1.5" onClick={() => {
-                if (btn.id === "layers") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("layers"); }
-                else if (btn.id === "layerControl") { setActiveView("layers"); }
-                else if (btn.id === "specCheck") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("thumbnails"); }
-                else setActiveView(btn.id as any);
-                setHover(false);
-              }}>
-                {Icon && <Icon className="w-3.5 h-3.5 flex-shrink-0" />}
-                {btn.label}
+        <div
+          role="menu"
+          className="absolute left-0 top-full mt-3 z-[1000] min-w-[220px] bg-bg-secondary border border-border rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.35)] text-text-primary"
+        >
+          {/* 三角吹き出し（上向き、トリガーボタン中心を指す。overflow 外に配置して clip 回避）
+              ボタン (w-7=28px) の中心 14px に tip を合わせる: left 8px + borderLeft 6px = 14px */}
+          <span
+            aria-hidden="true"
+            className="absolute -top-[7px] left-2 w-0 h-0 pointer-events-none z-10"
+            style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "7px solid var(--cb-border-color, #d5d9e0)" }}
+          />
+          <span
+            aria-hidden="true"
+            className="absolute -top-[6px] left-2 w-0 h-0 pointer-events-none z-10"
+            style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "7px solid var(--cb-menu-bg, #ffffff)" }}
+          />
+          {/* 内側スクロール領域 */}
+          <div className="max-h-[35vh] overflow-auto py-1.5 rounded-lg">
+            <div className={sectionHeaderCls}>ツール</div>
+            {ALL_NAV_BUTTONS.filter((b) => b.id !== "specCheck").map((btn) => {
+              const Icon = btn.icon;
+              return (
+                <button
+                  key={btn.id}
+                  role="menuitem"
+                  className={itemCls}
+                  onClick={() => {
+                    if (btn.id === "layers") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("layers"); }
+                    else if (btn.id === "layerControl") { setActiveView("layers"); }
+                    else setActiveView(btn.id as any);
+                    setHover(false);
+                  }}
+                >
+                  {Icon && <Icon className="w-4 h-4 flex-shrink-0 text-text-secondary" />}
+                  <span className="flex-1">{btn.label}</span>
+                </button>
+              );
+            })}
+
+            <div className={`${sectionHeaderCls} mt-1`}>ProGen</div>
+            {TOOL_PROGEN_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                role="menuitem"
+                className={itemCls}
+                onClick={() => {
+                  try {
+                    localStorage.removeItem("folderSetup_progenMode");
+                    localStorage.removeItem("progen_wfCheckMode");
+                  } catch { /* ignore */ }
+                  useProgenStore.getState().setToolMode(mode.id);
+                  useProgenStore.getState().setScreen(mode.id === "proofreading" ? "extraction" : mode.id);
+                  useViewStore.getState().setProgenMode(mode.id);
+                  const _lbl = useScanPsdStore.getState().workInfo.label || (() => {
+                    const jp = useScanPsdStore.getState().currentJsonFilePath || useUnifiedViewerStore.getState().presetJsonPath || "";
+                    if (!jp) return "";
+                    const ps = jp.replace(/\//g, "\\").split("\\");
+                    return ps.length >= 2 ? ps[ps.length - 2] : "";
+                  })();
+                  if (_lbl) useProgenStore.getState().loadMasterRule(_lbl);
+                  setActiveView("progen");
+                  setHover(false);
+                }}
+              >
+                <span className="w-4 flex-shrink-0" />
+                <span className="flex-1">{mode.label}</span>
+                {!hasWorkJson && <span className="text-[10px] text-text-muted font-mono">新規</span>}
               </button>
-            );
-          })}
-          <div className="border-t border-border/40 my-1" />
-          <div className="px-3 py-0.5 text-[9px] text-text-muted/50 font-medium">ProGen</div>
-          {TOOL_PROGEN_MODES.map((mode) => (
-            <button key={mode.id} className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors" onClick={() => {
-              // ツールメニュー経由の場合、前回のWFフラグを必ずクリア
-              try {
-                localStorage.removeItem("folderSetup_progenMode");
-                localStorage.removeItem("progen_wfCheckMode");
-              } catch { /* ignore */ }
-              // toolMode + screen を progenStore に直接セット（race condition 回避）
-              // 初回レンダリング前に screen を更新することで古い画面の popup が表示されるのを防ぐ
-              // 注意: proofreading モードでも画面は extraction（ProgenRuleView）を使用
-              useProgenStore.getState().setToolMode(mode.id);
-              useProgenStore.getState().setScreen(mode.id === "proofreading" ? "extraction" : mode.id);
-              useViewStore.getState().setProgenMode(mode.id);
-              const _lbl = useScanPsdStore.getState().workInfo.label || (() => { const jp = useScanPsdStore.getState().currentJsonFilePath || useUnifiedViewerStore.getState().presetJsonPath || ""; if (!jp) return ""; const ps = jp.replace(/\//g, "\\").split("\\"); return ps.length >= 2 ? ps[ps.length - 2] : ""; })();
-              if (_lbl) useProgenStore.getState().loadMasterRule(_lbl);
-              setActiveView("progen");
-              setHover(false);
-            }}>
-              {mode.label}
-              {!hasWorkJson && <span className="text-[9px] text-text-muted/50 ml-1">新規</span>}
-            </button>
-          ))}
-          <div className="border-t border-border/40 my-1" />
-          <div className="px-3 py-0.5 text-[9px] text-text-muted/50 font-medium inline-flex items-center gap-1">
-            <Shield className="w-3 h-3" />
-            検版ツール
+            ))}
+
+            <div className={`${sectionHeaderCls} mt-1`}>
+              <Shield className="w-3 h-3" />
+              検版ツール
+            </div>
+            {TOOL_INSPECTION_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                role="menuitem"
+                className={itemCls}
+                onClick={() => {
+                  useViewStore.getState().setKenbanViewMode(mode.id);
+                  setActiveView("inspection");
+                  setHover(false);
+                }}
+              >
+                <span className="w-4 flex-shrink-0" />
+                <span className="flex-1">{mode.label}</span>
+              </button>
+            ))}
           </div>
-          {TOOL_INSPECTION_MODES.map((mode) => (
-            <button
-              key={mode.id}
-              className="w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-              onClick={() => {
-                useViewStore.getState().setKenbanViewMode(mode.id);
-                setActiveView("inspection");
-                setHover(false);
-              }}
-            >
-              {mode.label}
-            </button>
-          ))}
         </div>
       )}
     </div>
@@ -720,9 +808,9 @@ function NavBarButtons() {
               } else if (btn.id === "layerControl") {
                 setActiveView("layers");
               } else if (btn.id === "specCheck") {
-                // ホーム（仕様チェック）に戻る時は常にサムネイル表示
+                // ホームボタンは常に新ホームランチャーへ
                 setActiveView("specCheck");
-                usePsdStore.getState().setSpecViewMode("thumbnails");
+                usePsdStore.getState().setSpecViewMode("home");
               } else {
                 setActiveView(btn.id as any);
               }
@@ -733,5 +821,85 @@ function NavBarButtons() {
         );
       })}
     </>
+  );
+}
+
+// ─── ホームボタン（読み込みリセットの右） ───
+function HomeNavButton() {
+  const setActiveView = useViewStore((s) => s.setActiveView);
+  const activeView = useViewStore((s) => s.activeView);
+  const specViewMode = usePsdStore((s) => s.specViewMode);
+  const active = activeView === "specCheck" && specViewMode !== "layers";
+
+  return (
+    <button
+      aria-current={active ? "page" : undefined}
+      title="ホーム"
+      className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
+        active
+          ? "bg-accent/15 text-accent ring-1 ring-accent/40"
+          : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
+      }`}
+      onClick={() => {
+        setActiveView("specCheck");
+        usePsdStore.getState().setSpecViewMode("home");
+      }}
+    >
+      <Home className="w-4 h-4" />
+    </button>
+  );
+}
+
+// ─── ウインドウコントロール（右端: 最小化 / 最大化 / 閉じる） ───
+function WindowControls() {
+  const [isMax, setIsMax] = useState(false);
+
+  useEffect(() => {
+    const w = getCurrentWindow();
+    w.isMaximized().then(setIsMax).catch(() => {});
+    const unlistenPromise = w.onResized(() => {
+      w.isMaximized().then(setIsMax).catch(() => {});
+    });
+    return () => { unlistenPromise.then((fn) => fn()).catch(() => {}); };
+  }, []);
+
+  const handleMinimize = () => getCurrentWindow().minimize().catch(() => {});
+  const handleToggleMax = () => getCurrentWindow().toggleMaximize().catch(() => {});
+  const handleClose = () => getCurrentWindow().close().catch(() => {});
+
+  const btnBase =
+    "w-11 h-10 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors";
+
+  return (
+    <div className="flex items-center flex-shrink-0 -mr-3 h-full" data-tauri-drag-region={false}>
+      <button onClick={handleMinimize} className={btnBase} title="最小化" aria-label="最小化">
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <rect x="2" y="6" width="8" height="1" fill="currentColor" />
+        </svg>
+      </button>
+      <button onClick={handleToggleMax} className={btnBase} title={isMax ? "元に戻す" : "最大化"} aria-label={isMax ? "元に戻す" : "最大化"}>
+        {isMax ? (
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <rect x="3.5" y="2.5" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="1" />
+            <rect x="2.5" y="3.5" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="1" />
+          </svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1" />
+          </svg>
+        )}
+      </button>
+      <button
+        onClick={handleClose}
+        className="w-11 h-10 flex items-center justify-center text-text-muted hover:text-white hover:bg-[#e81123] transition-colors"
+        title="閉じる"
+        aria-label="閉じる"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+          <line x1="2.5" y1="2.5" x2="9.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="9.5" y1="2.5" x2="2.5" y2="9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      </button>
+    </div>
   );
 }

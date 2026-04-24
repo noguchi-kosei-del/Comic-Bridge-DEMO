@@ -1808,6 +1808,23 @@ gh release view v1.x.x --json assets -q '.assets[].name'  # アセット確認
 - このステップが欠落するとCIビルドが `resource path resources\pdfium\pdfium.dll doesn't exist` で失敗する
 - 同期時のチェックリスト: `src/`, `src-tauri/`, ルートconfig, **`.github/`**
 
+### DEMO 版 GitHub リモート (2026-04-24 追加)
+- **デモ配布用リモート**: `demo` → `https://github.com/noguchi-kosei-del/Comic-Bridge-DEMO.git`
+- **`origin` は従来通り** `yamamoto-ryusei-ux/COMIC-Bridge-integrated.git`（CI/リリース本線）
+- **ローカル `main` の tracking は `origin/main`**。DEMO への反映は明示的に `git push demo main` で行う（`-u` は付けない）
+- `.gitignore` 追加エントリ（Desktop.ini と個人メモを誤コミットしないため）:
+  ```
+  Desktop.ini
+  comicbridge改善案.txt
+  ```
+- **折りたたみ方針**: DEMO への push は「UI 大幅更新を 1 コミットにまとめる」方針（大量の小コミットを DEMO リポジトリに残さない）。本線 `origin` へ push する場合は通常通りコミットを分割する
+
+### フォルダをリネーム／移動した場合のビルドキャッシュ
+- `src-tauri/target/` 内の **Tauri プラグイン権限ファイルに絶対パスが焼き込まれる** ため、フォルダをリネーム／移動すると dev ビルドが `failed to read plugin permissions: ... (os error 3)` で失敗する
+- 対処: `cd src-tauri && cargo clean`（旧パス参照を含む `target` を全削除）→ `start-dev.bat` で再ビルド
+- ついでに `pdfium.dll` が消えていても `start-dev.bat` の `:download_pdfium` サブルーチンが自動 DL するので手動配置は不要
+- **注意**: cargo clean は 8GB 超のキャッシュを削除するため、クリーン後の初回ビルドは 10〜15 分かかる
+
 ## localStorage永続化
 
 ```typescript
@@ -2220,3 +2237,118 @@ textLogFolderPath: string      // テキストログフォルダパス
 - ダイアログ権限（`dialog:allow-message` 等）は Tauri の capabilities 変更なので、**dev サーバー＋Tauri 再起動**が必須。
 - `productName` 変更で生成バイナリ名が変わるため、古い `src-tauri/target` の成果物は一度クリーンにするのが安全。
 - `navBarButtons` の 1 回限りリオーダーは `localStorage` キー `comic_bridge_migration_layers_after_home_v1` で制御。再実行したい場合は当該キーを削除してからアプリを起動する。
+
+
+## v3.x: ホーム画面全面刷新 + MojiQ 互換ダークモード + アニメーション (2026-04-24)
+
+### 概要
+起動時画面をダッシュボード型 2 カラムホームに全面刷新。ヘッダーを完全カスタム chrome 化、ダークモードを MojiQ 準拠パレットに移行、画面遷移に方向性のあるスライドアニメーションを導入。PsDesign / MojiQ / Tachimi の UX を横断的に採用。
+
+### 1. 新ホーム画面 (HomeLayout)
+[src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) (新規) + [src/store/psdStore.ts](src/store/psdStore.ts)
+
+- `SpecViewMode` に `"home"` を追加し初期値に。`SpecCheckView` の冒頭で `if (viewMode === "home") return <HomeLayout />`。
+- **レイアウト**: `grid grid-cols-1 lg:grid-cols-2 gap-6 p-6` の 2 カラム
+  - **左**: モノクロ/カラー + 「N ファイル」 + ○/× カウンター + 詳細▶ / 大きなサムネ&ドロップゾーン (`flex-1 min-h-[240px] rounded-2xl border-2 border-dashed`) / ワークフロー▶ 大ボタン (`PlayCircle` アイコン + `text-lg font-bold`)
+  - **右**: Chrome 風タブ（すべて / 入稿 / 初稿確認 / 差し替え / TIFF化）+ タイルグリッド（`ALL_NAV_BUTTONS` から specCheck を除く）+ 下部 4 アクション（ガイドを編集 / PDF化 / 簡易スキャン / テキスト抽出）
+- サムネは `useHighResPreview(firstFile.filePath, { maxSize: 1200 })` で詳細表示と同等画質。`thumbnailStatus === "pending"/"loading"` でスピナー、hover で「フォルダを変更」オーバーレイ。
+- **カラーモード自動判定**: 読込時に PSD の `metadata.colorMode` を集計し、多数派（Grayscale → mono-spec / RGB・CMYK → color-spec）を `selectSpecAndCheck` で自動アクティブ化。`autoSelectedFolderRef` で同一フォルダにつき 1 回だけ判定、ユーザー手動切替を尊重。
+- HomeLayout 内でも `useSpecChecker()` を呼び、○/× バッジが読込時に自動更新。
+- PSD 未読込時はモノクロ/カラートグルを `opacity-40 pointer-events-none` でグレーアウト。
+
+### 2. ホームアクション 4 ボタン集約
+[src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) + [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx)
+
+- 従来 `SpecCheckView` の浮動アクションバーにあった **ガイドを編集 / PDF化 (Tachimi) / 簡易スキャン / テキスト抽出** をホーム右カラムの最下部 `grid grid-cols-4 gap-2` に集約。Tachimi 風 `bg-bg-secondary border-2 border-border` のグレー統一配色。
+- `TextExtractButton` は外部コンポを改変せず、ラッパー div の `[&>div>button]:!border-border` Tailwind arbitrary variant で色を上書きしつつ `w-full` を注入。PSD 未読込時はプレースホルダ ActionButton を表示し 4 列レイアウトを維持。
+- `handleLaunchTachimi` / `showScanJsonInPanel` / `tachimiError` state を HomeLayout に複製。SpecCheckView には `FileContextMenu` 経由の `onLaunchTachimi` が残るため `tachimiError` 固定トーストのみ残置。
+
+### 3. 画面遷移アニメーション
+- HomeLayout: `exitDirection: "none" | "toDetail" | "toTile"` state で方向管理。`transition-all duration-300 ease-in` で 300ms 後に実際の state 切替。
+  - **ホーム → 詳細**: `-translate-x-8 opacity-0`（左スライド + フェード）
+  - **ホーム → タイル**: `-translate-y-8 opacity-0`（下 → 上スライド）
+- SpecCheckView: `isExitingToHome` state で **右スライド**（`translate-x-8 opacity-0`）。詳細モノクロ/カラー行の左端に `Home` アイコン付き「ホーム」ボタンを追加、クリックで `goToHome()` → 300ms 後に `setSpecViewMode("home")`。
+- ワークフロー/データボタン/タイル連打ガード付き。
+
+### 4. ヘッダー (TopNav) 全面再構成 + カスタムウインドウコントロール
+[src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) + [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json) + [src-tauri/capabilities/default.json](src-tauri/capabilities/default.json)
+
+- **Tauri `decorations: false`** に切替、完全カスタム chrome 化。capabilities に `core:window:allow-minimize` / `allow-toggle-maximize` / `allow-is-maximized` / `allow-close` を追加。
+- **最小横幅**: `minWidth: 1000 → 1200`。ヘッダー高さ `h-14 → h-10`。
+- **アプリアイコン**: `/app-icon.png`（`src-tauri/icons/32x32.png` を `public/` に複製）を左端に配置。
+- **ヘッダー右端のウインドウコントロール**（`WindowControls` コンポーネント、ファイル末尾）: 最小化 / 最大化トグル（`isMaximized` を `onResized` で監視し `□` ↔ `❐` を切替）/ 閉じる（hover 時 `#e81123` 赤塗り）。
+- 並び順: `[アイコン][ホーム][ツール][│区切り][設定/フォルダから開く/読み込みリセット][テキスト/作品情報JSON/校正JSON] ... [flex-1] [更新バッジ][― □ ×]`
+- **廃止**: WorkflowBar コンポーネント（header 左端の WF ボタン）、NavBarButtons の配置（本体はコンポとして残置）、ファイル数+OK/NG カウンターの TopNav 右側表示（ホーム側に集約）。
+
+### 5. ツールボタン ドロップダウン（PsDesign save-menu 準拠）
+[src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) の `TopNavToolMenu`
+
+- 挙動: **ホバー開閉**（`onMouseEnter` で即開、`onMouseLeave` で 300ms ディレイ閉）。
+- 見た目: 上向き三角（CSS border-trick 2 枚重ね、外枠 `--cb-border-color` + 内塗り `--cb-menu-bg` で light/dark 自動切替）、`shadow-[0_8px_24px_rgba(0,0,0,0.35)]`、`min-w-[220px] max-h-[35vh]`、overflow-auto は内側スクロール領域にだけ付けて三角のクリップを回避、三角の left 位置はボタン中心に合わせて `left-2`。
+- 内容: **ツール**（`ALL_NAV_BUTTONS` から specCheck を除いた 13 項目、ホーム右タイルグリッドと同一）+ **ProGen**（抽出/整形/校正）+ **検版ツール**（差分/分割、`Shield` アイコン）。セクションヘッダーに `border-b border-border mb-1` で区切り。
+
+### 6. 読み込みリセット カスタムダイアログ（赤基調）
+[src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx)
+
+- 旧 Tauri `ask()` を廃止し、`createPortal` で自前モーダル。警告三角アイコン + タイトル「読み込みリセット」+ 説明文 + キャンセル/リセット ボタン。
+- 全体を `border-error/30` / `bg-error/15` / `text-error` / `bg-error shadow-error/30` の **赤基調**で「危険操作」を表現。
+- `performReset` で PSD / テキスト / 作品情報JSON / 校正JSON に加え `useSpecStore.clearCheckResults()` / `clearConversionResults()` / `setCurrentFolderPath(null)` も実行。
+
+### 7. 設定パネル
+[src/components/layout/SettingsPanel.tsx](src/components/layout/SettingsPanel.tsx)
+
+- **「ナビ/ツール配置」タブを完全削除**。関連 state（`editNav` / `editTool` / `dragTarget` / `dragOverIdx`）とドラッグ並べ替えロジック、`renderCombinedList` / `getPreviewList` / `startDrag` / `toggleItem` / `applyLayout` をすべて撤去。単一タブになったのでタブバー自体も廃止。
+- `settingsStore` の `navBarButtons` / `toolMenuButtons` フィールドは保持（TopNav の NavBarButtons / TopNavToolMenu が参照するデフォルト値として）。
+
+### 8. MojiQ Pro_1.0 互換ダークパレット
+[src/styles/globals.css](src/styles/globals.css) + [src/components/layout/AppLayout.tsx](src/components/layout/AppLayout.tsx)
+
+- **旧 `filter: invert(1) hue-rotate(180deg)` トリックを完全撤廃**（画像/Canvas/iframe への counter-filter 含む）。画像・PSD プレビューは常に自然な色で表示。
+- MojiQ Pro_1.0 (`C:\Users\noguchi-kosei\Desktop\MojiQ_開発\MojiQ Pro_1.0\src\App.css`) の dark-theme 変数に揃えた MojiQ 互換パレットを `html.dark-mode-invert` スコープで Tailwind 静的色クラスに上書き:
+  - bg: `#1e1e1e` / `#2c2c2c` / `#3c3c3c` / `#4c4c4c`
+  - text: `#f6f6f6` / `#aaaaaa` / `#888888`
+  - border: `#444444` / `#555555`（opacity variant /20 /30 /40 /50 も含む）
+  - accent: `#0078d4`
+- `bg-bg-*` / `text-text-*` / `border-border*` の基底に加え **`hover:*` / `group-hover:*` / `focus:*` / `active:*` のバリアントもすべて上書き**。スクロールバー（track `#2c2c2c` / thumb `#4c4c4c`）、`.bg-tone` もダーク対応。
+- `:root` / `html.dark-mode-invert` に `--cb-border-color` / `--cb-menu-bg` を定義し、ドロップダウン三角のような JSX インライン style も自動で light/dark 切替。
+
+### 9. ProGen ルール編集ビュー
+[src/components/progen/ProgenRuleView.tsx](src/components/progen/ProgenRuleView.tsx) + [src/components/views/ProgenView.tsx](src/components/views/ProgenView.tsx)
+
+- 上部バー (`flex-shrink-0 px-3 py-2 border-b … bg-bg-tertiary/20`) を整理:
+  - 4 プロンプト生成ボタン（抽出/整形/正誤/提案）と「コピー済」バッジを削除
+  - 左端に **テキストエディタへジャンプ** ボタン（`FileEdit` icon、`useViewStore.getState().setActiveView("textEditor")`）
+  - 右寄せの `TextSourceDropdown` / `ResultPasteDropdown` は維持
+- コンテンツ (`flex-1 overflow-auto p-3`) の直下に **`grid grid-cols-4 gap-3 h-14`** の大きな横一列で 4 プロンプト生成ボタンを再配置。青/緑/橙で色分け、`rounded-xl shadow-sm active:scale-[0.98]`。
+- ProgenView の `absolute bottom-4 … z-30` の WF フローティングポップアップを完全削除（240 行超）。`hasText` / `wfProgenMode` / `wfCheckMode` / `toolMode` 等の関連 state・不要 import（`AlertTriangle` / `Lightbulb` / `Pencil`）も撤去。`text-sm font-bold` のタイトル行も削除。
+
+### 10. ワークフローボタン ホバーシャイン
+[src/styles/globals.css](src/styles/globals.css) + [src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx)
+
+- Tachimi Standalone (`C:\Users\noguchi-kosei\Desktop\Tachimi_開発\Tachimi-_Standalone`) の `.btn-execute::before` 手法を移植し、`.btn-shine` ユーティリティクラスとして globals.css に実装。
+- 挙動: **ホバー時のみ** `::before` の斜め 45° 白ハイライト（`rgba(255,255,255,0.28)` 中央）が `translateX(-100% → 100%)` に **1.6s ease-out** で片道スイープ。opacity を `0 → 1 → 1 → 0` で両端フェード。
+- 旧 `hover:-translate-y-0.5 hover:shadow-elevated`（動き + 影強化）を撤廃。ラベル/アイコンは `<span className="relative z-[1]">` で前面に。
+- `disabled` / `aria-disabled="true"` では `::before { display: none }` で光を停止。
+
+### 主要変更ファイル一覧（この節で追加/変更）
+| 区分 | パス |
+| --- | --- |
+| 新規 | [src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) |
+| 新規 | [public/app-icon.png](public/app-icon.png)（`src-tauri/icons/32x32.png` を複製） |
+| 改修 | [src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) — アプリアイコン / ウインドウコントロール / カスタムリセット / ツールドロップダウン |
+| 改修 | [src/components/layout/WorkflowBar.tsx](src/components/layout/WorkflowBar.tsx) — `executeStepNav` / `ProofLoadOverlay` を export |
+| 改修 | [src/components/layout/AppLayout.tsx](src/components/layout/AppLayout.tsx) — ダークモードのコメント更新 |
+| 改修 | [src/components/layout/SettingsPanel.tsx](src/components/layout/SettingsPanel.tsx) — 「ナビ/ツール配置」タブ削除 |
+| 改修 | [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) — home mode 分岐 / 戻る遷移 / 4 ボタン移設 |
+| 改修 | [src/components/views/ProgenView.tsx](src/components/views/ProgenView.tsx) — フローティングポップアップ削除 |
+| 改修 | [src/components/progen/ProgenRuleView.tsx](src/components/progen/ProgenRuleView.tsx) — 上部バー整理・下部 4 ボタン |
+| 改修 | [src/store/psdStore.ts](src/store/psdStore.ts) — `SpecViewMode` に `"home"` 追加、初期値変更 |
+| 改修 | [src/styles/globals.css](src/styles/globals.css) — MojiQ ダークパレット / btn-shine / CSS 変数 |
+| 改修 | [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json) — `decorations: false` / `minWidth: 1200` |
+| 改修 | [src-tauri/capabilities/default.json](src-tauri/capabilities/default.json) — window permission 追加 |
+
+### 注意事項
+- `decorations: false` と capabilities の変更は Tauri アプリの再ビルド/再起動が必要。
+- MojiQ 互換ダーク化で filter 反転を廃止したため、ダーク時に色味が大きく変わる。`dark-mode-invert` クラス名は互換性のため据え置き。
+- `specViewMode` 初期値を `"home"` に変更したため、既存ユーザーも起動時はホームから始まる（`localStorage` での永続化はなし）。
+- `WorkflowBar` コンポは `executeStepNav` / `ProofLoadOverlay` を外部から再利用するため `export` 化済み。本体のバー UI は TopNav から削除されているが、HomeLayout のワークフロー▶ ピッカーから間接的に呼ばれる。

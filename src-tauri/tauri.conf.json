@@ -16,11 +16,11 @@
         "title": "Comic-Bridge DEMO",
         "width": 1400,
         "height": 900,
-        "minWidth": 1000,
+        "minWidth": 1200,
         "minHeight": 700,
         "resizable": true,
         "fullscreen": false,
-        "decorations": true,
+        "decorations": false,
         "transparent": false,
         "dragDropEnabled": true
       }
