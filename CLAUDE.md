@@ -2641,3 +2641,47 @@ _backup/
 | 改修 | [src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) — Tauri D&D + dropZoneRef + scale-125 演出 + 各タイル `icon-anim-{btn.id}` |
 | 改修 | [src/styles/globals.css](src/styles/globals.css) — 13 種 keyframe + ホバー rule + reduced-motion ガード |
 | 改修 | [src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) — ホームボタン青線修正 + ProGen 見出し Sparkles 追加 |
+
+---
+
+## v1.0.4: アプリアイコン差し替え (Comic-Bridge ロゴ) (2026-04-25)
+
+### 概要
+`logo/comic-bridge_icon.png` (333×333、青グラデの本ロゴ) を全プラットフォーム/全サイズのアプリアイコンに反映。Tauri 公式 CLI (`@tauri-apps/cli` の `icon` サブコマンド) でソース 1 枚から自動生成し、`tauri.conf.json` のパス参照を変更せずに済ませた。
+
+### 1. アイコン全種を再生成
+コマンド (プロジェクトルートで実行):
+```bash
+npx tauri icon "logo/comic-bridge_icon.png"
+```
+
+`src-tauri/icons/` 配下を一括上書き:
+- Windows / macOS / Linux 用: `32x32.png` / `64x64.png` / `128x128.png` / `128x128@2x.png` (256×256) / `icon.png` (1024×1024) / `icon.ico` / `icon.icns`
+- Windows Store 用 (未使用だが生成): `Square{30,44,71,89,107,142,150,284,310}x{...}Logo.png` / `StoreLogo.png`
+- iOS / Android 用 (未使用だが生成): `ios/AppIcon-*.png` / `android/mipmap-*/ic_launcher{,_round,_foreground}.png`
+
+[tauri.conf.json](src-tauri/tauri.conf.json) の `bundle.icon` 配列・`bundle.resources.icon.ico → comic-bridge.ico` のパス参照は変更不要。
+
+### 2. TopNav 左端アイコン更新
+[TopNav.tsx:164](src/components/layout/TopNav.tsx#L164) は `<img src="/app-icon.png" className="w-6 h-6 rounded">` で表示。生成された `src-tauri/icons/32x32.png` を `public/app-icon.png` にコピーして反映:
+```bash
+cp "src-tauri/icons/32x32.png" "public/app-icon.png"
+```
+
+24×24 表示なので 32×32 ソースが最もシャープ。Tauri CLI が高品質リサンプリング済み。
+
+### 3. ソース画像
+`logo/comic-bridge_icon.png` は青グラデの本のシンボルのみ (テキストなし)。アイコンとして小サイズで視認性が確保される。
+
+### 注意事項
+- **ソース解像度**: 333×333。Tauri CLI 推奨は 1024×1024 以上だが、生成自体は通る。1024×1024 の `icon.png` や 256×256 の `128x128@2x.png` はアップスケールでやや甘くなる。タスクバー/ショートカット用 (32–128px) は問題なし。
+- **CI**: `.github/workflows/release.yml` は `src-tauri/icons/icon.ico` を bundle するため、新 `.ico` が次回タグ push (`v1.0.4`) 時に自動でインストーラーに焼き込まれる。workflow 修正不要。
+- **アイコンキャッシュ**: Windows のタスクバー/エクスプローラーがアイコンをキャッシュしているため、新インストーラー実行後もしばらくキャッシュが残る場合がある。`ie4uinit.exe -show` または再起動で解消。
+
+### 主要変更ファイル
+| 区分 | パス |
+| --- | --- |
+| 上書き | `src-tauri/icons/*.png` / `icon.ico` / `icon.icns` (約 50 ファイル) |
+| 上書き | [public/app-icon.png](public/app-icon.png) — 32×32 をコピー |
+| 新規 | `logo/comic-bridge_icon.png` — アイコンソース原本 |
+| バージョン | [package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml) — 1.0.3 → 1.0.4 |
