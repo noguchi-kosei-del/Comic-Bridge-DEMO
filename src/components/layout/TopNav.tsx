@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { FileText, FileJson, ClipboardCheck, Shield, Check, RotateCcw, Home, type LucideIcon } from "lucide-react";
+import { FileText, FileJson, ClipboardCheck, Shield, Sparkles, Check, RotateCcw, Home, type LucideIcon } from "lucide-react";
 import { useViewStore, validateAndSetABPath } from "../../store/viewStore";
 import { usePsdStore } from "../../store/psdStore";
 import { useSpecStore } from "../../store/specStore";
@@ -712,7 +712,10 @@ function TopNavToolMenu() {
               );
             })}
 
-            <div className={`${sectionHeaderCls} mt-1`}>ProGen</div>
+            <div className={`${sectionHeaderCls} mt-1`}>
+              <Sparkles className="w-3 h-3" />
+              ProGen
+            </div>
             {TOOL_PROGEN_MODES.map((mode) => (
               <button
                 key={mode.id}
@@ -799,7 +802,7 @@ function NavBarButtons() {
             className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
               active
                 ? "bg-accent/15 text-accent ring-1 ring-accent/40"
-                : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
+                : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
             }`}
             onClick={() => {
               if (btn.id === "layers") {
@@ -836,7 +839,7 @@ function HomeNavButton() {
       className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
         active
           ? "bg-accent/15 text-accent ring-1 ring-accent/40"
-          : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
+          : "text-text-muted hover:text-text-primary hover:bg-bg-tertiary"
       }`}
       onClick={() => useViewStore.getState().goToHomeWithExit()}
     >

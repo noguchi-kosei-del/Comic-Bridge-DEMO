@@ -2591,3 +2591,53 @@ _backup/
 ### 6. 既知の癖
 - `start-dev.bat` の pdfium ダウンロード処理は環境依存で post-check に失敗するケースあり。`pdfium.dll` を手動配置 or `_backup` から流用すれば `if not exist "%PDFIUM_DLL%"` の最初のガードでスキップされる
 - 古い `package-lock.json` が `version: "3.8.1"` (上流) のまま残っていたが `npm install` で `1.0.1` に修正済
+
+---
+
+## v1.0.3: ホームタイル個別ホバーアニメ + ドロップゾーン演出 + ヘッダー修正 (2026-04-25)
+
+### 1. ホームタイルアイコンの個別ホバーアニメーション
+[HomeLayout.tsx:472](src/components/views/HomeLayout.tsx#L472) のツールタイルグリッド内 `<Icon>` に `icon-anim-{btn.id}` クラスを連結し、[globals.css 末尾](src/styles/globals.css) に各 id 用 keyframe + `.group:hover` ルール + `prefers-reduced-motion` ガードを追加。各ツールのメタファに合わせた個別アニメ:
+
+| btn.id | アイコン | 動き | keyframe |
+|---|---|---|---|
+| `unifiedViewer` | Eye | scaleY で縦方向まばたき | `icon-blink` |
+| `inspection` | Shield | 内側に fill が緩やかに入って抜ける（`fill-opacity: 0 → 0.5 → 0`） | `icon-fill` |
+| `progen` | Sparkles | 拡大 + 軽い回転（きらめき、ループ） | `icon-twinkle` |
+| `textEditor` | FileEdit | **左下のペン (`:nth-child(3)`) のみ** が自身の中心軸でゆらゆら振動 | `icon-wiggle` |
+| `scanPsd` | ScanLine | scale(0.4) + opacity 0 から徐々に拡大しフェードして手前に近づく | `icon-zoom-in` |
+| `layers` | Layers | ダイヤ部分は静止、下の 2 本の線が上 → 下の順に出現 | `icon-layer-line-1/2` |
+| `layerControl` | SlidersHorizontal | 左右にスライド（ループ） | `icon-slide-h` |
+| `replace` | Replace | 上の□のコーナー線 (1-4) と下の□ (rect) が逆位相に交互ブリンク | `icon-blink-a/b` |
+| `compose` | Combine | 右向き矢印 (`:nth-child(3,4)`) が左から現在位置に緩やかにスライドイン | `icon-arrow-enter-l` |
+| `tiff` | FileImage | Y 軸 180° フリップ（perspective: 600px で立体感） | `icon-flip` |
+| `split` | Columns2 | scaleX で開閉（ループ） | `icon-pull-apart` |
+| `folderSetup` | FolderCog | **歯車部分（`:not(:first-child)` = 歯 + 中心 circle）のみ** が viewBox 座標 (18, 18) を中心に 360° 回転、フォルダ本体は静止 | `icon-rotate` |
+| `requestPrep` | Package | バウンド | `icon-bounce` |
+
+### 2. ドロップゾーン D&D 演出強化 ([HomeLayout.tsx](src/components/views/HomeLayout.tsx))
+**問題**: 既存の HTML5 `onDragOver`/`onDragLeave` は **Tauri webview では発火しない**ため、`isDragOver` state が更新されず見た目が変化しなかった。
+
+**修正**: `getCurrentWindow().onDragDropEvent` を購読し、`event.payload.position` を `dropZoneRef.current.getBoundingClientRect()` と DPR 補正付きで比較してドロップゾーン内外を判定。`over` で内側なら `setIsDragOver(true)`、`leave` / `drop` で `setIsDragOver(false)`。
+
+ドラッグ中の見た目:
+- 外枠: `border-accent` + `bg-accent/15` + `ring-4 ring-accent/30` + `shadow-elevated shadow-accent/20`（青枠強調 + ふんわり青グロー）
+- フォルダアイコン容器: `transition-all duration-500 ease-out` で `scale-100 → scale-125`、`bg-bg-tertiary → bg-accent/20`、`shadow-elevated shadow-accent/40`（奥から手前へ近づく演出）
+- Folder アイコン本体: `text-folder → text-accent` で色変化
+
+### 3. TopNav ホームボタン押下時の青いライン修正 ([TopNav.tsx](src/components/layout/TopNav.tsx))
+**問題**: ホームボタンを押すと一瞬だけ青い線が出てしまう。
+
+**根本原因**: [globals.css:152-161](src/styles/globals.css#L152-L161) の `nav button.text-text-secondary:focus::after` ルールが、`text-text-secondary` を持つボタンに focus 時、青い 2px ライン（`background: #3a7bd5`、`bottom: -6px`）を疑似要素で描画していた。設定ボタン・フォルダ選択ボタンは `text-text-muted` を使っているため発火しない。
+
+**修正**: `HomeNavButton` および `NavBarButtons` の inactive 状態クラスを `text-text-secondary` → **`text-text-muted`** に変更し、設定ボタン等と挙動を完全にそろえた。`.blur()` 呼び出しや `focus-visible:outline-none` ハック、グローバル `nav button:focus { outline: none !important }` など試行的に追加した防御的コードはすべて撤去。
+
+### 4. ツールドロップダウン ProGen セクション見出しにアイコン追加 ([TopNav.tsx](src/components/layout/TopNav.tsx))
+ツールドロップダウン (`TopNavToolMenu`) の「ProGen」セクション見出しに `Sparkles`（✨）アイコンを `w-3 h-3` で追加。検版ツール（`Shield`）と同じパターンで、ProGen の標準ナビアイコン（[ALL_NAV_BUTTONS](src/store/settingsStore.ts#L20)）と統一。
+
+### 主要変更ファイル
+| 区分 | パス |
+| --- | --- |
+| 改修 | [src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) — Tauri D&D + dropZoneRef + scale-125 演出 + 各タイル `icon-anim-{btn.id}` |
+| 改修 | [src/styles/globals.css](src/styles/globals.css) — 13 種 keyframe + ホバー rule + reduced-motion ガード |
+| 改修 | [src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) — ホームボタン青線修正 + ProGen 見出し Sparkles 追加 |

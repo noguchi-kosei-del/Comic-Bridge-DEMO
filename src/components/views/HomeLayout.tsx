@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Folder, FolderOpen, Pencil, ScanLine, PlayCircle } from "lucide-react";
 import { usePsdStore } from "../../store/psdStore";
 import { useSpecStore } from "../../store/specStore";
@@ -83,6 +84,39 @@ export function HomeLayout() {
   }, [files, currentFolderPath, activeSpecId, selectSpecAndCheck]);
 
   const [isDragOver, setIsDragOver] = useState(false);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  // Tauri D&D イベント監視 — HTML5 onDrag* は webview で発火しないので
+  // onDragDropEvent + bounding rect で「ドロップゾーン上にカーソルがあるか」を判定。
+  useEffect(() => {
+    const currentWindow = getCurrentWindow();
+    let unlisten: (() => void) | undefined;
+    let mounted = true;
+    const setup = async () => {
+      const fn = await currentWindow.onDragDropEvent((event) => {
+        const el = dropZoneRef.current;
+        if (!el) return;
+        const dpr = window.devicePixelRatio || 1;
+        if (event.payload.type === "over") {
+          const pos = event.payload.position;
+          const r = el.getBoundingClientRect();
+          const x = pos.x / dpr;
+          const y = pos.y / dpr;
+          const inside = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+          setIsDragOver(inside);
+        } else if (event.payload.type === "leave" || event.payload.type === "drop") {
+          setIsDragOver(false);
+        }
+      });
+      if (mounted) unlisten = fn;
+      else fn();
+    };
+    setup();
+    return () => {
+      mounted = false;
+      if (unlisten) unlisten();
+    };
+  }, []);
   const [wfPickerOpen, setWfPickerOpen] = useState(false);
   const [showProofLoadOverlay, setShowProofLoadOverlay] = useState(false);
   const [activeTileTab, setActiveTileTab] = useState<TileTabId>("all");
@@ -308,24 +342,29 @@ export function HomeLayout() {
 
           {/* サムネ/ドロップゾーン */}
           <div
+            ref={dropZoneRef}
             onClick={handlePickFolder}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragOver(true);
-            }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={() => setIsDragOver(false)}
-            className={`group relative flex-1 min-h-[240px] rounded-2xl border-2 border-dashed transition-all duration-200 cursor-pointer overflow-hidden ${
+            className={`group relative flex-1 min-h-[240px] rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer overflow-hidden ${
               isDragOver
-                ? "border-accent bg-accent/10"
+                ? "border-accent bg-accent/15 ring-4 ring-accent/30 shadow-elevated shadow-accent/20"
                 : "border-text-muted/20 hover:border-accent/40 hover:bg-accent/5"
             }`}
             title={files.length > 0 ? "クリックでフォルダを再選択" : "クリックでフォルダを選択"}
           >
             {files.length === 0 ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                <div className="w-20 h-20 mb-4 rounded-3xl flex items-center justify-center bg-bg-tertiary">
-                  <Folder className="w-10 h-10 text-folder" />
+                <div
+                  className={`w-20 h-20 mb-4 rounded-3xl flex items-center justify-center transition-all duration-500 ease-out ${
+                    isDragOver
+                      ? "scale-125 bg-accent/20 shadow-elevated shadow-accent/40"
+                      : "scale-100 bg-bg-tertiary"
+                  }`}
+                >
+                  <Folder
+                    className={`w-10 h-10 transition-colors duration-300 ${
+                      isDragOver ? "text-accent" : "text-folder"
+                    }`}
+                  />
                 </div>
                 <p className="text-base font-display font-medium mb-1 text-text-primary">
                   フォルダを選択、またはドラッグ＆ドロップ
@@ -470,7 +509,7 @@ export function HomeLayout() {
                     className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl bg-bg-primary border border-border hover:border-accent/40 hover:bg-accent/5 shadow-soft hover:shadow-card transition-all group"
                   >
                     {Icon && (
-                      <Icon className="w-8 h-8 text-text-secondary group-hover:text-accent transition-colors" />
+                      <Icon className={`w-8 h-8 text-text-secondary group-hover:text-accent transition-colors icon-anim-${btn.id}`} />
                     )}
                     <span className="text-sm font-medium text-text-primary text-center">
                       {btn.label}
