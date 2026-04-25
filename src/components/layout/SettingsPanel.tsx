@@ -10,14 +10,15 @@ const FONT_SIZES = [
 ];
 
 const ACCENT_COLORS = [
+  { color: "#3a7bd5", label: "ブルー（標準）" },
   { color: "#7c5cff", label: "パープル" },
-  { color: "#3b82f6", label: "ブルー" },
   { color: "#10b981", label: "グリーン" },
   { color: "#f59e0b", label: "オレンジ" },
   { color: "#ef4444", label: "レッド" },
   { color: "#ec4899", label: "ピンク" },
   { color: "#6366f1", label: "インディゴ" },
   { color: "#14b8a6", label: "ティール" },
+  { color: "#52525b", label: "ダークグレー" },
 ];
 
 
@@ -54,12 +55,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
       <div className="bg-bg-secondary rounded-2xl shadow-2xl border border-border w-[480px] max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="px-5 py-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-text-primary">設定</h2>
-            <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
+          <h2 className="text-sm font-bold text-text-primary">設定</h2>
         </div>
 
         {/* Content */}
@@ -85,7 +81,6 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   style={{ backgroundColor: c.color }} title={c.label} />
               ))}
             </div>
-            <p className="text-[9px] text-text-muted mt-1">※カラー変更は今後対応予定</p>
           </div>
           <div>
             <label className="text-xs font-medium text-text-primary mb-2 block">ダークモード</label>
@@ -109,7 +104,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
           {/* バージョン情報（左側） */}
           <div className="mr-auto flex items-center gap-2 text-[11px] text-text-muted">
             {updater.appVersion && (
-              <span className="font-mono">v{updater.appVersion}</span>
+              <span className="font-mono">Ver {updater.appVersion}</span>
             )}
             {updater.phase === "checking" && (
               <span className="inline-flex items-center gap-1 text-text-muted/70">

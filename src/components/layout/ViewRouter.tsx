@@ -20,6 +20,8 @@ import { InspectionToolView } from "../views/InspectionToolView";
 
 export function ViewRouter() {
   const activeView = useViewStore((s) => s.activeView);
+  const isExitingHome = useViewStore((s) => s.isExitingHome);
+  const isEnteringWorkflow = useViewStore((s) => s.isEnteringWorkflow);
 
   // State-preserving mount for heavy tabs (once mounted, never unmount)
   const [progenMounted, setProgenMounted] = useState(false);
@@ -35,7 +37,9 @@ export function ViewRouter() {
   }, [activeView]);
 
   return (
-    <div className="flex-1 overflow-hidden bg-bg-primary relative">
+    <div className={`flex-1 overflow-hidden bg-bg-primary relative ${
+      isExitingHome ? "animate-exit-to-home" : isEnteringWorkflow ? "animate-enter-from-back" : ""
+    }`}>
       {/* Standard conditional rendering for lightweight tabs */}
       {activeView === "specCheck" && <SpecCheckView />}
       {activeView === "layers" && <LayerControlView />}

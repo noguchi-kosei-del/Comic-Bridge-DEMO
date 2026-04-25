@@ -86,6 +86,37 @@ export function HomeLayout() {
   const [wfPickerOpen, setWfPickerOpen] = useState(false);
   const [showProofLoadOverlay, setShowProofLoadOverlay] = useState(false);
   const [activeTileTab, setActiveTileTab] = useState<TileTabId>("all");
+
+  // タイルタブの sliding indicator (選択中タブの背景 pill が左右にスライド)
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Record<TileTabId, HTMLButtonElement | null>>({
+    all: null, ingest: null, proof: null, whiteout: null, tiff: null,
+  });
+  const [tabPillStyle, setTabPillStyle] = useState<{ left: number; width: number; ready: boolean }>({
+    left: 0, width: 0, ready: false,
+  });
+  useEffect(() => {
+    const update = () => {
+      const tabEl = tabRefs.current[activeTileTab];
+      const containerEl = tabsContainerRef.current;
+      if (!tabEl || !containerEl) return;
+      const tabRect = tabEl.getBoundingClientRect();
+      const containerRect = containerEl.getBoundingClientRect();
+      setTabPillStyle({
+        left: tabRect.left - containerRect.left,
+        width: tabRect.width,
+        ready: true,
+      });
+    };
+    update();
+    const containerEl = tabsContainerRef.current;
+    if (!containerEl) return;
+    const ro = new ResizeObserver(update);
+    ro.observe(containerEl);
+    Object.values(tabRefs.current).forEach((el) => el && ro.observe(el));
+    window.addEventListener("resize", update);
+    return () => { ro.disconnect(); window.removeEventListener("resize", update); };
+  }, [activeTileTab]);
   const [showScanJsonInPanel, setShowScanJsonInPanel] = useState(false);
   const [tachimiError, setTachimiError] = useState<string | null>(null);
 
@@ -187,6 +218,8 @@ export function HomeLayout() {
 
   const handleSelectWorkflow = (wf: Workflow) => {
     useWorkflowStore.getState().startWorkflow(wf);
+    // ワークフロー入場アニメ: ViewRouter ラッパー全体が奥 → 手前にズームイン
+    useViewStore.getState().triggerWorkflowEnter();
     setWfPickerOpen(false);
     if (wf.id === "proof") {
       setShowProofLoadOverlay(true);
@@ -385,24 +418,37 @@ export function HomeLayout() {
 
         {/* ═══ RIGHT COLUMN: ツールタイルグリッド（Chrome 風タブ） ═══ */}
         <div className="flex flex-col min-h-[300px]">
-          {/* Chrome 風 タブバー */}
+          {/* Chrome 風 タブバー — 選択中タブの背景 pill が左右にスライド */}
           <div
-            className="flex items-end flex-wrap gap-0.5 px-2 pt-1 relative z-10"
+            ref={tabsContainerRef}
+            className="flex items-end px-2 pt-1 relative z-10"
             role="tablist"
             aria-label="タイル カテゴリ"
           >
+            {/* スライディング pill（選択中タブの背景、コンテンツパネルと同色で同化） */}
+            <div
+              aria-hidden
+              className="absolute bottom-0 -mb-px bg-bg-secondary border border-b-0 border-border rounded-t-lg pointer-events-none transition-all duration-300 ease-out"
+              style={{
+                left: `${tabPillStyle.left}px`,
+                width: `${tabPillStyle.width}px`,
+                top: "0.25rem",
+                opacity: tabPillStyle.ready ? 1 : 0,
+              }}
+            />
             {TILE_TABS.map((tab) => {
               const active = tab.id === activeTileTab;
               return (
                 <button
                   key={tab.id}
+                  ref={(el) => { tabRefs.current[tab.id] = el; }}
                   role="tab"
                   aria-selected={active}
                   onClick={() => setActiveTileTab(tab.id)}
-                  className={`relative px-4 rounded-t-lg border border-b-0 text-xs font-medium transition-colors ${
+                  className={`no-glass relative z-20 px-4 py-2 text-xs font-medium bg-transparent transition-colors ${
                     active
-                      ? "bg-bg-secondary text-text-primary border-border pt-2 pb-2.5 -mb-px z-10"
-                      : "bg-bg-tertiary text-text-secondary border-border/40 hover:bg-bg-elevated hover:text-text-primary pt-1.5 pb-1.5 mt-1"
+                      ? "text-text-primary"
+                      : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   {tab.label}

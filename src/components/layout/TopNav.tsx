@@ -808,9 +808,8 @@ function NavBarButtons() {
               } else if (btn.id === "layerControl") {
                 setActiveView("layers");
               } else if (btn.id === "specCheck") {
-                // ホームボタンは常に新ホームランチャーへ
-                setActiveView("specCheck");
-                usePsdStore.getState().setSpecViewMode("home");
+                // ホームへはアニメ付きで遷移（どのビューからでも）
+                useViewStore.getState().goToHomeWithExit();
               } else {
                 setActiveView(btn.id as any);
               }
@@ -826,7 +825,6 @@ function NavBarButtons() {
 
 // ─── ホームボタン（読み込みリセットの右） ───
 function HomeNavButton() {
-  const setActiveView = useViewStore((s) => s.setActiveView);
   const activeView = useViewStore((s) => s.activeView);
   const specViewMode = usePsdStore((s) => s.specViewMode);
   const active = activeView === "specCheck" && specViewMode !== "layers";
@@ -840,10 +838,7 @@ function HomeNavButton() {
           ? "bg-accent/15 text-accent ring-1 ring-accent/40"
           : "text-text-secondary hover:text-text-primary hover:bg-bg-tertiary"
       }`}
-      onClick={() => {
-        setActiveView("specCheck");
-        usePsdStore.getState().setSpecViewMode("home");
-      }}
+      onClick={() => useViewStore.getState().goToHomeWithExit()}
     >
       <Home className="w-4 h-4" />
     </button>
@@ -868,7 +863,7 @@ function WindowControls() {
   const handleClose = () => getCurrentWindow().close().catch(() => {});
 
   const btnBase =
-    "w-11 h-10 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors";
+    "no-glass w-11 h-10 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors";
 
   return (
     <div className="flex items-center flex-shrink-0 -mr-3 h-full" data-tauri-drag-region={false}>
@@ -891,7 +886,7 @@ function WindowControls() {
       </button>
       <button
         onClick={handleClose}
-        className="w-11 h-10 flex items-center justify-center text-text-muted hover:text-white hover:bg-[#e81123] transition-colors"
+        className="no-glass w-11 h-10 flex items-center justify-center text-text-muted hover:text-white hover:bg-[#e81123] transition-colors"
         title="閉じる"
         aria-label="閉じる"
       >

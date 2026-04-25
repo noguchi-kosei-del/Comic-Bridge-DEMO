@@ -16,6 +16,7 @@ import { useFileWatcher } from "../../hooks/useFileWatcher";
 import { useHandoff } from "../../hooks/useHandoff";
 import { usePsdLoader } from "../../hooks/usePsdLoader";
 import { registerPsdLoader } from "../../lib/psdLoaderRegistry";
+import { deriveAccentPalette, hexToRgbTriplet } from "../../lib/colorUtils";
 
 export function AppLayout() {
   const isViewerFullscreen = useViewStore((s) => s.isViewerFullscreen);
@@ -30,10 +31,10 @@ export function AppLayout() {
     root.style.fontSize = `${scale * 16}px`;
   }, [fontSize]);
 
-  // ダークモード + アクセントカラー
-  // ダークモードは HTML に dark-mode-invert クラスを付与し、CSS 側で
-  // MojiQ Pro_1.0 互換のダークパレット（#1e1e1e / #2c2c2c / #3c3c3c 等）で
-  // bg-bg-* / text-text-* / border-border* を上書きする。
+  // ダークモード
+  // HTML に dark-mode-invert クラスを付与し、CSS 側で MojiQ Pro_1.0 互換の
+  // ダークパレット（#1e1e1e / #2c2c2c / #3c3c3c 等）で bg-bg-* / text-text-* /
+  // border-border* を上書きする。
   // 旧 filter: invert(1) hue-rotate(180deg) トリックは廃止。画像/Canvas は自然な色で表示される。
   useEffect(() => {
     const root = document.documentElement;
@@ -42,15 +43,23 @@ export function AppLayout() {
     } else {
       root.classList.remove("dark-mode-invert");
     }
-    // アクセントカラー
-    if (accentColor && accentColor !== "#ff5a8a") {
-      root.style.setProperty("--settings-accent", accentColor);
-    } else {
-      root.style.removeProperty("--settings-accent");
-    }
     // 旧方式で設定されていたインライン filter があれば除去（移行対応）
     root.style.removeProperty("filter");
-  }, [darkMode, accentColor]);
+  }, [darkMode]);
+
+  // アクセントカラー → CSS 変数（Tailwind の bg-accent / text-accent 系が参照）
+  // settingsStore.accentColor を派生パレットに変換し、RGB triplet として書き込むことで
+  // bg-accent/15 等の opacity モディファイアも機能する。
+  useEffect(() => {
+    const palette = deriveAccentPalette(accentColor || "#3a7bd5");
+    const s = document.documentElement.style;
+    s.setProperty("--cb-accent-rgb",           hexToRgbTriplet(palette.accent));
+    s.setProperty("--cb-accent-hover-rgb",     hexToRgbTriplet(palette.hover));
+    s.setProperty("--cb-accent-secondary-rgb", hexToRgbTriplet(palette.secondary));
+    s.setProperty("--cb-accent-tertiary-rgb",  hexToRgbTriplet(palette.tertiary));
+    s.setProperty("--cb-accent-warm-rgb",      hexToRgbTriplet(palette.warm));
+    s.setProperty("--cb-accent-glow",          palette.glow);
+  }, [accentColor]);
   const clearSelection = usePsdStore((state) => state.clearSelection);
   const selectAll = usePsdStore((state) => state.selectAll);
   const files = usePsdStore((state) => state.files);

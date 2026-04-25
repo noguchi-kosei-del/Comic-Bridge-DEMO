@@ -26,14 +26,15 @@ export default {
         // アクセント: 単一ブルー原則（台割マネージャー準拠）
         // ══════════════════════════════════════════════════════════
         accent: {
-          DEFAULT:   "#3a7bd5",  // Blue 主要操作
-          hover:     "#0078d4",  // Deep Blue（ホバー時・グラデ終点）
-          glow:      "rgba(58, 123, 213, 0.20)",
-          // ブルー統一方針（v3.8.2〜）: secondary/tertiary/warm もグラデ用のブルー系に再定義。
-          // 従来 semantic（amber/teal/orange）だった用途は全て青基調に集約。
-          secondary: "#0078d4",  // Deep Blue（from-accent to-accent-secondary グラデで使用）
-          tertiary:  "#1e90ff",  // Dodger Blue（info 系ハイライト・グラデのバリエーション）
-          warm:      "#1e6bb8",  // Steel Blue（旧 warm トーン → 落ち着いたブルー）
+          // CSS 変数経由（settingsStore.accentColor から AppLayout が更新）。
+          // RGB triplet（"58 123 213" 形式）+ <alpha-value> で bg-accent/15 等の
+          // opacity モディファイアを機能させる。派生色は colorUtils.deriveAccentPalette() で HSL 派生。
+          DEFAULT:   "rgb(var(--cb-accent-rgb) / <alpha-value>)",
+          hover:     "rgb(var(--cb-accent-hover-rgb) / <alpha-value>)",
+          secondary: "rgb(var(--cb-accent-secondary-rgb) / <alpha-value>)",
+          tertiary:  "rgb(var(--cb-accent-tertiary-rgb) / <alpha-value>)",
+          warm:      "rgb(var(--cb-accent-warm-rgb) / <alpha-value>)",
+          glow:      "var(--cb-accent-glow)",
         },
         // ══════════════════════════════════════════════════════════
         // 漫画装飾カラー: 事実上廃止（CSS で全て bg-tertiary に上書き）

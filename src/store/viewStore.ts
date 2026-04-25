@@ -34,6 +34,10 @@ interface ViewState {
   jsonBrowserMode: "preset" | "check" | null;
   /** グローバルpromptダイアログ */
   promptDialog: { message: string; defaultValue: string; resolve: (value: string | null) => void } | null;
+  /** ホームへ戻る退場アニメーション中フラグ（ViewRouter ラッパーが animate-exit-to-home を付与） */
+  isExitingHome: boolean;
+  /** ワークフロー開始時の入場アニメーション中フラグ（ViewRouter ラッパーが animate-enter-from-back を付与） */
+  isEnteringWorkflow: boolean;
 
   setActiveView: (view: AppView) => void;
   setDetailPanelOpen: (open: boolean) => void;
@@ -44,9 +48,13 @@ interface ViewState {
   setKenbanPathB: (path: string | null) => void;
   setKenbanViewMode: (mode: "diff" | "parallel") => void;
   setJsonBrowserMode: (mode: "preset" | "check" | null) => void;
+  /** どのビューからでもホームへアニメ付きで戻る（380ms 後に specCheck + home に切替） */
+  goToHomeWithExit: () => void;
+  /** ワークフロー入場アニメーションをトリガー（ViewRouter ラッパーで奥→手前ズーム） */
+  triggerWorkflowEnter: () => void;
 }
 
-export const useViewStore = create<ViewState>((set) => ({
+export const useViewStore = create<ViewState>((set, get) => ({
   activeView: "specCheck",
   isDetailPanelOpen: false,
   progenMode: null,
@@ -55,8 +63,10 @@ export const useViewStore = create<ViewState>((set) => ({
   kenbanPathB: null,
   kenbanViewMode: "diff" as const,
   jsonBrowserMode: null,
+  isExitingHome: false,
+  isEnteringWorkflow: false,
 
-  setActiveView: (activeView) => set({ activeView }),
+  setActiveView: (activeView) => set({ activeView, isExitingHome: false }),
   setDetailPanelOpen: (isDetailPanelOpen) => set({ isDetailPanelOpen }),
   toggleDetailPanel: () => set((state) => ({ isDetailPanelOpen: !state.isDetailPanelOpen })),
   setProgenMode: (progenMode) => set({ progenMode }),
@@ -72,6 +82,25 @@ export const useViewStore = create<ViewState>((set) => ({
   setKenbanViewMode: (kenbanViewMode) => set({ kenbanViewMode }),
   setJsonBrowserMode: (jsonBrowserMode) => set({ jsonBrowserMode }),
   promptDialog: null,
+  goToHomeWithExit: () => {
+    if (get().isExitingHome) return;
+    // 動的 import で循環依存を回避
+    import("./psdStore").then(({ usePsdStore }) => {
+      const psd = usePsdStore.getState();
+      const { activeView } = get();
+      // 既にホーム表示中ならアニメ不要
+      if (activeView === "specCheck" && psd.specViewMode === "home") return;
+      set({ isExitingHome: true });
+      window.setTimeout(() => {
+        set({ activeView: "specCheck", isExitingHome: false });
+        psd.setSpecViewMode("home");
+      }, 380);
+    });
+  },
+  triggerWorkflowEnter: () => {
+    set({ isEnteringWorkflow: true });
+    window.setTimeout(() => set({ isEnteringWorkflow: false }), 420);
+  },
 }));
 
 /** Tauri互換のpromptダイアログ（window.promptの代替） */

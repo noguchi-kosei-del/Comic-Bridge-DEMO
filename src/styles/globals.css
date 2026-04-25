@@ -551,6 +551,48 @@ img {
   animation: fs-splash 0.5s ease-out forwards;
 }
 
+/* ===== ホームに戻る退場アニメーション（手前 → 奥へフェードアウト） =====
+ * React の transition タイミング問題を避けるため keyframes animation 方式。
+ * このクラスが付与された瞬間にアニメが必ず走る。 */
+@keyframes exit-to-home {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0px);
+  }
+  100% {
+    transform: scale(0.6);
+    opacity: 0;
+    filter: blur(6px);
+  }
+}
+.animate-exit-to-home {
+  animation: exit-to-home 380ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform-origin: center center;
+  will-change: transform, opacity, filter;
+}
+
+/* ===== ワークフロー開始時の入場アニメーション（奥 → 手前へズームイン） =====
+ * exit-to-home の逆方向。ビュー全体が小さく・薄く・ボケた状態から、
+ * 通常サイズ・フル不透明・くっきりに迫り出してくる。 */
+@keyframes enter-from-back {
+  0% {
+    transform: scale(0.65);
+    opacity: 0;
+    filter: blur(6px);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0px);
+  }
+}
+.animate-enter-from-back {
+  animation: enter-from-back 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center center;
+  will-change: transform, opacity, filter;
+}
+
 /* ===== Dark Mode（MojiQ 互換パレット）=====
  * MojiQ Pro_1.0 の dark-theme CSS 変数に揃えたダークパレット。
  *   bg-primary:   #1e1e1e  (アプリ背景)
@@ -608,13 +650,8 @@ html.dark-mode-invert .border-border\/50 { border-color: rgb(68 68 68 / 0.5) !im
 
 /* border-b / border-t / border-l / border-r 系（color は上の border-border* が適用される） */
 
-/* アクセント（MojiQ 準拠 #0078d4） */
-html.dark-mode-invert .bg-accent { background-color: #0078d4 !important; }
-html.dark-mode-invert .text-accent { color: #3a9ae6 !important; }
-html.dark-mode-invert .border-accent { border-color: #0078d4 !important; }
-html.dark-mode-invert .bg-accent\/10 { background-color: rgb(0 120 212 / 0.15) !important; }
-html.dark-mode-invert .bg-accent\/15 { background-color: rgb(0 120 212 / 0.2) !important; }
-html.dark-mode-invert .bg-accent\/5 { background-color: rgb(0 120 212 / 0.1) !important; }
+/* アクセント色はライト/ダーク共通で CSS 変数（--cb-accent-rgb 等）を参照する。
+ * ユーザーが設定パネルで選んだ色がそのままダーク時にも適用される。 */
 
 /* ─── ボタンシャインエフェクト（Tachimi btn-execute 準拠、ホバー時のみ発火） ─── */
 @keyframes cb-button-shine {
@@ -628,6 +665,45 @@ html.dark-mode-invert .bg-accent\/5 { background-color: rgb(0 120 212 / 0.1) !im
   position: relative;
   overflow: hidden;
   isolation: isolate;
+  /* メタリック仕上げ:
+   *   - 上端の白い縁ハイライト（くっきり）
+   *   - 下端の暗い縁 + 内側下方のソフトな暗影 → 「丸い金属」感
+   *   - 外側に accent カラーの glow（CSS 変数連動）+ 微かな drop shadow */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    inset 0 -12px 22px -10px rgba(0, 0, 0, 0.20),
+    0 8px 20px -4px rgba(var(--cb-accent-rgb), 0.45),
+    0 2px 4px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.18s ease-out, transform 0.18s ease-out;
+}
+
+.btn-shine:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    inset 0 -12px 22px -10px rgba(0, 0, 0, 0.22),
+    0 12px 28px -4px rgba(var(--cb-accent-rgb), 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.10);
+}
+
+/* ダークモード時は暗影を強め、ハイライトを少し抑える */
+html.dark-mode-invert .btn-shine {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.40),
+    inset 0 -12px 22px -10px rgba(0, 0, 0, 0.35),
+    0 8px 20px -4px rgba(var(--cb-accent-rgb), 0.45),
+    0 2px 4px rgba(0, 0, 0, 0.30);
+}
+
+html.dark-mode-invert .btn-shine:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    inset 0 -12px 22px -10px rgba(0, 0, 0, 0.40),
+    0 12px 28px -4px rgba(var(--cb-accent-rgb), 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.35);
 }
 
 .btn-shine::before {
@@ -658,14 +734,96 @@ html.dark-mode-invert .bg-accent\/5 { background-color: rgb(0 120 212 / 0.1) !im
   display: none;
 }
 
-/* ─── メニュー三角吹き出し用変数（light / dark 両対応） ─── */
+/* ==========================================================================
+ * iOS 風ボタンベース効果（全 button に自動適用、.no-glass でオプトアウト）
+ *   - 上端の白い 1px 縁ハイライト
+ *   - 上から下への半透明グラデーション overlay（ガラス感）
+ *   - hover で微かに brightness up、active で scale-down + brightness down
+ *   - .btn-shine 付きボタンは別アニメ優先のため除外
+ * ========================================================================== */
+
+button {
+  position: relative;
+  isolation: isolate; /* stacking context を作って擬似要素と中身の順序を保証 */
+  transition: transform 0.12s ease-out, filter 0.15s ease-out;
+}
+
+/* グラデーション overlay（::before、ボタン背景の上に重ねる）
+ * メタリック感: 上 30% 白 → 中盤フェード → 下端 subtle dark で「光って沈む」表現 */
+button:not(.no-glass):not(.btn-shine)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.32) 0%,
+    rgba(255, 255, 255, 0.08) 45%,
+    rgba(0, 0, 0, 0.04) 100%
+  );
+  z-index: 0;
+}
+
+/* 縁ハイライト（::after、上下に 1px の白/黒インナーボーダー）
+ * 上縁を 0.55 まで強めて iOS / macOS の金属ボタンらしいクッキリしたエッジを出す */
+button:not(.no-glass):not(.btn-shine)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+  z-index: 0;
+}
+
+/* hover で subtle brightness up */
+button:not(.no-glass):not(:disabled):not([aria-disabled="true"]):hover {
+  filter: brightness(1.05);
+}
+
+/* active で押下感（scale + brightness 落ち） */
+button:not(.no-glass):not(:disabled):not([aria-disabled="true"]):active {
+  transform: scale(0.97);
+  filter: brightness(0.95);
+}
+
+/* ダークモード時はハイライトを弱め、下方の影を強めに */
+html.dark-mode-invert button:not(.no-glass):not(.btn-shine)::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 50%,
+    transparent 100%
+  );
+}
+
+html.dark-mode-invert button:not(.no-glass):not(.btn-shine)::after {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+/* ─── メニュー三角吹き出し用変数 + アクセントカラー変数（light / dark 両対応） ─── */
 :root {
   --cb-border-color: #d5d9e0;
   --cb-menu-bg: #ffffff;
+  /* アクセントカラー（settingsStore.accentColor から AppLayout が更新）。
+   * Tailwind の bg-accent/15 等 opacity モディファイアを動かすため、
+   * RGB triplet（"R G B" 形式、カンマなし）として保持する。 */
+  --cb-accent-rgb:           58 123 213;   /* #3a7bd5 標準ブルー */
+  --cb-accent-hover-rgb:     0 120 212;    /* #0078d4 */
+  --cb-accent-secondary-rgb: 0 120 212;    /* #0078d4 */
+  --cb-accent-tertiary-rgb:  30 144 255;   /* #1e90ff */
+  --cb-accent-warm-rgb:      30 107 184;   /* #1e6bb8 */
+  --cb-accent-glow:          rgba(58, 123, 213, 0.20);
 }
 html.dark-mode-invert {
   --cb-border-color: #444444;
   --cb-menu-bg: #2c2c2c;
+  /* アクセントカラーはライト/ダーク共通でユーザー指定色を尊重 */
 }
 
 /* ─── ホバー / フォーカス / アクティブ variant（MojiQ 準拠ダーク色） ─── */
@@ -678,35 +836,27 @@ html.dark-mode-invert .hover\:bg-bg-elevated:hover { background-color: #4c4c4c !
 html.dark-mode-invert .hover\:bg-bg-tertiary\/50:hover { background-color: rgb(60 60 60 / 0.5) !important; }
 html.dark-mode-invert .hover\:bg-bg-tertiary\/70:hover { background-color: rgb(60 60 60 / 0.7) !important; }
 html.dark-mode-invert .hover\:bg-bg-tertiary\/80:hover { background-color: rgb(60 60 60 / 0.8) !important; }
-html.dark-mode-invert .hover\:bg-accent\/5:hover { background-color: rgb(0 120 212 / 0.12) !important; }
-html.dark-mode-invert .hover\:bg-accent\/10:hover { background-color: rgb(0 120 212 / 0.15) !important; }
-html.dark-mode-invert .hover\:bg-accent\/15:hover { background-color: rgb(0 120 212 / 0.2) !important; }
-html.dark-mode-invert .hover\:bg-accent\/20:hover { background-color: rgb(0 120 212 / 0.25) !important; }
-html.dark-mode-invert .hover\:bg-accent\/25:hover { background-color: rgb(0 120 212 / 0.3) !important; }
+/* hover:bg-accent/* はアクセント CSS 変数経由で自動適用される */
 
 /* text hover */
 html.dark-mode-invert .hover\:text-text-primary:hover { color: #f6f6f6 !important; }
 html.dark-mode-invert .hover\:text-text-secondary:hover { color: #aaaaaa !important; }
 html.dark-mode-invert .hover\:text-text-muted:hover { color: #888888 !important; }
-html.dark-mode-invert .hover\:text-accent:hover { color: #3a9ae6 !important; }
+/* hover:text-accent はアクセント CSS 変数経由で自動適用される */
 
 /* border hover */
 html.dark-mode-invert .hover\:border-border:hover { border-color: #444444 !important; }
 html.dark-mode-invert .hover\:border-border-light:hover { border-color: #555555 !important; }
-html.dark-mode-invert .hover\:border-accent\/30:hover { border-color: rgb(0 120 212 / 0.4) !important; }
-html.dark-mode-invert .hover\:border-accent\/40:hover { border-color: rgb(0 120 212 / 0.5) !important; }
-html.dark-mode-invert .hover\:border-accent\/50:hover { border-color: rgb(0 120 212 / 0.6) !important; }
+/* hover:border-accent/* はアクセント CSS 変数経由で自動適用される */
 
 /* group-hover */
 html.dark-mode-invert .group:hover .group-hover\:bg-bg-tertiary { background-color: #3c3c3c !important; }
 html.dark-mode-invert .group:hover .group-hover\:bg-bg-elevated { background-color: #4c4c4c !important; }
 html.dark-mode-invert .group:hover .group-hover\:text-text-primary { color: #f6f6f6 !important; }
-html.dark-mode-invert .group:hover .group-hover\:text-accent { color: #3a9ae6 !important; }
-html.dark-mode-invert .group:hover .group-hover\:border-accent\/40 { border-color: rgb(0 120 212 / 0.5) !important; }
+/* group-hover:text-accent / border-accent はアクセント CSS 変数経由で自動適用される */
 
 /* focus / focus-visible / active */
-html.dark-mode-invert .focus\:border-accent:focus { border-color: #0078d4 !important; }
-html.dark-mode-invert .focus\:border-accent\/50:focus { border-color: rgb(0 120 212 / 0.6) !important; }
+/* focus:border-accent はアクセント CSS 変数経由で自動適用される */
 html.dark-mode-invert .focus\:bg-bg-tertiary:focus { background-color: #3c3c3c !important; }
 html.dark-mode-invert .active\:bg-bg-tertiary:active { background-color: #3c3c3c !important; }
 

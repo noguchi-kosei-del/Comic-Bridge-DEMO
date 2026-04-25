@@ -121,7 +121,7 @@ function migrateNavBar(existing: string[] | undefined): string[] {
 
 export const useSettingsStore = create<AppSettings>((set, get) => ({
   fontSize: saved.fontSize || "medium",
-  accentColor: saved.accentColor || "#7c5cff",
+  accentColor: saved.accentColor || "#3a7bd5",
   darkMode: saved.darkMode ?? false,
   defaultFolderPath: saved.defaultFolderPath || "",
   navBarButtons: migrateNavBar(saved.navBarButtons),

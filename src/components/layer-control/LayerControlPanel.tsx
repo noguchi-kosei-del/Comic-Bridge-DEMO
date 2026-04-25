@@ -384,7 +384,7 @@ export function LayerControlPanel() {
                   flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all duration-200
                   ${
                     mergeReorganizeText
-                      ? "bg-emerald-500/15 border border-emerald-500/50"
+                      ? "bg-accent/15 border border-accent/50"
                       : "bg-bg-secondary border border-white/5 hover:border-white/10"
                   }
                 `}
@@ -395,7 +395,7 @@ export function LayerControlPanel() {
                     w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-200
                     ${
                       mergeReorganizeText
-                        ? "bg-emerald-500 border-emerald-500"
+                        ? "bg-accent border-accent"
                         : "border-text-muted/50"
                     }
                   `}
@@ -425,7 +425,7 @@ export function LayerControlPanel() {
             <div className="bg-bg-tertiary rounded-xl p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <svg
-                  className="w-4 h-4 text-amber-400"
+                  className="w-4 h-4 text-accent"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -451,7 +451,7 @@ export function LayerControlPanel() {
                   flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all duration-200
                   ${
                     lockBottomLayer
-                      ? "bg-amber-500/15 border border-amber-500/50"
+                      ? "bg-accent/15 border border-accent/50"
                       : "bg-bg-secondary border border-white/5 hover:border-white/10"
                   }
                 `}
@@ -464,7 +464,7 @@ export function LayerControlPanel() {
                 <div
                   className={`
                     w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-200
-                    ${lockBottomLayer ? "bg-amber-500 border-amber-500" : "border-text-muted/50"}
+                    ${lockBottomLayer ? "bg-accent border-accent" : "border-text-muted/50"}
                   `}
                 >
                   {lockBottomLayer && (
@@ -484,7 +484,7 @@ export function LayerControlPanel() {
                   </p>
                 </div>
                 <svg
-                  className="w-4 h-4 text-amber-500/60 flex-shrink-0"
+                  className="w-4 h-4 text-accent/60 flex-shrink-0"
                   fill="none"
                   viewBox="0 0 16 16"
                   stroke="currentColor"
@@ -506,7 +506,7 @@ export function LayerControlPanel() {
                   flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all duration-200
                   ${
                     unlockAllLayers
-                      ? "bg-sky-500/15 border border-sky-500/50"
+                      ? "bg-accent/15 border border-accent/50"
                       : "bg-bg-secondary border border-white/5 hover:border-white/10"
                   }
                 `}
@@ -519,7 +519,7 @@ export function LayerControlPanel() {
                 <div
                   className={`
                     w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-200
-                    ${unlockAllLayers ? "bg-sky-500 border-sky-500" : "border-text-muted/50"}
+                    ${unlockAllLayers ? "bg-accent border-accent" : "border-text-muted/50"}
                   `}
                 >
                   {unlockAllLayers && (
@@ -539,7 +539,7 @@ export function LayerControlPanel() {
                   </p>
                 </div>
                 <svg
-                  className="w-4 h-4 text-sky-500/60 flex-shrink-0"
+                  className="w-4 h-4 text-accent/60 flex-shrink-0"
                   fill="none"
                   viewBox="0 0 16 16"
                   stroke="currentColor"
@@ -559,7 +559,7 @@ export function LayerControlPanel() {
             <div className="bg-bg-tertiary rounded-xl p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <svg
-                  className="w-4 h-4 text-sky-400"
+                  className="w-4 h-4 text-accent"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -588,13 +588,13 @@ export function LayerControlPanel() {
                 <div className="space-y-1.5">
                   {customVisCount > 0 && (
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="w-2 h-2 rounded-full bg-sky-400" />
+                      <span className="w-2 h-2 rounded-full bg-accent" />
                       <span className="text-text-secondary">表示/非表示: {customVisCount} 件</span>
                     </div>
                   )}
                   {customMoveCount > 0 && (
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="w-2 h-2 rounded-full bg-violet-400" />
+                      <span className="w-2 h-2 rounded-full bg-accent-tertiary" />
                       <span className="text-text-secondary">移動: {customMoveCount} 件</span>
                     </div>
                   )}
@@ -676,7 +676,7 @@ export function LayerControlPanel() {
                     name="layerMoveSearchScope"
                     checked={layerMoveSearchScope === "all"}
                     onChange={() => setLayerMoveSearchScope("all")}
-                    className="accent-violet-500"
+                    style={{ accentColor: "rgb(var(--cb-accent-rgb))" }}
                   />
                   <span className="text-sm text-text-primary">ドキュメント全体</span>
                 </label>
@@ -686,7 +686,7 @@ export function LayerControlPanel() {
                     name="layerMoveSearchScope"
                     checked={layerMoveSearchScope === "group"}
                     onChange={() => setLayerMoveSearchScope("group")}
-                    className="accent-violet-500"
+                    style={{ accentColor: "rgb(var(--cb-accent-rgb))" }}
                   />
                   <span className="text-sm text-text-primary">特定グループ内</span>
                 </label>
@@ -696,7 +696,7 @@ export function LayerControlPanel() {
                     value={layerMoveSearchGroupName}
                     onChange={(e) => setLayerMoveSearchGroupName(e.target.value)}
                     placeholder="グループ名"
-                    className="w-full bg-bg-elevated border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-violet-500 focus:outline-none ml-5"
+                    className="w-full bg-bg-elevated border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none ml-5"
                     style={{ width: "calc(100% - 20px)" }}
                   />
                 )}
@@ -711,14 +711,14 @@ export function LayerControlPanel() {
                 value={layerMoveTargetName}
                 onChange={(e) => setLayerMoveTargetName(e.target.value)}
                 placeholder="移動先グループ名"
-                className="w-full bg-bg-elevated border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-violet-500 focus:outline-none"
+                className="w-full bg-bg-elevated border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
               />
               <div
                 className={`
                   flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all duration-200 mt-2
                   ${
                     layerMoveCreateIfMissing
-                      ? "bg-violet-500/15 border border-violet-500/50"
+                      ? "bg-accent/15 border border-accent/50"
                       : "bg-bg-secondary border border-white/5 hover:border-white/10"
                   }
                 `}
@@ -729,7 +729,7 @@ export function LayerControlPanel() {
                     w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-200
                     ${
                       layerMoveCreateIfMissing
-                        ? "bg-violet-500 border-violet-500"
+                        ? "bg-accent border-accent"
                         : "border-text-muted/50"
                     }
                   `}
@@ -779,14 +779,15 @@ export function LayerControlPanel() {
                       value={layerMoveCondName}
                       onChange={(e) => setLayerMoveCondName(e.target.value)}
                       placeholder="レイヤー名"
-                      className="w-full bg-bg-elevated border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-violet-500 focus:outline-none"
+                      className="w-full bg-bg-elevated border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
                     />
                     <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer">
                       <input
                         type="checkbox"
                         checked={layerMoveCondNamePartial}
                         onChange={(e) => setLayerMoveCondNamePartial(e.target.checked)}
-                        className="rounded accent-violet-500"
+                        className="rounded"
+                        style={{ accentColor: "rgb(var(--cb-accent-rgb))" }}
                       />
                       部分一致
                     </label>
@@ -806,7 +807,7 @@ export function LayerControlPanel() {
                 value={organizeTargetName}
                 onChange={(e) => setOrganizeTargetName(e.target.value)}
                 placeholder="#原稿#"
-                className="w-full bg-bg-elevated border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-warning focus:outline-none"
+                className="w-full bg-bg-elevated border border-white/10 rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none"
               />
             </div>
 
@@ -823,7 +824,7 @@ export function LayerControlPanel() {
                   flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all duration-200
                   ${
                     organizeIncludeSpecial
-                      ? "bg-warning/15 border border-warning/50"
+                      ? "bg-accent/15 border border-accent/50"
                       : "bg-bg-secondary border border-white/5 hover:border-white/10"
                   }
                 `}
@@ -832,7 +833,7 @@ export function LayerControlPanel() {
                 <div
                   className={`
                     w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-200
-                    ${organizeIncludeSpecial ? "bg-warning border-warning" : "border-text-muted/50"}
+                    ${organizeIncludeSpecial ? "bg-accent border-accent" : "border-text-muted/50"}
                   `}
                 >
                   {organizeIncludeSpecial && (
@@ -1035,7 +1036,7 @@ export function LayerControlPanel() {
                     ? `${files[0].filePath.replace(/\\/g, "/").split("/").slice(-2, -1)[0] || "output"}_統合`
                     : "output"
                 }
-                className="flex-1 min-w-0 px-2 py-0.5 text-[11px] bg-white/80 border border-black/5 rounded-lg text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
+                className="flex-1 min-w-0 px-2 py-0.5 text-[11px] bg-white/80 border border-black/5 rounded-lg text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-1 focus:ring-accent/40"
               />
             </div>
             <p className="text-[10px] text-text-muted leading-tight">
@@ -1227,19 +1228,9 @@ function ModeButton({
   const isSelected = currentMode === mode;
 
   const selectedClass =
-    mode === "hide"
-      ? "bg-accent text-white"
-      : mode === "show"
-        ? "bg-accent-tertiary text-white"
-        : mode === "layerMove"
-          ? "bg-violet-500 text-white"
-          : mode === "custom"
-            ? "bg-sky-500 text-white"
-            : mode === "lock"
-              ? "bg-amber-500 text-white"
-              : mode === "merge"
-                ? "bg-emerald-500 text-white"
-                : "bg-warning text-white";
+    mode === "show"
+      ? "bg-accent-tertiary text-white"
+      : "bg-accent text-white";
 
   return (
     <button
@@ -1350,7 +1341,7 @@ function LayerMoveConditionItem({
         flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all duration-200
         ${
           checked
-            ? "bg-violet-500/15 border border-violet-500/50"
+            ? "bg-accent/15 border border-accent/50"
             : "bg-bg-secondary border border-white/5 hover:border-white/10"
         }
       `}
@@ -1359,7 +1350,7 @@ function LayerMoveConditionItem({
       <div
         className={`
           w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all duration-200
-          ${checked ? "bg-violet-500 border-violet-500" : "border-text-muted/50"}
+          ${checked ? "bg-accent border-accent" : "border-text-muted/50"}
         `}
       >
         {checked && (

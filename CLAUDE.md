@@ -2352,3 +2352,242 @@ textLogFolderPath: string      // テキストログフォルダパス
 - MojiQ 互換ダーク化で filter 反転を廃止したため、ダーク時に色味が大きく変わる。`dark-mode-invert` クラス名は互換性のため据え置き。
 - `specViewMode` 初期値を `"home"` に変更したため、既存ユーザーも起動時はホームから始まる（`localStorage` での永続化はなし）。
 - `WorkflowBar` コンポは `executeStepNav` / `ProofLoadOverlay` を外部から再利用するため `export` 化済み。本体のバー UI は TopNav から削除されているが、HomeLayout のワークフロー▶ ピッカーから間接的に呼ばれる。
+
+---
+
+## v3.x: アクセントカラー設定連動 + iOS 風メタリックボタン + 画面遷移アニメーション統一
+
+本節は「アクセントカラーの動的化」「全ボタンの iOS 風メタリック仕上げ」「ホーム ↔ ワークフロー遷移アニメ」「ホーム画面タブの slide pill 化」「レイヤー制御の color 統一」の一連の整理をまとめる。
+
+### 1. アクセントカラーを設定パネルから動的に変更可能に
+従来 `tailwind.config.js` に固定値（`#3a7bd5`）として焼き込まれていた `accent` トークンを **CSS 変数経由** に書き換え、`settingsStore.accentColor` の変更が即座にアプリ全体に反映されるようにした。
+
+**新規:** [src/lib/colorUtils.ts](src/lib/colorUtils.ts)
+- `hexToHsl()` / `hslToHex()` / `hexToRgba()` / `hexToRgbTriplet()` の純粋関数
+- `deriveAccentPalette(baseHex)` — 基準色から hover (`-10% lightness`) / tertiary (`+6%`) / warm (`-14% L, -8% S`) を機械的に派生 + `glow` (`alpha 0.20`)
+
+**改修:** [tailwind.config.js](tailwind.config.js#L28-L37)
+- `accent.{DEFAULT,hover,secondary,tertiary,warm}` を `rgb(var(--cb-accent-*-rgb) / <alpha-value>)` 形式に変更（`bg-accent/15` 等の opacity モディファイア対応のため RGB triplet + alpha placeholder）
+- `accent.glow` のみ完全な rgba 文字列（`var(--cb-accent-glow)`）
+
+**改修:** [src/styles/globals.css](src/styles/globals.css)
+- `:root` に `--cb-accent-rgb: 58 123 213` などスペース区切りの RGB triplet 5 つ + `--cb-accent-glow` を追加
+- `html.dark-mode-invert` スコープから `bg-accent` / `text-accent` / `border-accent` / `hover:*-accent` / `group-hover:*-accent` / `focus:border-accent` 系の固定値上書きを **撤去**（CSS 変数経由になったので不要）
+
+**改修:** [src/components/layout/AppLayout.tsx](src/components/layout/AppLayout.tsx#L33-L66)
+- ダークモード切替の useEffect とは別に、`accentColor` 変更時に `deriveAccentPalette` → `hexToRgbTriplet` で 5 つの triplet + glow を `document.documentElement.style.setProperty("--cb-accent-*-rgb", ...)` する useEffect を追加
+- 旧 `--settings-accent`（未配線）の処理は削除
+
+**改修:** [src/store/settingsStore.ts](src/store/settingsStore.ts#L124)
+- `accentColor` 初期値を `#7c5cff`（旧パープル）→ **`#3a7bd5`（標準ブルー）** に
+
+**改修:** [src/components/layout/SettingsPanel.tsx](src/components/layout/SettingsPanel.tsx)
+- `ACCENT_COLORS` 配列を 8 → 9 色に再構成、先頭を「ブルー（標準）`#3a7bd5`」、末尾に「ダークグレー `#52525b`」を追加
+- 「※カラー変更は今後対応予定」注記を削除
+
+### 2. レイヤー制御パネルの操作色を accent に統一
+[LayerControlPanel.tsx](src/components/layer-control/LayerControlPanel.tsx) のモードボタンとモード内 UI の色をすべて accent 系に揃えた（モード固有の violet/sky/amber/emerald 配色を撤廃）。
+
+- **ModeButton (6 モード)**: hide=`bg-accent`、show=`bg-accent-tertiary`、その他（layerMove/custom/lock/merge）も全て `bg-accent text-white` に統一
+- **lockBottomLayer / unlockAllLayers** チェックボックス: amber → accent、sky → accent
+- **layerMove モード**: violet → accent、`focus:border-violet-500` → `focus:border-accent` (3 箇所)
+- **整理モード「白消し・棒消しも含む」**: warning (オレンジ) → accent、`focus:border-warning` → `focus:border-accent`
+- **merge モード「テキスト整理」**: emerald → accent
+- **custom モードのサマリ**: `bg-sky-400` / `bg-violet-400` → `bg-accent` / `bg-accent-tertiary`
+- **native HTML radio/checkbox** の `accent-violet-500` → `style={{ accentColor: "rgb(var(--cb-accent-rgb))" }}` で CSS 変数連動化（3 箇所）
+
+注: PSD レイヤータイプアイコン色（`#f06292` 等）、警告系 `text-amber-500`、Photoshop ブランド `[#31A8FF]` などの **意味色** は意図的に維持。
+
+### 3. iOS 風メタリックボタン効果（全 button 自動適用）
+700+ 件のボタンを個別書き換えせず、`globals.css` のグローバル CSS だけで全 `<button>` に **縁ハイライト + 上下グラデ + 押下感** を乗せる方針。
+
+**実装** ([globals.css](src/styles/globals.css)):
+```css
+button { position: relative; isolation: isolate; transition: transform 0.12s, filter 0.15s; }
+
+/* グラデーション overlay（ガラス感） */
+button:not(.no-glass):not(.btn-shine)::before {
+  inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.32) 0%,
+    rgba(255,255,255,0.08) 45%,
+    rgba(0,0,0,0.04) 100%);
+}
+/* 縁ハイライト */
+button:not(.no-glass):not(.btn-shine)::after {
+  inset: 0; pointer-events: none; border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.10);
+}
+/* hover で brightness up、active で scale-down */
+button:not(.no-glass):...:hover  { filter: brightness(1.05); }
+button:not(.no-glass):...:active { transform: scale(0.97); filter: brightness(0.95); }
+```
+
+**設計判断**:
+- 透明背景の icon-only ボタンには半透明オーバーレイがほぼ見えないので副作用なし
+- `.btn-shine` は別アニメ優先のため擬似要素から除外（メタリックは inset shadow 直接付与で実現、後述）
+- `.no-glass` でオプトアウト可能。WindowControls 3 ボタン（最小化/最大化/閉じる）に適用 — 閉じるボタンの `#e81123` 赤 hover を綺麗に保つため
+- ダークモード: `html.dark-mode-invert` スコープでハイライトを 0.55 → 0.10 に弱め、下方シャドウを 0.10 → 0.25 に強めて統一感
+
+**初期値はライトで控えめ → ユーザーフィードバックで大幅強化**:
+- 上端ハイライト 0.22 → **0.55** (2.5 倍)、グラデ上端 0.14 → 0.32 (2 倍超)
+- 下端に微かな暗色 (`rgba(0,0,0,0.04)`) を加えて「光って沈む」金属感
+
+### 4. ワークフロー▶ボタンのメタリック仕上げ
+`.btn-shine` 自身に inset shadow + outer accent glow を直接当てて、iOS の Tinted Button 風の質感に。
+
+**実装** ([globals.css](src/styles/globals.css)):
+```css
+.btn-shine {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.55),         /* 上端の白い縁 */
+    inset 0 -1px 0 rgba(0,0,0,0.18),              /* 下端の暗縁 */
+    inset 0 -12px 22px -10px rgba(0,0,0,0.20),    /* 内側下方の暗影 = お椀型 */
+    0 8px 20px -4px rgba(var(--cb-accent-rgb), 0.45),  /* outer glow（accent 連動） */
+    0 2px 4px rgba(0,0,0,0.08);                   /* drop shadow */
+}
+.btn-shine:hover { /* glow と暗影を強化 */ }
+html.dark-mode-invert .btn-shine { /* ハイライト弱め、暗影強め */ }
+```
+
+- `rgba(var(--cb-accent-rgb), 0.45)` でアクセントカラー切替時に glow も追従
+- 既存の `:hover::before` 白いスイープアニメと共存（box-shadow vs ::before）
+
+### 5. 画面遷移アニメーション 2 種（exit-to-home + enter-from-back）
+**問題:** 当初 SpecCheckView 親 div に `transition: scale + opacity + blur` を適用していたが、ユーザーが押す「ホーム」ボタンは TopNav の HomeNavButton（**SpecCheckView 外**）で、SpecCheckView がそもそもマウントされていない別ビュー（unifiedViewer 等）から戻るケースで親 div のアニメは効かなかった。
+
+**解決:** ViewRouter ラッパー div に `@keyframes` ベースのアニメ class を付与する方式に再設計。
+
+**実装** ([globals.css](src/styles/globals.css)):
+```css
+/* ホームへ戻る: 手前 → 奥へフェードアウト */
+@keyframes exit-to-home {
+  0%   { transform: scale(1);    opacity: 1; filter: blur(0px); }
+  100% { transform: scale(0.6);  opacity: 0; filter: blur(6px); }
+}
+.animate-exit-to-home { animation: exit-to-home 380ms cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+/* ワークフロー入場: 奥 → 手前へズームイン */
+@keyframes enter-from-back {
+  0%   { transform: scale(0.65); opacity: 0; filter: blur(6px); }
+  100% { transform: scale(1);    opacity: 1; filter: blur(0px); }
+}
+.animate-enter-from-back { animation: enter-from-back 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+```
+
+**実装** ([viewStore.ts](src/store/viewStore.ts)):
+```ts
+isExitingHome: boolean;
+isEnteringWorkflow: boolean;
+
+goToHomeWithExit: () => {
+  // 動的 import で psdStore と循環依存回避
+  // 既にホーム表示中ならスキップ
+  set({ isExitingHome: true });
+  setTimeout(() => {
+    set({ activeView: "specCheck", isExitingHome: false });
+    psd.setSpecViewMode("home");
+  }, 380);
+},
+triggerWorkflowEnter: () => {
+  set({ isEnteringWorkflow: true });
+  setTimeout(() => set({ isEnteringWorkflow: false }), 420);
+},
+```
+
+**実装** ([ViewRouter.tsx](src/components/layout/ViewRouter.tsx)):
+```tsx
+<div className={`flex-1 overflow-hidden bg-bg-primary relative ${
+  isExitingHome ? "animate-exit-to-home"
+  : isEnteringWorkflow ? "animate-enter-from-back" : ""
+}`}>
+```
+
+**呼び出し箇所**:
+- TopNav の HomeNavButton + NavBar specCheck onClick → `useViewStore.getState().goToHomeWithExit()`
+- SpecCheckView 内の「ホーム」ボタン → 同上
+- HomeLayout の `handleSelectWorkflow` → `useViewStore.getState().triggerWorkflowEnter()` を `startWorkflow(wf)` 直後に呼ぶ
+
+**重要:** CSS `transition` 方式は React の re-render と値変化検知が噛み合わずスキップされるケースがある（特に Tailwind の `--tw-scale-x` 経由）。`@keyframes animation` 方式はクラス付与の瞬間に必ず実行されるためタイミング問題が起きない。
+
+### 6. ホーム画面タブのスライディング pill
+[HomeLayout.tsx](src/components/views/HomeLayout.tsx) の Chrome 風タブ（すべて / 入稿 / 初稿確認 / 差し替え / TIFF化）を **絶対配置の pill が左右にスライド** する方式に書き換え。
+
+**実装**:
+- `tabsContainerRef` + `tabRefs.current[id]` で各タブ button の `getBoundingClientRect()` を計測
+- `useEffect` + `ResizeObserver` で `activeTileTab` 変化時 + リサイズ時に `tabPillStyle = { left, width, ready }` を更新
+- pill = `<div className="absolute bottom-0 -mb-px bg-bg-secondary border border-b-0 border-border rounded-t-lg transition-all duration-300 ease-out" style={{ left, width, top: "0.25rem" }} />`
+- pill 背景色 = `bg-bg-secondary`（コンテンツパネルと同色）+ `rounded-t-lg` + `border-b-0` でパネルとシームレスに繋がる「同化」表現
+- 各 tab button は `bg-transparent` + `no-glass`（pill の上に乗るのでガラス効果は除外）
+
+切替時に pill が 300ms かけて `ease-out` で横スライドし、選択中タブは下のコンテンツパネルと同一面のように見える。
+
+### 7. その他の細かい改修
+- **設定ダイアログ右上 ×ボタン削除** ([SettingsPanel.tsx](src/components/layout/SettingsPanel.tsx)) — フッターの「閉じる」ボタンと背景クリック / Escape で代替可能
+- **設定パネルのバージョン表示** `v0.0.0` → **`Ver 0.0.0`**（大文字 + スペース）
+- **SpecCheckView 下部の白背景装飾 div 削除** — `pointer-events-none absolute bottom-0 bg-white border-t border-border z-[5] h-16 ...` の純粋装飾要素を撤去
+
+### 主要変更ファイル一覧
+| 区分 | パス |
+|---|---|
+| 新規 | [src/lib/colorUtils.ts](src/lib/colorUtils.ts) — HSL 変換 + 派生パレット |
+| 改修 | [tailwind.config.js](tailwind.config.js) — accent を CSS 変数化 |
+| 改修 | [src/styles/globals.css](src/styles/globals.css) — `:root` accent 変数 / iOS 風 button 擬似要素 / btn-shine メタリック / exit-to-home + enter-from-back keyframes / dark accent 上書き撤去 |
+| 改修 | [src/components/layout/AppLayout.tsx](src/components/layout/AppLayout.tsx) — accentColor → CSS 変数更新 useEffect |
+| 改修 | [src/components/layout/SettingsPanel.tsx](src/components/layout/SettingsPanel.tsx) — 9 色プリセット / ×ボタン削除 / Ver 表記 |
+| 改修 | [src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) — HomeNavButton / NavBar specCheck onClick を `goToHomeWithExit()` に統一、WindowControls 3 ボタンに `no-glass` |
+| 改修 | [src/components/layout/ViewRouter.tsx](src/components/layout/ViewRouter.tsx) — ラッパー div に exit/enter アニメ class |
+| 改修 | [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) — `goToHome` を viewStore 経由に / 「ホームへ戻る」ボタンの inline transition 削除 / 下部白背景 div 削除 |
+| 改修 | [src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) — タブ pill (ResizeObserver で位置追従) / `triggerWorkflowEnter()` 呼出 |
+| 改修 | [src/components/layer-control/LayerControlPanel.tsx](src/components/layer-control/LayerControlPanel.tsx) — モードボタン + 各モード内 UI の色を accent 系に統一、native input は CSS 変数連動 |
+| 改修 | [src/store/viewStore.ts](src/store/viewStore.ts) — `isExitingHome` / `isEnteringWorkflow` state + `goToHomeWithExit()` / `triggerWorkflowEnter()` action |
+| 改修 | [src/store/settingsStore.ts](src/store/settingsStore.ts) — `accentColor` 初期値を `#3a7bd5` に |
+
+### 注意事項
+- アクセントカラー追加時は `accent` トークンの派生（hover/secondary/tertiary/warm/glow）が `colorUtils.deriveAccentPalette` の HSL 変換で機械的に生成される。基準色さえ指定すればパレット全体が自動構成される
+- `.no-glass` を新規ボタンで使う場面はほぼない（透明 / icon-only でも副作用なし）。例外は WindowControls のように特定の hover 色（赤 #e81123 等）を綺麗に出したい場合のみ
+- `goToHomeWithExit()` / `triggerWorkflowEnter()` は **どこからでも呼べる**（zustand store action）。新規にホーム遷移 UI を作る場合は必ず `goToHomeWithExit()` を経由させること
+- ホームから別ビューへ遷移するアニメは現状 enter-from-back のみ。ワークフロー以外で「奥 → 手前」の演出が必要なら `triggerWorkflowEnter()` を流用するか、新規 keyframe を追加
+
+---
+
+## DEMO 環境再構成: GitHub プル → _backup から UI 一式を反映 (2026-04-25)
+
+### 概要
+DEMO リポジトリ (`noguchi-kosei-del/Comic-Bridge-DEMO`) を `C:\Users\noguchi-kosei\Desktop\Comic-Bridge DEMO\` にプル後、隣接 `_backup/` に保存されていた 2026-04-24 の UI/アニメーション一連の改修 (前 2 セクション) を反映させた作業ログ。
+
+### 1. 初期セットアップ
+- 既存の `_backup/` と `Desktop.ini` が残るディレクトリに `git init` → `remote add origin` → `git pull origin main` でリポジトリを初期化
+- ローカルブランチを `master` → `main` にリネームし、`origin/main` を tracking
+- `start-dev.bat` 起動時に pdfium ダウンロード後の存在チェックで失敗 (curl は成功しコピーも echo されるが post-check で失敗) → `_backup/src-tauri/resources/pdfium/pdfium.dll` をコピーして回避。以降のステップは `:download_pdfium` サブルーチンをスキップ
+
+### 2. _backup から反映した変更
+- **`src/` 全体を wholesale 置換**: 19 変更ファイル + 新規 2 ファイル (`src/lib/colorUtils.ts`, `src/components/views/HomeLayout.tsx`)
+- **`tailwind.config.js`** (accent CSS 変数化版)
+- **`CLAUDE.md`** (最新ドキュメント同期)
+
+### 3. DEMO 識別子保持のため触らなかったファイル
+- `src-tauri/tauri.conf.json` — DEMO の updater endpoint (`noguchi-kosei-del/Comic-Bridge-DEMO`) と pubkey、`version: "1.0.1"` を維持。UI 関連フィールド (`decorations: false`, `minWidth: 1200`, `productName: "Comic-Bridge DEMO"`, capabilities の window permission 等) は既に DEMO 版に取り込まれていたため変更不要
+- `package.json` — `version: "1.0.1"` 維持 (deps は `_backup` と完全一致)
+- `package-lock.json` — `npm install` 実行で版数が `3.8.1 → 1.0.1` に正常同期 (これはコミット対象)
+- `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` — version のみ差分、依存解決に変更なし
+- `src-tauri/src/` — Rust ソース不変
+- `src-tauri/capabilities/default.json` — 完全同一
+- `start-dev.bat` — byte-identical
+
+### 4. .gitignore 追加
+ローカル作業領域を誤コミットしないため:
+```
+_backup/
+.claude/
+```
+
+### 5. リリース構成 (DEMO 環境)
+- リリース CI: [.github/workflows/release.yml](.github/workflows/release.yml) `on: push: tags: 'v*'` で発火、`tauri-apps/tauri-action@v0.5` 使用
+- PDFium 自動ダウンロードステップ込み (line 38-52)
+- 必要 secrets: `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (DEMO リポジトリに設定済み — v1.0.0 / v1.0.1 が既にリリース実績あり)
+- リリース手順は通常版と同じ: `package.json` / `tauri.conf.json` / `Cargo.toml` の 3 ファイルを同一バージョンに更新 → コミット → `git tag vX.X.X && git push origin vX.X.X` で CI 起動
+
+### 6. 既知の癖
+- `start-dev.bat` の pdfium ダウンロード処理は環境依存で post-check に失敗するケースあり。`pdfium.dll` を手動配置 or `_backup` から流用すれば `if not exist "%PDFIUM_DLL%"` の最初のガードでスキップされる
+- 古い `package-lock.json` が `version: "3.8.1"` (上流) のまま残っていたが `npm install` で `1.0.1` に修正済

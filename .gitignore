@@ -19,6 +19,10 @@ Desktop.ini
 # Personal notes
 comicbridge改善案.txt
 
+# Local backup / scratch
+_backup/
+.claude/
+
 # Logs
 *.log
 npm-debug.log*

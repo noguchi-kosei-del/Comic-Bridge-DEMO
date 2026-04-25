@@ -27,7 +27,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTextExtract } from "../../hooks/useTextExtract";
 import { useHighResPreview } from "../../hooks/useHighResPreview";
 import { detectPaperSize } from "../../lib/paperSize";
-import { showPromptDialog } from "../../store/viewStore";
+import { showPromptDialog, useViewStore } from "../../store/viewStore";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { FileContextMenu } from "../common/FileContextMenu";
 import { HomeLayout } from "./HomeLayout";
@@ -73,11 +73,8 @@ export function SpecCheckView() {
   const [tachimiError, setTachimiError] = useState<string | null>(null);
   const [showPreviewPanel, setShowPreviewPanel] = useState(true);
   const [showDetailPanel, setShowDetailPanel] = useState(true);
-  const [isExitingToHome, setIsExitingToHome] = useState(false);
-  // ホームモードに切り替わったら退場フラグをリセット
-  useEffect(() => {
-    if (viewMode !== "home") setIsExitingToHome(false);
-  }, [viewMode]);
+  // 退場アニメーションは viewStore.goToHomeWithExit が ViewRouter ラッパー div に
+  // animate-exit-to-home クラスを付けて実行する（SpecCheckView ローカル state は不要）
   const [showActionBar, setShowActionBar] = useState(true);
   const [showTextExtractInPanel, setShowTextExtractInPanel] = useState(false);
   const textExtract = useTextExtract();
@@ -427,21 +424,13 @@ export function SpecCheckView() {
     return <HomeLayout />;
   }
 
-  // ホームへ戻る退場アニメーション（左→右スライド + フェード）
+  // ホームへ戻る = ViewRouter ラッパーで keyframes アニメ → 380ms 後に specViewMode="home"
   const goToHome = () => {
-    if (isExitingToHome) return;
-    setIsExitingToHome(true);
-    window.setTimeout(() => {
-      usePsdStore.getState().setSpecViewMode("home");
-    }, 300);
+    useViewStore.getState().goToHomeWithExit();
   };
 
   return (
-    <div
-      className={`flex flex-col h-full overflow-hidden transition-all duration-300 ease-in ${
-        isExitingToHome ? "translate-x-8 opacity-0" : "translate-x-0 opacity-100"
-      }`}
-    >
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Main 3-column layout */}
       <div className="flex-1 flex overflow-hidden" data-tool-panel>
 
@@ -871,15 +860,6 @@ export function SpecCheckView() {
           )}
           {viewMode === "layers" && <SpecLayerGrid layoutMode={layerLayoutMode} />}
           {/* layerCheck は隔離中 — コードを実行しない */}
-
-          {/* 下部ボタン領域の白背景（展開時: 横幅いっぱい h-16、折りたたみ時: ボタンサイズの小片） */}
-          <div
-            className={`pointer-events-none absolute bottom-0 bg-white border-t border-border z-[5] transition-all duration-200 ease-out ${
-              showActionBar
-                ? "left-0 right-[12px] h-16 rounded-none"
-                : "right-[12px] h-7 w-9 rounded-tl-md border-l"
-            }`}
-          />
 
           {/* 折りたたみトグル用の縦区切り線（展開時のみ） */}
           {showActionBar && (
