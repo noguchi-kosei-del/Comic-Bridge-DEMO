@@ -470,21 +470,18 @@ function TopNavDataButtons() {
       ) : (
         <>
           {/* テキスト */}
-          <SmallBtn loaded={textLoaded} icon={FileText} title="テキスト読み込み" clearTitle="クリア"
+          <SmallBtn loaded={textLoaded} icon={FileText} title="テキスト読み込み"
             onLoad={handleOpenText}
-            onClear={() => { const v = useUnifiedViewerStore.getState(); v.setTextContent(""); v.setTextFilePath(null); v.setTextHeader([]); v.setTextPages([]); v.setIsDirty(false); }}
             tooltip={textTooltip}
           />
           {/* 作品情報 */}
-          <SmallBtn loaded={presetsLoaded} icon={FileJson} title="作品情報JSON" clearTitle="クリア"
+          <SmallBtn loaded={presetsLoaded} icon={FileJson} title="作品情報JSON"
             onLoad={() => useViewStore.getState().setJsonBrowserMode("preset")}
-            onClear={() => { useUnifiedViewerStore.getState().setFontPresets([]); useUnifiedViewerStore.getState().setPresetJsonPath(null); }}
             tooltip={presetTooltip}
           />
           {/* 校正JSON */}
-          <SmallBtn loaded={checkLoaded} icon={ClipboardCheck} title="校正JSON" clearTitle="クリア"
+          <SmallBtn loaded={checkLoaded} icon={ClipboardCheck} title="校正JSON"
             onLoad={() => useViewStore.getState().setJsonBrowserMode("check")}
-            onClear={() => useUnifiedViewerStore.getState().setCheckData(null)}
             tooltip={checkTooltip}
           />
         </>
@@ -494,26 +491,26 @@ function TopNavDataButtons() {
 }
 
 // ─── 小さなデータ読み込みボタン ───
-function SmallBtn({ loaded, icon: Icon, title, clearTitle, onLoad, onClear, tooltip }: {
-  loaded: boolean; icon: LucideIcon; title: string; clearTitle: string;
-  onLoad: () => void; onClear: () => void;
+function SmallBtn({ loaded, icon: Icon, title, onLoad, tooltip }: {
+  loaded: boolean; icon: LucideIcon; title: string;
+  onLoad: () => void;
   tooltip?: string;
 }) {
+  // 読み込み済みは [Icon ラベル ✓] の単一ボタン。✓ は視覚インジケータのみ（クリア機能なし）。
+  // クリックで再読み込み（ファイルピッカーを開く）。
   const bgCls = loaded
     ? "bg-sky-500/15 text-sky-500 hover:bg-sky-500/25"
-    : "bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/70";
+    : "bg-bg-tertiary text-text-muted hover:bg-bg-elevated";
   return (
-    <div className="flex items-center gap-0.5">
-      <button onClick={onLoad} className={`h-6 px-2 inline-flex items-center gap-1 rounded-md transition-colors ${bgCls}`} title={tooltip || title}>
-        <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-        <span className="text-[10px] font-medium whitespace-nowrap">{title}</span>
-      </button>
-      {loaded && (
-        <button onClick={onClear} className="w-3.5 h-3.5 flex items-center justify-center rounded text-sky-500 hover:bg-sky-500/15 transition-colors" title={clearTitle}>
-          <Check className="w-3 h-3" strokeWidth={3} />
-        </button>
-      )}
-    </div>
+    <button
+      onClick={onLoad}
+      className={`h-6 px-2 inline-flex items-center gap-1 rounded-md transition-colors ${bgCls}`}
+      title={tooltip || title}
+    >
+      <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+      <span className="text-[10px] font-medium whitespace-nowrap">{title}</span>
+      {loaded && <Check className="w-3 h-3 flex-shrink-0" strokeWidth={3} aria-hidden />}
+    </button>
   );
 }
 
@@ -639,6 +636,18 @@ function TopNavToolMenu() {
   // 見た目は PsDesign の save-menu 方式（三角吹き出し / ヘッダー付きセクション）、
   // 開閉はホバー（mouseEnter で開き、mouseLeave でディレイ後に閉じる）
   const [hover, setHover] = useState(false);
+  // 閉じアニメ中もマウントを保持するための rendered フラグ
+  const [rendered, setRendered] = useState(false);
+  useEffect(() => {
+    if (hover) {
+      setRendered(true);
+      return;
+    }
+    if (!rendered) return;
+    const t = window.setTimeout(() => setRendered(false), 160);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hover]);
   const ref = useRef<HTMLDivElement>(null);
   const setActiveView = useViewStore((s) => s.setActiveView);
   const scanJsonPath = useScanPsdStore((s) => s.currentJsonFilePath);
@@ -672,10 +681,12 @@ function TopNavToolMenu() {
           <circle cx="3" cy="13" r="1.3" /><circle cx="8" cy="13" r="1.3" /><circle cx="13" cy="13" r="1.3" />
         </svg>
       </button>
-      {hover && (
+      {rendered && (
         <div
           role="menu"
-          className="absolute left-0 top-full mt-3 z-[1000] min-w-[220px] bg-bg-secondary border border-border rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.35)] text-text-primary"
+          className={`absolute left-0 top-full mt-3 z-[1000] min-w-[220px] bg-bg-secondary border border-border rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.35)] text-text-primary ${
+            hover ? "animate-dropdown-down" : "animate-dropdown-down-close pointer-events-none"
+          }`}
         >
           {/* 三角吹き出し（上向き、トリガーボタン中心を指す。overflow 外に配置して clip 回避）
               ボタン (w-7=28px) の中心 14px に tip を合わせる: left 8px + borderLeft 6px = 14px */}
@@ -700,9 +711,11 @@ function TopNavToolMenu() {
                   role="menuitem"
                   className={itemCls}
                   onClick={() => {
-                    if (btn.id === "layers") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("layers"); }
-                    else if (btn.id === "layerControl") { setActiveView("layers"); }
-                    else setActiveView(btn.id as any);
+                    useViewStore.getState().slideToTool(() => {
+                      if (btn.id === "layers") { setActiveView("specCheck"); usePsdStore.getState().setSpecViewMode("layers"); }
+                      else if (btn.id === "layerControl") { setActiveView("layers"); }
+                      else setActiveView(btn.id as any);
+                    });
                     setHover(false);
                   }}
                 >
@@ -722,21 +735,23 @@ function TopNavToolMenu() {
                 role="menuitem"
                 className={itemCls}
                 onClick={() => {
-                  try {
-                    localStorage.removeItem("folderSetup_progenMode");
-                    localStorage.removeItem("progen_wfCheckMode");
-                  } catch { /* ignore */ }
-                  useProgenStore.getState().setToolMode(mode.id);
-                  useProgenStore.getState().setScreen(mode.id === "proofreading" ? "extraction" : mode.id);
-                  useViewStore.getState().setProgenMode(mode.id);
-                  const _lbl = useScanPsdStore.getState().workInfo.label || (() => {
-                    const jp = useScanPsdStore.getState().currentJsonFilePath || useUnifiedViewerStore.getState().presetJsonPath || "";
-                    if (!jp) return "";
-                    const ps = jp.replace(/\//g, "\\").split("\\");
-                    return ps.length >= 2 ? ps[ps.length - 2] : "";
-                  })();
-                  if (_lbl) useProgenStore.getState().loadMasterRule(_lbl);
-                  setActiveView("progen");
+                  useViewStore.getState().slideToTool(() => {
+                    try {
+                      localStorage.removeItem("folderSetup_progenMode");
+                      localStorage.removeItem("progen_wfCheckMode");
+                    } catch { /* ignore */ }
+                    useProgenStore.getState().setToolMode(mode.id);
+                    useProgenStore.getState().setScreen(mode.id === "proofreading" ? "extraction" : mode.id);
+                    useViewStore.getState().setProgenMode(mode.id);
+                    const _lbl = useScanPsdStore.getState().workInfo.label || (() => {
+                      const jp = useScanPsdStore.getState().currentJsonFilePath || useUnifiedViewerStore.getState().presetJsonPath || "";
+                      if (!jp) return "";
+                      const ps = jp.replace(/\//g, "\\").split("\\");
+                      return ps.length >= 2 ? ps[ps.length - 2] : "";
+                    })();
+                    if (_lbl) useProgenStore.getState().loadMasterRule(_lbl);
+                    setActiveView("progen");
+                  });
                   setHover(false);
                 }}
               >
@@ -756,8 +771,10 @@ function TopNavToolMenu() {
                 role="menuitem"
                 className={itemCls}
                 onClick={() => {
-                  useViewStore.getState().setKenbanViewMode(mode.id);
-                  setActiveView("inspection");
+                  useViewStore.getState().slideToTool(() => {
+                    useViewStore.getState().setKenbanViewMode(mode.id);
+                    setActiveView("inspection");
+                  });
                   setHover(false);
                 }}
               >

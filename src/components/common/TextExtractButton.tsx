@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTextExtract } from "../../hooks/useTextExtract";
 import { invoke } from "@tauri-apps/api/core";
 import type { PsdFile } from "../../types";
@@ -10,9 +10,12 @@ import type { PsdFile } from "../../types";
 export function TextExtractButton({
   compact = false,
   files,
+  variant = "accent",
 }: {
   compact?: boolean;
   files?: PsdFile[];
+  /** "accent" = 青基調 / "neutral" = ActionButton と同じ無彩色（ダークモード時に白文字化） */
+  variant?: "accent" | "neutral";
 }) {
   const {
     psdFiles,
@@ -29,16 +32,29 @@ export function TextExtractButton({
     handleExtract,
   } = useTextExtract(files);
   const [showOptions, setShowOptions] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 外側クリックでポップオーバーを閉じる
+  useEffect(() => {
+    if (!showOptions) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowOptions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [showOptions]);
 
   if (psdFiles.length === 0) return null;
 
   return (
     <>
-      <div className="relative">
+      <div className="relative" ref={containerRef}>
         {/* オプションポップオーバー */}
         {showOptions && (
           <div
-            className="absolute bottom-full right-0 mb-3 w-72 bg-white rounded-xl shadow-elevated border border-border p-4 space-y-3"
+            className="absolute bottom-full right-0 mb-3 w-72 bg-bg-secondary rounded-xl shadow-elevated border border-border p-4 space-y-3"
             style={{ animation: "toast-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" }}
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -137,7 +153,11 @@ export function TextExtractButton({
 
         {/* メインボタン */}
         <button
-          className={`${compact ? "h-8 px-3 text-sm" : "h-10 px-4 text-base"} font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1 whitespace-nowrap bg-bg-secondary border-2 border-[#3a7bd5]/40 text-[#3a7bd5] hover:bg-bg-elevated hover:border-[#3a7bd5]/60 hover:shadow-[0_4px_16px_rgba(58,123,213,0.25)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed`}
+          className={`${compact ? "h-8 px-3 text-sm" : "h-10 px-4 text-base"} font-bold rounded-xl shadow-2xl transition-all duration-200 flex items-center justify-center gap-1 whitespace-nowrap bg-bg-secondary border-2 ${
+            variant === "neutral"
+              ? "border-border text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+              : "border-accent/40 text-accent hover:bg-bg-elevated hover:border-accent/60"
+          } active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed`}
           onClick={() => {
             setResult(null);
             setShowOptions(!showOptions);
@@ -148,7 +168,7 @@ export function TextExtractButton({
           {isExtracting ? (
             <>
               <div
-                className={`${compact ? "w-4 h-4" : "w-5 h-5"} rounded-full border-2 border-[#3a7bd5]/30 border-t-[#3a7bd5] animate-spin`}
+                className={`${compact ? "w-4 h-4" : "w-5 h-5"} rounded-full border-2 border-accent/30 border-t-accent animate-spin`}
               />
               <span className={compact ? "text-xs" : "text-base"}>抽出中...</span>
             </>

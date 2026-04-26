@@ -578,8 +578,9 @@ export function SpecScanJsonDialog({ onClose, inline, targetFiles }: SpecScanJso
     <div
       className="fixed inset-0 z-[200] flex items-start justify-center pt-[10vh] bg-black/40"
       onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {content}
+      <div onClick={(e) => e.stopPropagation()}>{content}</div>
     </div>
   );
 }

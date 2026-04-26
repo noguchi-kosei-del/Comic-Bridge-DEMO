@@ -361,7 +361,7 @@ export function RequestPrepView() {
               <div className="text-[9px] text-text-muted font-mono truncate">{proofNgFile.split("\\").pop()}</div>
             </div>
             {/* チェック */}
-            <div className={`p-3 rounded-xl border ${proofOk ? "bg-success/5 border-success/20" : "bg-warning/5 border-warning/20"}`}>
+            <div className={`p-3 rounded-xl border ${proofOk ? "bg-success/5 border-success/20" : "bg-accent/5 border-accent/20"}`}>
               <div className="flex gap-2 flex-wrap">
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${proofPdf ? "bg-success/15 text-success" : "bg-error/15 text-error"}`}>{proofPdf ? "✓" : "✗"} PDF</span>
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${proofTxt ? "bg-success/15 text-success" : "bg-error/15 text-error"}`}>{proofTxt ? "✓" : "✗"} テキスト</span>
@@ -404,19 +404,19 @@ export function RequestPrepView() {
             )}
             {/* チェック */}
             {items.length > 0 && mode === "ingest" && (
-              <div className={`p-3 rounded-xl border ${ingestChecks.every(Boolean) ? "bg-success/5 border-success/20" : "bg-warning/5 border-warning/20"}`}>
+              <div className={`p-3 rounded-xl border ${ingestChecks.every(Boolean) ? "bg-success/5 border-success/20" : "bg-accent/5 border-accent/20"}`}>
                 <div className="flex gap-2 flex-wrap">
                   {ingestLabels.map((label, i) => (
                     <span key={label} className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${ingestChecks[i] ? "bg-success/15 text-success" : "bg-error/15 text-error"}`}>{ingestChecks[i] ? "✓" : "✗"} {label}</span>
                   ))}
                 </div>
                 {ingestLabels.filter((_, i) => !ingestChecks[i]).length > 0 && (
-                  <div className="text-[9px] text-warning mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />不足: {ingestLabels.filter((_, i) => !ingestChecks[i]).join("、")}</div>
+                  <div className="text-[9px] text-error mt-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />不足: {ingestLabels.filter((_, i) => !ingestChecks[i]).join("、")}</div>
                 )}
               </div>
             )}
             {items.length > 0 && mode === "whiteout" && (
-              <div className={`p-3 rounded-xl border ${whiteoutOk ? "bg-success/5 border-success/20" : "bg-warning/5 border-warning/20"}`}>
+              <div className={`p-3 rounded-xl border ${whiteoutOk ? "bg-success/5 border-success/20" : "bg-accent/5 border-accent/20"}`}>
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${hasManuscript ? "bg-success/15 text-success" : "bg-error/15 text-error"}`}>{hasManuscript ? "✓" : "✗"} 原稿（PSD）</span>
               </div>
             )}

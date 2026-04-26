@@ -94,8 +94,12 @@ export function GuideEditorModal() {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
       onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => { if (e.target === e.currentTarget) closeEditor(); }}
     >
-      <div className="bg-bg-secondary rounded-lg shadow-2xl w-[95vw] max-w-6xl h-[90vh] flex flex-col overflow-hidden relative">
+      <div
+        className="bg-bg-secondary rounded-lg shadow-2xl w-[95vw] max-w-6xl h-[90vh] flex flex-col overflow-hidden relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-text-muted/10">
           <h2 className="text-lg font-medium text-text-primary">ガイド編集</h2>
@@ -286,7 +290,7 @@ export function GuideEditorModal() {
                 </div>
               )}
               {existingGuideCount > 0 && (
-                <div className="text-xs bg-warning/10 border border-warning/20 rounded-lg px-3 py-2 text-warning">
+                <div className="text-xs bg-accent/10 border border-accent/20 rounded-lg px-3 py-2 text-accent">
                   {existingGuideCount}件のファイルに既存ガイドあり → 置き換えられます
                 </div>
               )}

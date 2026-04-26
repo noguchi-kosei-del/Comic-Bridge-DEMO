@@ -346,11 +346,11 @@ export function ReplacePanel() {
               label="スイッチ差替え"
               description="白消し ⇔ 棒消し を切り替え"
               icon={<SwitchIcon />}
-              color="warning"
+              color="accent-warm"
               onSelect={setMode}
             />
             {settings.mode === "switch" && (
-              <div className="ml-3 pl-3 border-l-2 border-warning/30 space-y-2">
+              <div className="ml-3 pl-3 border-l-2 border-accent-warm/30 space-y-2">
                 <label
                   className="flex items-center gap-2 cursor-pointer"
                   onClick={() => setSwitchSubMode("whiteToBar")}
@@ -402,11 +402,11 @@ export function ReplacePanel() {
               label="合成"
               description="2種類の原稿から要素を選択して合成"
               icon={<ComposeIcon />}
-              color="warning"
+              color="accent-warm"
               onSelect={setMode}
             />
             {settings.mode === "compose" && (
-              <div className="ml-3 pl-3 border-l-2 border-warning/30 space-y-2">
+              <div className="ml-3 pl-3 border-l-2 border-accent-warm/30 space-y-2">
                 <p className="text-[10px] text-text-muted">
                   原稿Aと原稿Bから要素ごとにソースを選択して合成します。
                 </p>
@@ -505,7 +505,7 @@ export function ReplacePanel() {
                       partialMatch: true,
                     });
                   }}
-                  className="flex items-center gap-1 text-[10px] text-warning hover:text-warning/80 transition-colors"
+                  className="flex items-center gap-1 text-[10px] text-accent hover:text-accent-hover transition-colors"
                 >
                   <svg
                     className="w-3 h-3"

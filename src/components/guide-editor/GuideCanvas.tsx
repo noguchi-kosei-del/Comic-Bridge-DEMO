@@ -363,8 +363,11 @@ export function GuideCanvas({ imageUrl, imageSize, isLoading, onZoomChange }: Gu
           gridTemplateRows: `${RULER_SIZE}px 1fr`,
         }}
       >
-        {/* Ruler Corner */}
-        <div className="bg-bg-tertiary border-r border-b border-border-light" />
+        {/* Ruler Corner — CanvasRuler と完全に同じ色（背景 #ecf2fa / 縁 #bcd0ee） */}
+        <div
+          className="border-r border-b"
+          style={{ backgroundColor: "#ecf2fa", borderRightColor: "#bcd0ee", borderBottomColor: "#bcd0ee" }}
+        />
 
         {/* Horizontal Ruler (creates vertical guides) */}
         <div className="overflow-hidden">

@@ -2685,3 +2685,167 @@ cp "src-tauri/icons/32x32.png" "public/app-icon.png"
 | 上書き | [public/app-icon.png](public/app-icon.png) — 32×32 をコピー |
 | 新規 | `logo/comic-bridge_icon.png` — アイコンソース原本 |
 | バージョン | [package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml) — 1.0.3 → 1.0.4 |
+
+---
+
+## v1.0.5: テキストエディタ・ビューアー大型刷新 + UI ポリッシュ + 横スライド遷移 + ショートカット拡張 (2026-04-26)
+
+v1.0.4 以降の累積アップデート。テキストエディタ↔ProGen 間のスライドアニメ導入から始まり、ビューアー UI の統合・スクショ機能の動線整理・グローバルショートカット追加・ダークモード対応強化・色味の統一など多領域に渡る整備を 1 リリースに集約。
+
+### 1. テキストエディタ ⇔ ProGen / ホーム ⇔ 詳細 横スライド遷移
+[viewStore.ts](src/store/viewStore.ts) に `slidePhase` (`exit-left`/`exit-right`/`enter-from-right`/`enter-from-left`/`exit-up`/`enter-from-bottom` | null) を追加。`runSlideTransition(get, set, direction, switchView)` ヘルパーを抽出して 4 アクションを統一:
+- `slideToTextEditor()` / `slideToProgen()` — ProGen ⇔ TextEditor: 右→左 / 左→右モーション
+- `slideToHomeDetail()` / `slideFromDetailToHome()` — ホーム ⇔ 詳細: 同パターン
+- `slideToTool(switchView)` — TopNav ツールメニュー → 任意ビュー: 下→上モーション (exit-up 200ms → enter-from-bottom 320ms)
+- 中断ガード: `setTimeout` 内で `get().slidePhase` 再確認、別ナビ介入時は no-op
+- `setActiveView` / `goToHomeWithExit` でも `slidePhase: null` クリアで他ナビと整合
+
+[globals.css](src/styles/globals.css) に対応 keyframes 6 種 + utility class 6 種:
+- `slide-out-left/right` / `slide-in-from-left/right` (220/320ms cubic-bezier expo-out)
+- `slide-out-up` (200ms ease-in) / `slide-in-from-bottom` (320ms expo-out)
+
+[ViewRouter.tsx](src/components/layout/ViewRouter.tsx) のラッパー className に全フェーズの分岐を追加。
+
+呼び出し側:
+- ProgenRuleView「テキストエディタ」ボタン → `slideToTextEditor()`
+- UnifiedViewer (textEditorMode) ProGen ボタン (新設) → `slideToProgen()`
+- HomeLayout 詳細▶ → `slideToHomeDetail()`
+- SpecCheckView「ホーム」ボタン → `slideFromDetailToHome()`
+- TopNav ツールメニュー全 3 セクション (一般 / ProGen / 検版) → `slideToTool()` 経由
+
+### 2. UnifiedViewer トップバー大規模統合
+- **二段だったツールバー (`bg-bg-secondary` 保存バー + `bg-bg-tertiary/50` タブセレクタ) を 1 本に統合**
+  - 旧 Bar B (タブセレクタ + 未保存表示 + プリセット切替) のコンテンツを Bar A の右側 (`flex-1` スペーサー後) に移設
+  - 縦領域 28px 節約
+- **画像ナビバー全体を撤去**: 旧 `flex-shrink-0 h-6 bg-bg-tertiary/30 ...` センターナビバーを丸ごと削除し、◀ N/M ▶ / − Z% + / 単ページ化 系コントロールをトップバー (別名保存の左) に移設。`detectPaperSize` import / dpi+colorMode 表示も削除
+- **ズームボタン並び替え**: `[+] [zoom%] [−]` (拡大が左、縮小が右)
+- **下部ステータスバー削除**: `flex-shrink-0 h-5 bg-bg-secondary border-t border-border ... text-text-muted/60 gap-3` をビューアー本体および ProgenImageViewer 両方から撤去
+- **保存ドロップダウン化** (PsDesign 互換 `SaveDropdown` 新設): 旧「保存」「別名保存」テキストボタン 2 個を **`Save` アイコン 1 個 + クリック展開ドロップダウン** に統合。メニューには「上書き保存 (Ctrl+S)」「別名で保存 (Ctrl+Shift+S)」の 2 項目、三角ポインター・clickaway / Escape close 対応。トップバーの最左端に配置
+- **テキストエディタモード専用ボタン**: ProGen ジャンプボタン (`Sparkles` アイコン)、未保存インジケータも同バー上に共存
+
+### 3. ビューアー キーボードショートカット拡張
+- **Ctrl + ←/→**: ページ先頭 / 末尾へジャンプ (`goFirst()` / `goLast()`)。spread モードでは `logicalPage` を 0 / `maxLogicalPage-1` に
+- **Ctrl + J**: `showPromptDialog` 経由でページ番号入力 → `parseInt` + 範囲クランプ + 1ベース→0ベース変換 → ジャンプ
+- 既存 ←/→ (前/次)、Ctrl+/-/0 (ズーム)、P (Photoshop 起動) は維持
+- INPUT/TEXTAREA/SELECT 内では発火しないガードで競合回避
+
+### 4. グローバルショートカット
+[AppLayout.tsx](src/components/layout/AppLayout.tsx#L85): Ctrl+A 全選択ハンドラに **Ctrl+O (Cmd+O) フォルダ選択** を追加。Tauri `@tauri-apps/plugin-dialog` の `open({ directory: true })` → `currentFolderPath` 更新 → `psdLoadFolder` で読込 → `triggerRefresh`。INPUT/TEXTAREA/SELECT 内では発火しない。
+
+### 5. 写植仕様タブ刷新 + スクショボタン動線整理
+**[SpecLayerGrid.tsx](src/components/spec-checker/SpecLayerGrid.tsx) の構造再編:**
+- ファイルカード (旧 `border-accent ring-2 ring-accent/30 bg-accent/5 shadow-md`) を **「枠だけ青く変化」**: `border-accent bg-bg-secondary/50` のみ、リング・塗り・影削除
+- ヘッダーから `{N}L` / `{N}T` バッジ削除 (ファイル名のみ表示)
+- カード本体に **トグル展開機能** 追加: シェブロンボタンで開閉、初期状態は閉、展開時のみ `border-b border-border/60` のヘッダー区切り表示
+- グリッドコンテナに `items-start` 追加 — カード展開時に隣接カードが引き伸ばされる挙動を解消
+- グリッド上部に「**すべて展開 / すべて閉じる**」トグルボタン追加 (`expandedIds: Set<string>` を親で集中管理)
+- テキストレイヤー行を**ゼブラストライプ化**: 偶数行 `#eaf2fb` (LayerTree と統一)
+- 各行レイアウト変更: ○pt をバッジ化 (`text-[9px] px-1 py-px rounded bg-bg-tertiary text-text-muted`) してレイヤー名の **上** に配置、テキストプレビュー (`text-text-muted/50 truncate`) を削除
+- 全ファイル合計サマリーの「使用フォント」と「サイズ統計」の間に `border-t border-border/40` の細い区切り線追加
+
+**スクショ → フォント帳 機能の動線整理:**
+- 旧スクショボタン (`px-2 py-1.5 border-b border-border/30 space-y-1.5` の使用フォント表示エリア内) を撤去
+- ビューアー画像エリア左上にスクショボタンを新設 (リロードボタンと対角配置)
+- 有効化条件を `写植仕様タブ open + フォント選択中` の AND に強化、状態に応じてツールチップ・トースト 3 段階切替 (`!specOpen → "写植仕様タブを開いてください" / !activeFontFilter → "フォント選択してください" / 両方OK → 「{font名}」をフォント帳にキャプチャ`)
+- テキストエディタモード (`textEditorMode`) ではボタン非表示
+
+### 6. ホーム画面アクションボタン整理
+- ワークフロー大ボタンを **ホバー開閉ドロップダウン** に変更 (TopNav ツールメニューと同パターン): `wfHoverRef` + 300ms ディレイ閉、外側 mousedown で `setOpen(false)`、`role="menu"` / `aria-haspopup`
+- リスト下端に **下向き三角フキダシ** (`-bottom-[7px] left-1/2 -translate-x-1/2`、border-trick 2 重で枠+塗り、CSS 変数 `--cb-border-color` / `--cb-menu-bg` で light/dark 自動切替)
+- リスト本体は outer (三角配置 + 枠) + inner (`overflow-auto rounded-xl`) 2 層構造で三角の clip 回避
+- メニュー展開中もシャイン継続: 新 keyframe `cb-button-shine-loop` (3.5s infinite) + `.btn-shine-active` クラスを `wfPickerOpen` で動的付与
+- **メニュー出現/消失アニメ**:
+  - `dropdown-appear-down/up` (180ms expo-out, transform-origin: top/bottom center): 開く時の縦方向スライドイン
+  - `dropdown-disappear-down/up` (160ms ease-in): マウスアウト時の縦方向スライドアウト
+  - TopNav ToolMenu / HomeLayout Workflow の両方に適用、`rendered` ローカル state で閉じアニメ中もマウント維持
+
+### 7. ヘッダー データ読み込みボタン整理
+[TopNav.tsx](src/components/layout/TopNav.tsx) `SmallBtn`:
+- 旧「読み込み済み時に右隣にチェックマーク (クリックでクリア)」分割ボタン形式 → **アイコン + ラベル + ✓ を 1 つの単一ボタン内** で表示する形式に統一
+- クリア機能を完全削除 (再読み込みは同じボタンクリックでファイルピッカー再オープン)
+- 視覚指標としての `Check` アイコンは `aria-hidden` で残す
+
+### 8. PsDesign 風保存ドロップダウン (再掲、UnifiedViewer 専用)
+クリック開閉、外側 mousedown / Escape close、三角ポインター、メニュー項目に Save / FilePlus アイコン、Ctrl+S / Ctrl+Shift+S ショートカット表示。
+
+### 9. ホーム詳細ビュー (SpecCheckView) 構造整理
+- カラーモードボタン (TIFF) を **2 列グリッド化**: `flex` → `grid grid-cols-2 gap-0.5`、各ボタンを `flex-1` → `w-full` に
+- TIFF File List パネルを **折りたたみ可能化** (デフォルト閉): `w-8 ↔ w-[210px]` の transition、≪≫ シェブロンで開閉
+- ホームタイル切替時の `goToTile` の縦スライドはローカル state で維持
+
+### 10. 各種ダイアログ ↔ outside click close
+- [GuideEditorModal](src/components/guide-editor/GuideEditorModal.tsx): 背景 onClick で `e.target === e.currentTarget` 判定 → `closeEditor()`、内側 dialog に `e.stopPropagation()`
+- [SpecScanJsonDialog](src/components/spec-checker/SpecScanJsonDialog.tsx): 同パターン
+- [TextExtractButton](src/components/common/TextExtractButton.tsx): containerRef + `useEffect(() => { document.addEventListener("mousedown", ...) })` で外側 mousedown 検知してポップオーバー閉
+
+### 11. ガイドエディタ青基調化 + ルーラー色統一
+- **GuideCanvas ルーラーコーナー** (`bg-bg-tertiary border-border-light` → ハードコード `#ecf2fa` + 縁 `#bcd0ee`)
+- **CanvasRuler の塗り色を全て青基調に書き換え**: 背景 (`#f8f6f3` → `#ecf2fa`) / 画像範囲背景 (`#f0eeeb` → `#d8e5f4`) / 主目盛り (`#4a4a58` → `#1e3a5f`) / 中目盛り (`#8a8a98` → `#6a8aae`) / 補助目盛り (`#a8a8b4` → `#9cb0cb`) / エッジ (`#ddd8d3` → `#bcd0ee`)
+- **TiffCropEditor のルーラーコーナー** (`bg-[#f8f6f3] border-[#ddd8d3]` → 同 `#ecf2fa` / `#bcd0ee`) で完全一致
+- **`.btn-primary`** を `linear-gradient(#3a7bd5, #0078d4)` ハードコード → **CSS 変数連動** (`rgb(var(--cb-accent-rgb))` / `rgb(var(--cb-accent-hover-rgb))`) に書換 → 設定パネルアクセント変更が GuideEditor の「適用する」ボタンにも追従
+- 「既存ガイドあり → 置き換えられます」通知 (`bg-warning/10 border-warning/20 text-warning`) → **`bg-accent/10 border-accent/20 text-accent`** に変更
+
+### 12. レイヤー差替え/合成 配色のクリーンアップ
+- ComposePanel の warning 残り (input focus / divider 5 箇所) を `accent` / `border-border-light` に置換
+- 合成ヘッダーアイコン: `text-warning` → `text-text-muted` (グレー)
+- 合成「+ カスタム要素を追加」: `text-warning hover:text-warning/80` → `text-accent hover:text-accent-hover` (青文字)
+- ReplacePanel の **スイッチ差替え / 合成 ModeCard** を `color="warning"` → `color="accent-warm"` (Steel Blue)
+- スイッチ・合成セクションの左縦区切り線 `border-warning/30` → `border-accent-warm/30` で ModeCard と統一
+- ReplacePanel 合成モード内の「+ カスタム要素を追加」ボタンも `text-accent` 化
+
+### 13. リネーム UI 整理
+[LayerRenamePanel.tsx](src/components/rename/LayerRenamePanel.tsx) のリネームルール:
+- ヘッダー右側の [+ レイヤー][+ グループ] ボタンを撤去
+- 空状態時: メッセージ「ルールを追加して...」の **下** に `flex gap-1` でボタン配置
+- ルールあり時: ルールリストの **末尾** にも同ボタンを配置 (`flex gap-1 pt-1`)
+
+### 14. テキスト抽出ボタン ダークモード対応
+- ポップオーバー: `bg-white` → `bg-bg-secondary` (CSS 変数連動)
+- ボタン色: ハードコード `[#3a7bd5]` 系 4 箇所 → `accent` 変数ベース
+- スピナー: `border-[#3a7bd5]/30 border-t-[#3a7bd5]` → `border-accent/30 border-t-accent`
+- **`variant` prop 追加** (`"accent"` | `"neutral"`、デフォルト `"accent"`):
+  - 原因: HomeLayout のラッパー `[&>div>button]:!text-text-secondary` (descendant セレクタ経由) はダークモード上書き `html.dark-mode-invert .text-text-secondary` (クラス直接マッチのみ) に発火しない
+  - 対策: `variant="neutral"` でボタン本体に `text-text-secondary` クラスを直接適用
+  - HomeLayout 4 列アクションボタン行で `variant="neutral"` 指定 → ダーク時に `#aaaaaa` で他 ActionButton と一貫
+
+### 15. 依頼準備 / フォルダセットアップ 配色統一
+- [RequestPrepView.tsx](src/components/views/RequestPrepView.tsx) のチェック未完了ボックス 3 箇所 (`bg-warning/5 border-warning/20`) → `bg-accent/5 border-accent/20`
+- 「不足:」メッセージ (`text-warning`) → `text-error` (赤)
+- [FolderSetupView.tsx](src/components/views/FolderSetupView.tsx) の作品情報JSON セクション (badge / mode 切替ボタン / 既存JSON選択ボタン) の `purple-500` 系 3 箇所 → `accent` 系に統一
+
+### 16. その他細部修正
+- 見開き分割 ([SplitPreview.tsx](src/components/split/SplitPreview.tsx)) ヘッダーから画像サイズ表示削除、uneven モードボタンを `ml-auto` で右寄せ維持
+- ホーム詳細ヘッダーから PDF 表示モード切替ボタン (旧 `text-error bg-error/10` 系) を一旦削除し、user 要望で復元
+- ProGen ルール編集 → テキストエディタジャンプボタンを左端に移設 (上部バー整理)
+- UnifiedViewer 写植仕様タブ「使用フォント (M種/N ファイル)」エリアから旧スクショボタン削除
+
+### 主要変更ファイル
+| 区分 | パス |
+| --- | --- |
+| 改修 | [src/store/viewStore.ts](src/store/viewStore.ts) — slidePhase 機構 + 5 slide action + runSlideTransition helper |
+| 改修 | [src/styles/globals.css](src/styles/globals.css) — 14 種 keyframes (slide / dropdown / shine-loop) |
+| 改修 | [src/components/layout/AppLayout.tsx](src/components/layout/AppLayout.tsx) — Ctrl+O フォルダ選択 |
+| 改修 | [src/components/layout/ViewRouter.tsx](src/components/layout/ViewRouter.tsx) — slidePhase className 分岐 |
+| 改修 | [src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) — SmallBtn 単一ボタン化 / ToolMenu slideToTool / dropdown anim |
+| 改修 | [src/components/unified-viewer/UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx) — トップバー統合 / ナビバー撤去 / SaveDropdown / Ctrl+J/←→ |
+| 改修 | [src/components/unified-viewer/ProgenImageViewer.tsx](src/components/unified-viewer/ProgenImageViewer.tsx) — ステータスバー削除 |
+| 改修 | [src/components/spec-checker/SpecLayerGrid.tsx](src/components/spec-checker/SpecLayerGrid.tsx) — トグル展開 / 全展開ボタン / ゼブラ / バッジ化 |
+| 改修 | [src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) — ワークフロードロップダウン (ホバー / 三角 / シャイン継続) |
+| 改修 | [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) — slideFromDetailToHome 切替 |
+| 改修 | [src/components/views/TiffView.tsx](src/components/views/TiffView.tsx) — TiffFileList の固定幅撤去 |
+| 改修 | [src/components/tiff/TiffFileList.tsx](src/components/tiff/TiffFileList.tsx) — 折りたたみ機能 |
+| 改修 | [src/components/tiff/TiffSettingsPanel.tsx](src/components/tiff/TiffSettingsPanel.tsx) — カラーモード 2 列グリッド |
+| 改修 | [src/components/tiff/TiffCropEditor.tsx](src/components/tiff/TiffCropEditor.tsx) — ルーラーコーナー青基調 |
+| 改修 | [src/components/guide-editor/CanvasRuler.tsx](src/components/guide-editor/CanvasRuler.tsx) — 全描画色青基調化 |
+| 改修 | [src/components/guide-editor/GuideCanvas.tsx](src/components/guide-editor/GuideCanvas.tsx) — ルーラーコーナー青基調 |
+| 改修 | [src/components/guide-editor/GuideEditorModal.tsx](src/components/guide-editor/GuideEditorModal.tsx) — 背景クリックで閉、通知青化 |
+| 改修 | [src/components/spec-checker/SpecScanJsonDialog.tsx](src/components/spec-checker/SpecScanJsonDialog.tsx) — 背景クリックで閉 |
+| 改修 | [src/components/common/TextExtractButton.tsx](src/components/common/TextExtractButton.tsx) — variant prop / ダークモード対応 / 外側クリック close |
+| 改修 | [src/components/compose/ComposePanel.tsx](src/components/compose/ComposePanel.tsx) — warning カラー一掃 |
+| 改修 | [src/components/replace/ReplacePanel.tsx](src/components/replace/ReplacePanel.tsx) — ModeCard accent-warm 化 / 区切り線青化 / カスタム追加青化 |
+| 改修 | [src/components/rename/LayerRenamePanel.tsx](src/components/rename/LayerRenamePanel.tsx) — ボタン位置変更 |
+| 改修 | [src/components/views/RequestPrepView.tsx](src/components/views/RequestPrepView.tsx) — accent/error 系へ移行 |
+| 改修 | [src/components/views/FolderSetupView.tsx](src/components/views/FolderSetupView.tsx) — purple-500 を accent 化 |
+| 改修 | [src/components/split/SplitPreview.tsx](src/components/split/SplitPreview.tsx) — サイズ表示削除 |
+| 改修 | [src/components/progen/ProgenRuleView.tsx](src/components/progen/ProgenRuleView.tsx) — テキストエディタジャンプ slide 化 |
+| バージョン | [package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml) — 1.0.4 → 1.0.5 |

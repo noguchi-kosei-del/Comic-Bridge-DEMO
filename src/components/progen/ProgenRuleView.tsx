@@ -141,7 +141,7 @@ export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}
         {/* 上部バー（左: テキストエディタへジャンプ / 右: ドロップダウン2つ） */}
         <div className="flex-shrink-0 px-3 py-2 border-b border-border/30 bg-bg-tertiary/20 flex items-center gap-2">
           <button
-            onClick={() => useViewStore.getState().setActiveView("textEditor")}
+            onClick={() => useViewStore.getState().slideToTextEditor()}
             className="px-3 py-1.5 text-xs font-medium rounded-md bg-bg-secondary border border-border text-text-primary hover:bg-bg-elevated hover:border-accent/40 transition-colors inline-flex items-center gap-1.5"
             title="テキストエディタへ移動"
           >

@@ -447,13 +447,8 @@ export function SplitPreview() {
         <span className="text-xs font-medium text-text-primary truncate">
           {referenceFile.fileName}
         </span>
-        {imageSize && (
-          <span className="text-[10px] text-text-muted ml-auto flex-shrink-0">
-            {imageSize.width} x {imageSize.height}
-          </span>
-        )}
         {mode === "uneven" && (
-          <div className="flex items-center gap-0.5 ml-2 flex-shrink-0">
+          <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
             <button
               className="p-1 rounded hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors disabled:opacity-30 disabled:cursor-default"
               disabled={selectionHistory.length === 0 && previewGuides.length === 0}

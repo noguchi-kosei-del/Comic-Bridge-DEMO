@@ -53,12 +53,12 @@ export function CanvasRuler({
 
     ctx.scale(dpr, dpr);
 
-    // Background
-    ctx.fillStyle = "#f8f6f3";
+    // Background — accent/10 相当の薄青（GuideCanvas のコーナーと統一）
+    ctx.fillStyle = "#ecf2fa";
     ctx.fillRect(0, 0, displayW, displayH);
 
-    // Image area background (slightly different)
-    ctx.fillStyle = "#f0eeeb";
+    // Image area background (slightly darker blue for画像範囲の識別)
+    ctx.fillStyle = "#d8e5f4";
     if (isHorizontal) {
       ctx.fillRect(offset, 0, scaledImageSize, RULER_SIZE);
     } else {
@@ -79,19 +79,19 @@ export function CanvasRuler({
         const isMedium = unit % (majorStep / 2) === 0;
 
         if (isMajor) {
-          ctx.fillStyle = "#4a4a58";
+          ctx.fillStyle = "#1e3a5f";
           ctx.fillRect(Math.round(px), 0, 1, RULER_SIZE);
         } else if (isMedium) {
-          ctx.fillStyle = "#8a8a98";
+          ctx.fillStyle = "#6a8aae";
           ctx.fillRect(Math.round(px), RULER_SIZE - 11, 1, 11);
         } else {
-          ctx.fillStyle = "#a8a8b4";
+          ctx.fillStyle = "#9cb0cb";
           ctx.fillRect(Math.round(px), RULER_SIZE - 6, 1, 6);
         }
       }
 
       // Bottom edge
-      ctx.fillStyle = "#ddd8d3";
+      ctx.fillStyle = "#bcd0ee";
       ctx.fillRect(0, RULER_SIZE - 1, length, 1);
     } else {
       for (let unit = 0; unit <= imgDim; unit += minorStep) {
@@ -102,19 +102,19 @@ export function CanvasRuler({
         const isMedium = unit % (majorStep / 2) === 0;
 
         if (isMajor) {
-          ctx.fillStyle = "#4a4a58";
+          ctx.fillStyle = "#1e3a5f";
           ctx.fillRect(0, Math.round(py), RULER_SIZE, 1);
         } else if (isMedium) {
-          ctx.fillStyle = "#8a8a98";
+          ctx.fillStyle = "#6a8aae";
           ctx.fillRect(RULER_SIZE - 11, Math.round(py), 11, 1);
         } else {
-          ctx.fillStyle = "#a8a8b4";
+          ctx.fillStyle = "#9cb0cb";
           ctx.fillRect(RULER_SIZE - 6, Math.round(py), 6, 1);
         }
       }
 
       // Right edge
-      ctx.fillStyle = "#ddd8d3";
+      ctx.fillStyle = "#bcd0ee";
       ctx.fillRect(RULER_SIZE - 1, 0, 1, length);
     }
   }, [direction, length, imageSize, scaledImageSize, offset, getTickIntervals]);

@@ -935,17 +935,6 @@ export function ProgenImageViewer() {
         </div>
       </div>
 
-      {/* ─── Status bar ─── */}
-      <div className="flex-shrink-0 h-5 bg-bg-secondary border-t border-border flex items-center px-3 text-[10px] text-text-muted/60 gap-3">
-        <span>{files.length} ファイル</span>
-        {text.length > 0 && <span>{chunks.length} ブロック</span>}
-        {checkItems.length > 0 && (
-          <span>
-            校正: {simpleItems.length}正誤 / {variationItems.length}提案
-          </span>
-        )}
-        {pageSync && <span className="text-accent">ページ連動</span>}
-      </div>
     </div>
   );
 }

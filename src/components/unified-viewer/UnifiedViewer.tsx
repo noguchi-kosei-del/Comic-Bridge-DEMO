@@ -38,11 +38,10 @@ import {
 } from "../../store/unifiedViewerStore";
 import type { PanelTab } from "../../store/unifiedViewerStore";
 import { type ProofreadingCheckItem } from "../../types/typesettingCheck";
-import { detectPaperSize } from "../../lib/paperSize";
 import { JsonFileBrowser } from "../scanPsd/JsonFileBrowser";
 import { useScanPsdStore } from "../../store/scanPsdStore";
 import { usePsdStore } from "../../store/psdStore";
-import { useViewStore } from "../../store/viewStore";
+import { useViewStore, showPromptDialog } from "../../store/viewStore";
 import {
   collectTextLayers,
   FONT_COLORS,
@@ -67,7 +66,6 @@ import {
   type CacheEntry,
 } from "./utils";
 import {
-  ToolBtn,
   SortableBlockItem,
   CheckJsonBrowser,
 } from "./UnifiedSubComponents";
@@ -75,6 +73,7 @@ import { useViewerFileOps } from "./useViewerFileOps";
 import { LayerTree as FullLayerTree } from "../metadata/LayerTree";
 import { useFontBookStore } from "../../store/fontBookStore";
 import type { FontBookEntry } from "../../types/fontBook";
+import { Sparkles, Save, FilePlus } from "lucide-react";
 
 // (utils, helpers, sub-components are imported from ./utils and ./UnifiedSubComponents)
 
@@ -943,6 +942,29 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
     }
   }, [spreadMode, logicalPage, maxLogicalPage, idx, files.length]);
 
+  const goFirst = useCallback(() => {
+    if (spreadMode) setLogicalPage(0);
+    else if (files.length > 0) store.setCurrentFileIndex(0);
+  }, [spreadMode, files.length]);
+
+  const goLast = useCallback(() => {
+    if (spreadMode) setLogicalPage(Math.max(0, maxLogicalPage - 1));
+    else if (files.length > 0) store.setCurrentFileIndex(files.length - 1);
+  }, [spreadMode, maxLogicalPage, files.length]);
+
+  const promptJumpToPage = useCallback(async () => {
+    const total = spreadMode ? maxLogicalPage : files.length;
+    if (total <= 0) return;
+    const current = spreadMode ? logicalPage + 1 : idx + 1;
+    const input = await showPromptDialog(`ジャンプ先のページ番号 (1〜${total})`, String(current));
+    if (input === null) return;
+    const n = parseInt(input.trim(), 10);
+    if (!Number.isFinite(n) || n < 1) return;
+    const clamped = Math.min(Math.max(1, n), total) - 1;
+    if (spreadMode) setLogicalPage(clamped);
+    else store.setCurrentFileIndex(clamped);
+  }, [spreadMode, maxLogicalPage, files.length, logicalPage, idx]);
+
   /** テキストページ番号でナビゲート */
   const navigateToTextPage = useCallback((textPageNum: number) => {
     if (!spreadMode) {
@@ -976,6 +998,9 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
         if (e.key === "=" || e.key === "+") { e.preventDefault(); zoomIn(); }
         else if (e.key === "-") { e.preventDefault(); zoomOut(); }
         else if (e.key === "0") { e.preventDefault(); zoomFit(); }
+        else if (e.key === "ArrowLeft") { e.preventDefault(); goFirst(); }
+        else if (e.key === "ArrowRight") { e.preventDefault(); goLast(); }
+        else if (e.key === "j" || e.key === "J") { e.preventDefault(); promptJumpToPage(); }
         return;
       }
       if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); goPrev(); }
@@ -988,7 +1013,7 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [goPrev, goNext, zoomIn, zoomOut, zoomFit, handleSave]);
+  }, [goPrev, goNext, goFirst, goLast, promptJumpToPage, zoomIn, zoomOut, zoomFit, handleSave]);
 
   // Mouse wheel zoom / page
   useEffect(() => {
@@ -1184,23 +1209,6 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
                   <span className="text-[10px] text-text-muted flex-1">
                     使用フォント ({allFilesFontMap.size}種 / 全{files.length}ファイル)
                   </span>
-                  {/* スクショボタン */}
-                  {activeFontFilter && (
-                    <button
-                      onClick={() => setCaptureMode(!captureMode)}
-                      className={`text-[9px] px-1.5 py-0.5 rounded flex items-center gap-0.5 transition-colors ${
-                        captureMode ? "bg-accent-secondary text-white" : "bg-accent-secondary/15 text-accent-secondary hover:bg-accent-secondary/25"
-                      }`}
-                      title={captureMode ? "スクショモード OFF" : "ビューアー上でドラッグして範囲選択 → フォント帳に保存"}
-                    >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      {captureMode ? "スクショ中" : "スクショ"}
-                    </button>
-                  )}
-                  {captureStatus && <span className="text-[9px] text-success">{captureStatus}</span>}
                 </div>
                 {/* 全ファイル使用フォント — クリックで対象ページ移動 */}
                 <div className="flex flex-wrap gap-1">
@@ -1570,21 +1578,64 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
     >
       {/* ─── Top toolbar ─── */}
       <div className="flex-shrink-0 h-7 bg-bg-secondary border-b border-border flex items-center px-2 gap-1 text-xs">
-        <ToolBtn
-          onClick={handleSave}
-          disabled={!store.textFilePath || (!store.isDirty && (editBuffer === null || editBuffer === store.textContent))}
-          title="上書き保存 (Ctrl+S)"
+        {/* 保存ドロップダウン（左端、PsDesign風） */}
+        <SaveDropdown
+          onSave={handleSave}
+          onSaveAs={handleSaveAs}
+          canSave={!!store.textFilePath && (store.isDirty || (editBuffer !== null && editBuffer !== store.textContent))}
+          hasContent={!!store.textContent}
+        />
+        {textEditorMode && (
+          <button
+            onClick={() => useViewStore.getState().slideToProgen()}
+            className="mr-1 px-2 py-0.5 rounded text-[10px] inline-flex items-center gap-1 bg-bg-secondary border border-border text-text-primary hover:border-accent/40 hover:text-accent transition-colors"
+            title="ProGen に移動"
+          >
+            <Sparkles className="w-3 h-3" strokeWidth={2} />
+            ProGen
+          </button>
+        )}
+        {/* ページ送り / ズーム / 単ページ化（旧画像ナビバーから移設） */}
+        <button onClick={goPrev} disabled={idx <= 0} className="px-1 text-text-secondary hover:text-text-primary disabled:opacity-30">◀</button>
+        <span className="text-text-muted tabular-nums min-w-[40px] text-center text-[11px]">
+          {files.length > 0 ? `${idx + 1}/${files.length}` : "—"}
+        </span>
+        <button onClick={goNext} disabled={idx >= files.length - 1} className="px-1 text-text-secondary hover:text-text-primary disabled:opacity-30">▶</button>
+        <div className="w-px h-3 bg-border mx-1" />
+        <button onClick={zoomIn} disabled={zoom >= ZOOM_STEPS.length} className="px-0.5 text-text-secondary disabled:opacity-30">+</button>
+        <button onClick={zoomFit} className="px-1 text-text-muted hover:text-text-primary rounded tabular-nums text-[11px]">{zoomLabel}</button>
+        <button onClick={zoomOut} disabled={zoom <= 0} className="px-0.5 text-text-secondary disabled:opacity-30">−</button>
+        <div className="w-px h-3 bg-border mx-1" />
+        <button
+          onClick={() => setSpreadMode((v) => !v)}
+          className={`text-[9px] px-1.5 py-0 rounded transition-colors ${spreadMode ? "bg-orange-600 text-white" : "bg-bg-tertiary text-text-muted hover:text-text-primary"}`}
+          title="見開きPDFを単ページに分割"
         >
-          保存
-        </ToolBtn>
-        <ToolBtn onClick={handleSaveAs} disabled={!store.textContent} title="名前を付けて保存">
-          別名保存
-        </ToolBtn>
-        <div className="flex-1" />
-      </div>
-
-      {/* ─── Tab selector bar ─── */}
-      <div className="flex-shrink-0 h-7 bg-bg-tertiary/50 border-b border-border/50 flex items-center text-[10px]">
+          単ページ化
+        </button>
+        {spreadMode && (
+          <>
+            <select
+              className="text-[9px] bg-bg-primary border border-border/40 rounded px-1 py-0 text-text-muted outline-none"
+              value={firstPageMode}
+              onChange={(e) => setFirstPageMode(e.target.value as typeof firstPageMode)}
+            >
+              <option value="single">1P単独</option>
+              <option value="spread">1Pも見開き</option>
+              <option value="skip">1P除外</option>
+            </select>
+            <button
+              onClick={() => setSplitReadOrder((v) => v === "right-first" ? "left-first" : "right-first")}
+              className="text-[9px] px-1.5 py-0 rounded bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+              title={`読み順: ${splitReadOrder === "right-first" ? "右→左（漫画）" : "左→右（通常）"}`}
+            >
+              {splitReadOrder === "right-first" ? "右→左" : "左→右"}
+            </button>
+            <span className="text-[9px] text-accent/70 tabular-nums">
+              {logicalPage + 1}/{maxLogicalPage} ({splitViewSide === "full" ? "全体" : splitViewSide === "left" ? "左" : "右"})
+            </span>
+          </>
+        )}
         <div className="flex-1" />
         {/* タブボタン一覧（右寄せ） — textEditorMode では非表示 */}
         {!textEditorMode && (
@@ -1766,61 +1817,6 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
         {/* ═══ CENTER: Image viewer ═══ */}
         {/* 格納時は display:none で state 保持 & レイアウトから抜ける（右パネルが左に詰まる） */}
         <div className={`flex-1 flex flex-col overflow-hidden min-w-0 ${textEditorMode && !viewerVisible ? "hidden" : ""}`}>
-          {/* Center nav bar */}
-          <div className="flex-shrink-0 h-6 bg-bg-tertiary/30 border-b border-border/30 flex items-center px-2 gap-1 text-[11px]">
-            <button onClick={goPrev} disabled={idx <= 0} className="px-1 text-text-secondary hover:text-text-primary disabled:opacity-30">◀</button>
-            <span className="text-text-muted tabular-nums min-w-[40px] text-center">
-              {files.length > 0 ? `${idx + 1}/${files.length}` : "—"}
-            </span>
-            <button onClick={goNext} disabled={idx >= files.length - 1} className="px-1 text-text-secondary hover:text-text-primary disabled:opacity-30">▶</button>
-            <div className="w-px h-3 bg-border mx-1" />
-            <button onClick={zoomOut} disabled={zoom <= 0} className="px-0.5 text-text-secondary disabled:opacity-30">−</button>
-            <button onClick={zoomFit} className="px-1 text-text-muted hover:text-text-primary rounded tabular-nums">{zoomLabel}</button>
-            <button onClick={zoomIn} disabled={zoom >= ZOOM_STEPS.length} className="px-0.5 text-text-secondary disabled:opacity-30">+</button>
-            <div className="w-px h-3 bg-border mx-1" />
-            {/* 単ページ化（見開き分割） */}
-            <button
-              onClick={() => setSpreadMode((v) => !v)}
-              className={`text-[9px] px-1.5 py-0 rounded transition-colors ${spreadMode ? "bg-orange-600 text-white" : "bg-bg-tertiary text-text-muted hover:text-text-primary"}`}
-              title="見開きPDFを単ページに分割"
-            >
-              単ページ化
-            </button>
-            {spreadMode && (
-              <>
-                <select
-                  className="text-[9px] bg-bg-primary border border-border/40 rounded px-1 py-0 text-text-muted outline-none"
-                  value={firstPageMode}
-                  onChange={(e) => setFirstPageMode(e.target.value as typeof firstPageMode)}
-                >
-                  <option value="single">1P単独</option>
-                  <option value="spread">1Pも見開き</option>
-                  <option value="skip">1P除外</option>
-                </select>
-                <button
-                  onClick={() => setSplitReadOrder((v) => v === "right-first" ? "left-first" : "right-first")}
-                  className="text-[9px] px-1.5 py-0 rounded bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-                  title={`読み順: ${splitReadOrder === "right-first" ? "右→左（漫画）" : "左→右（通常）"}`}
-                >
-                  {splitReadOrder === "right-first" ? "右→左" : "左→右"}
-                </button>
-                <span className="text-[9px] text-accent/70 tabular-nums">
-                  {logicalPage + 1}/{maxLogicalPage} ({splitViewSide === "full" ? "全体" : splitViewSide === "left" ? "左" : "右"})
-                </span>
-              </>
-            )}
-            <div className="flex-1" />
-            {metadata && (
-              <span className="text-text-muted/50">
-                {metadata.dpi}dpi {metadata.colorMode}
-                {(() => {
-                  const ps = detectPaperSize(metadata.width, metadata.height, metadata.dpi);
-                  return ps ? ` (${ps})` : "";
-                })()}
-              </span>
-            )}
-          </div>
-
           {/* Image area */}
           <div
             ref={canvasRef}
@@ -1864,6 +1860,61 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
             }}
             style={{ userSelect: "none" }}
           >
+            {/* Screenshot button (top-left): toggle capture mode → drag to crop → save to font book */}
+            {/* テキストエディタビューでは非表示（写植仕様タブが使えないため） */}
+            {!textEditorMode && files.length > 0 && (() => {
+              const specOpen = (store.tabPositions.spec ?? null) !== null;
+              const enabled = specOpen && !!activeFontFilter;
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!specOpen) {
+                      setCaptureStatus("写植仕様タブを開いてください");
+                      setTimeout(() => setCaptureStatus(null), 3000);
+                      return;
+                    }
+                    if (!activeFontFilter) {
+                      setCaptureStatus("写植仕様タブでフォントを選択してください");
+                      setTimeout(() => setCaptureStatus(null), 3000);
+                      return;
+                    }
+                    setCaptureMode((v) => !v);
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className={`absolute top-2 left-2 z-20 w-8 h-8 rounded-lg backdrop-blur-sm border flex items-center justify-center transition-colors ${
+                    captureMode
+                      ? "bg-accent-secondary text-white border-accent-secondary"
+                      : enabled
+                        ? "bg-black/40 hover:bg-black/60 text-white/80 hover:text-white border-white/20"
+                        : "bg-black/30 text-white/40 border-white/10 cursor-not-allowed"
+                  }`}
+                  title={
+                    captureMode
+                      ? "スクショモード OFF"
+                      : !specOpen
+                        ? "写植仕様タブを開いてください"
+                        : !activeFontFilter
+                          ? "写植仕様タブでフォントを選択してください"
+                          : `「${getFontLabel(activeFontFilter)}」をフォント帳にキャプチャ — ドラッグで範囲選択`
+                  }
+                  aria-label="スクショ"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              );
+            })()}
+            {/* Capture status toast (top-left, below screenshot button) */}
+            {captureStatus && (
+              <div className="absolute top-12 left-2 z-30 px-2 py-1 rounded-md bg-black/70 text-white text-[10px] backdrop-blur-sm pointer-events-none">
+                {captureStatus}
+              </div>
+            )}
+
             {/* Reload button (top-right): clears cache and reloads currently displayed file */}
             {files.length > 0 && (
               <button
@@ -2004,16 +2055,6 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
         </>)}
       </div>
 
-      {/* ─── Status bar ─── */}
-      <div className="flex-shrink-0 h-5 bg-bg-secondary border-t border-border flex items-center px-3 text-[10px] text-text-muted/60 gap-3">
-        <span>{files.length} ファイル</span>
-        {store.textContent.length > 0 && <span>{chunks.length} ブロック</span>}
-        {checkData && (
-          <span>校正: {checkData.correctnessItems.length}正誤 / {checkData.proposalItems.length}提案</span>
-        )}
-        {store.fontPresets.length > 0 && <span>フォント: {store.fontPresets.length}件</span>}
-      </div>
-
       {/* ─── JSON File Browser Modal ─── */}
       {jsonBrowserMode && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40" onMouseDown={(e) => { if (e.target === e.currentTarget) setJsonBrowserMode(null); }}>
@@ -2071,4 +2112,97 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
 // (CheckJsonBrowser is now in ./UnifiedSubComponents.tsx)
 // Re-export for backward compatibility (TopNav imports it from here)
 export { CheckJsonBrowser } from "./UnifiedSubComponents";
+
+// ────────────────────────────────────────────────────────────
+// SaveDropdown — PsDesign 風の保存アイコン + ドロップダウン
+// クリックで開閉、外側クリック / Escape で閉じる
+// 上書き保存 / 別名保存 を選択可能
+// ────────────────────────────────────────────────────────────
+function SaveDropdown({
+  onSave,
+  onSaveAs,
+  canSave,
+  hasContent,
+}: {
+  onSave: () => void;
+  onSaveAs: () => void;
+  /** 上書き保存可能か（既存ファイルがあり、変更がある） */
+  canSave: boolean;
+  /** 別名保存可能か（テキストが空でない） */
+  hasContent: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  const triggerDisabled = !hasContent && !canSave;
+
+  return (
+    <div ref={containerRef} className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!triggerDisabled) setOpen((v) => !v);
+        }}
+        disabled={triggerDisabled}
+        title="保存"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="px-1.5 py-1 rounded text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-30 disabled:pointer-events-none inline-flex items-center"
+      >
+        <Save className="w-3.5 h-3.5" strokeWidth={2} />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute top-full left-0 mt-2 min-w-[200px] bg-bg-secondary border border-border rounded-lg shadow-elevated py-1 z-[1000]"
+        >
+          {/* Triangle pointer */}
+          <div className="absolute -top-[5px] left-3 w-2 h-2 bg-bg-secondary border-l border-t border-border rotate-45" />
+          <div className="px-3 py-1 text-[9px] text-text-muted/70 uppercase tracking-wide border-b border-border/40 mb-1">保存</div>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!canSave}
+            onClick={() => { onSave(); setOpen(false); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+          >
+            <Save className="w-3 h-3 text-text-muted flex-shrink-0" strokeWidth={2} />
+            <span className="flex-1 text-left">上書き保存</span>
+            <span className="text-[9px] text-text-muted">Ctrl+S</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!hasContent}
+            onClick={() => { onSaveAs(); setOpen(false); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+          >
+            <FilePlus className="w-3 h-3 text-text-muted flex-shrink-0" strokeWidth={2} />
+            <span className="flex-1 text-left">別名で保存</span>
+            <span className="text-[9px] text-text-muted">Ctrl+Shift+S</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 

@@ -839,8 +839,11 @@ export function TiffCropEditor({ onSwitchToQueue }: TiffCropEditorProps) {
             gridTemplateRows: `${RULER_SIZE}px 1fr`,
           }}
         >
-          {/* Corner */}
-          <div className="bg-[#f8f6f3] border-r border-b border-[#ddd8d3]" />
+          {/* Corner — CanvasRuler と完全に同じ色（背景 #ecf2fa / 縁 #bcd0ee） */}
+          <div
+            className="border-r border-b"
+            style={{ backgroundColor: "#ecf2fa", borderRightColor: "#bcd0ee", borderBottomColor: "#bcd0ee" }}
+          />
 
           {/* Horizontal Ruler */}
           {imageLayout && originalSize && (

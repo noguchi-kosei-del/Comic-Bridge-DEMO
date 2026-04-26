@@ -777,7 +777,7 @@ export function FolderSetupView() {
         {/* 作品情報JSON */}
         <div className="p-4 rounded-xl bg-bg-secondary border border-border space-y-2">
           <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-purple-500/15 text-purple-500 text-xs font-bold flex items-center justify-center">J</span>
+            <span className="w-6 h-6 rounded-full bg-accent/15 text-accent text-xs font-bold flex items-center justify-center">J</span>
             <span className="text-xs font-medium text-text-primary">作品情報JSON</span>
             <span className="text-[9px] text-text-muted">（ProGen校正ルール連携）</span>
           </div>
@@ -787,7 +787,7 @@ export function FolderSetupView() {
               新規作成
             </button>
             <button onClick={() => setJsonMode("select")}
-              className={`flex-1 py-2 rounded-lg text-[10px] font-medium transition-all ${jsonMode === "select" ? "bg-purple-500/15 text-purple-500 border border-purple-500/30" : "bg-bg-tertiary text-text-secondary border border-border/50 hover:bg-bg-elevated"}`}>
+              className={`flex-1 py-2 rounded-lg text-[10px] font-medium transition-all ${jsonMode === "select" ? "bg-accent/15 text-accent border border-accent/30" : "bg-bg-tertiary text-text-secondary border border-border/50 hover:bg-bg-elevated"}`}>
               既存JSONを選択
             </button>
           </div>
@@ -796,7 +796,7 @@ export function FolderSetupView() {
             <div className="space-y-1.5">
               <button
                 onClick={() => setShowJsonBrowser(true)}
-                className="w-full px-3 py-2 text-[10px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 border border-purple-500/30 rounded-lg transition-colors"
+                className="w-full px-3 py-2 text-[10px] bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 rounded-lg transition-colors"
               >
                 {selectedJsonPath ? `✓ ${selectedJsonPath.split(/[/\\]/).pop()}` : "作品情報JSONを選択..."}
               </button>

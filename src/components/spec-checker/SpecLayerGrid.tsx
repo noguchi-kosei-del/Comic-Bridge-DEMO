@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePsdStore } from "../../store/psdStore";
 import {
   collectTextLayers,
@@ -13,6 +13,20 @@ export function SpecLayerGrid({ layoutMode = "grid" }: { layoutMode?: LayerLayou
   const activeFileId = usePsdStore((s) => s.activeFileId);
   const selectFile = usePsdStore((s) => s.selectFile);
   const { fontInfo } = useFontResolver(files);
+
+  // 各カードの展開状態（fileId の Set）。新規読み込み時は空 = すべて閉じた状態。
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const allExpanded = files.length > 0 && files.every((f) => expandedIds.has(f.id));
+  const toggleAll = () => {
+    setExpandedIds(allExpanded ? new Set() : new Set(files.map((f) => f.id)));
+  };
+  const toggleOne = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   // 全ファイル合計サマリー
   const totalSummary = useMemo(() => {
@@ -66,6 +80,7 @@ export function SpecLayerGrid({ layoutMode = "grid" }: { layoutMode?: LayerLayou
               ))}
             </div>
           </div>
+          <div className="border-t border-border/40" />
           {/* サイズ統計 */}
           <div>
             <div className="flex items-center gap-1 mb-1">
@@ -100,28 +115,52 @@ export function SpecLayerGrid({ layoutMode = "grid" }: { layoutMode?: LayerLayou
       )}
 
       {layoutMode === "grid" ? (
-        <div
-          className="grid gap-3 p-4"
-          style={{
-            gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-          }}
-        >
-          {files.map((file) => {
-            const textLayers = file.metadata?.layerTree
-              ? collectTextLayers(file.metadata.layerTree)
-              : [];
-            return (
-              <SpecLayerCard
-                key={file.id}
-                file={file}
-                textLayers={textLayers}
-                isActive={activeFileId === file.id}
-                fontInfo={fontInfo}
-                onSelect={() => selectFile(file.id)}
-              />
-            );
-          })}
-        </div>
+        <>
+          <div className="px-4 pt-2 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={toggleAll}
+              disabled={files.length === 0}
+              className="px-2 py-1 text-[10px] rounded-md bg-bg-tertiary text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-border/50 transition-colors inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+              title={allExpanded ? "すべてのカードを折りたたむ" : "すべてのカードを展開"}
+            >
+              <svg
+                className={`w-3 h-3 transition-transform ${allExpanded ? "rotate-90" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              {allExpanded ? "すべて閉じる" : "すべて展開"}
+            </button>
+          </div>
+          <div
+            className="grid gap-3 p-4 items-start"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+            }}
+          >
+            {files.map((file) => {
+              const textLayers = file.metadata?.layerTree
+                ? collectTextLayers(file.metadata.layerTree)
+                : [];
+              return (
+                <SpecLayerCard
+                  key={file.id}
+                  file={file}
+                  textLayers={textLayers}
+                  isActive={activeFileId === file.id}
+                  fontInfo={fontInfo}
+                  onSelect={() => selectFile(file.id)}
+                  isExpanded={expandedIds.has(file.id)}
+                  onToggleExpand={() => toggleOne(file.id)}
+                />
+              );
+            })}
+          </div>
+        </>
       ) : (
         <div className="flex flex-col gap-1 p-2">
           {files.map((file) => {
@@ -152,49 +191,75 @@ function SpecLayerCard({
   isActive,
   fontInfo,
   onSelect,
+  isExpanded,
+  onToggleExpand,
 }: {
   file: any;
   textLayers: any[];
   isActive: boolean;
   fontInfo: any;
   onSelect: () => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }) {
   return (
     <div
       className={`border rounded-xl cursor-pointer transition-all ${
         isActive
-          ? "border-accent ring-2 ring-accent/30 bg-accent/5 shadow-md"
+          ? "border-accent bg-bg-secondary/50"
           : "border-border bg-bg-secondary/50 hover:bg-bg-secondary/80 hover:border-border-strong/50"
       }`}
       onClick={(e) => { if (!e.shiftKey && !e.ctrlKey && !e.metaKey) onSelect(); }}
     >
       {/* Header */}
-      <div className="px-3 py-2 border-b border-border/60 flex items-center gap-2">
+      <div className={`px-3 py-2 flex items-center gap-2 ${isExpanded ? "border-b border-border/60" : ""}`}>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+          className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
+          aria-label={isExpanded ? "折りたたむ" : "展開する"}
+          aria-expanded={isExpanded}
+          title={isExpanded ? "折りたたむ" : "展開する"}
+        >
+          <svg
+            className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
         <span className={`text-[11px] font-medium truncate flex-1 ${isActive ? "text-accent" : "text-text-primary"}`}>
           {file.fileName.replace(/\.(psd|psb)$/i, "")}
         </span>
-        <span className="text-[10px] text-text-muted flex-shrink-0">{file.metadata?.layerCount ?? 0}L</span>
-        {textLayers.length > 0 && <span className="text-[10px] text-accent/60 flex-shrink-0">{textLayers.length}T</span>}
       </div>
 
       {/* 個別サマリーは廃止 — 全ファイル合計を上部に表示 */}
 
       {/* Text Layer Spec (写植仕様) — 各レイヤー詳細 */}
-      {textLayers.length > 0 ? (
+      {isExpanded && (textLayers.length > 0 ? (
         <div className="p-1.5 border-b border-border/30">
           {textLayers.map((tl, i) => {
             const mainFont = tl.textInfo?.fonts[0];
             const color = mainFont ? fontInfo.getFontColor(mainFont) : "#888";
             return (
-              <div key={i} className="flex items-start gap-1.5 py-0.5 text-[10px]">
+              <div
+                key={i}
+                className="flex items-start gap-1.5 py-0.5 px-1 text-[10px]"
+                style={{ backgroundColor: i % 2 === 1 ? "#eaf2fb" : undefined }}
+              >
                 <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: color }} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-text-primary font-medium truncate">{tl.layerName}</span>
-                    {tl.textInfo?.fontSizes?.length ? (
-                      <span className="text-text-muted flex-shrink-0">{tl.textInfo.fontSizes.join("/")}pt</span>
-                    ) : null}
-                  </div>
+                  {tl.textInfo?.fontSizes?.length ? (
+                    <div className="mb-0.5">
+                      <span className="inline-block text-[9px] px-1 py-px rounded bg-bg-tertiary text-text-muted">
+                        {tl.textInfo.fontSizes.join("/")}pt
+                      </span>
+                    </div>
+                  ) : null}
+                  <span className="block text-text-primary font-medium truncate">{tl.layerName}</span>
                   {mainFont && (
                     <div className="truncate" style={{ color }}>
                       {fontInfo.getFontLabel(mainFont)}
@@ -223,9 +288,6 @@ function SpecLayerCard({
                       </div>
                     );
                   })()}
-                  {tl.textInfo?.text && (
-                    <div className="text-text-muted/50 truncate">{tl.textInfo.text.replace(/\n/g, " ").substring(0, 40)}</div>
-                  )}
                 </div>
               </div>
             );
@@ -233,7 +295,7 @@ function SpecLayerCard({
         </div>
       ) : (
         <div className="flex items-center justify-center py-4 text-[10px] text-text-muted">テキストレイヤーなし</div>
-      )}
+      ))}
     </div>
   );
 }

@@ -43,8 +43,8 @@ export function TiffView() {
         <TiffSettingsPanel />
       </div>
 
-      {/* File List — 設定とプレビューの間: スキップ切替 + 個別設定 */}
-      <div className="w-[210px] flex-shrink-0 border-r border-border overflow-hidden">
+      {/* File List — 設定とプレビューの間: スキップ切替 + 個別設定（折りたたみ可能、幅は TiffFileList が制御） */}
+      <div className="flex-shrink-0 border-r border-border overflow-hidden">
         <TiffFileList onOpenCropEditor={handleOpenCropEditor} />
       </div>
 

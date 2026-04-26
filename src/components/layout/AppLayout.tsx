@@ -82,19 +82,34 @@ export function AppLayout() {
     registerPsdLoader(psdLoadFolder, psdLoadFiles);
   }, [psdLoadFolder, psdLoadFiles]);
 
-  // Ctrl+A で全選択
+  // Ctrl+A で全選択 / Ctrl+O でフォルダを開く
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if ((e.ctrlKey || e.metaKey) && e.key === "a") {
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
         e.preventDefault();
         if (files.length > 0) selectAll();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === "o" || e.key === "O")) {
+        e.preventDefault();
+        (async () => {
+          const { open: dialogOpen } = await import("@tauri-apps/plugin-dialog");
+          const path = await dialogOpen({
+            directory: true,
+            multiple: false,
+            defaultPath: usePsdStore.getState().currentFolderPath || undefined,
+          });
+          if (!path) return;
+          const p = (path as string).replace(/\/+$|\\+$/g, "");
+          usePsdStore.getState().setCurrentFolderPath(p);
+          try { await psdLoadFolder(p); } catch { /* ignore */ }
+          usePsdStore.getState().triggerRefresh();
+        })();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [files.length, selectAll]);
+  }, [files.length, selectAll, psdLoadFolder]);
 
   // サムネ領域外クリックで複数選択を解除
   const handleMouseDown = useCallback(

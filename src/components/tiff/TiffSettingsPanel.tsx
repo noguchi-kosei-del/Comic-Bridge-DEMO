@@ -331,15 +331,15 @@ export function TiffSettingsPanel() {
             </div>
           }
         >
-          {/* カラーモード */}
+          {/* カラーモード — 2 列グリッドで配置（4 項目を 2x2 で表示） */}
           <label className="text-[10px] font-medium text-text-muted block mb-1">カラーモード</label>
-          <div className="flex gap-0.5 bg-bg-elevated rounded-lg p-0.5">
+          <div className="grid grid-cols-2 gap-0.5 bg-bg-elevated rounded-lg p-0.5">
             {colorModes.map(({ mode, label }) => (
               <button
                 key={mode}
                 onClick={() => setSettings({ colorMode: mode })}
                 className={`
-                  flex-1 px-2 py-1.5 text-[11px] rounded-md transition-all duration-200
+                  w-full px-2 py-1.5 text-[11px] rounded-md transition-all duration-200
                   ${
                     settings.colorMode === mode
                       ? "bg-accent-warm text-white shadow-sm font-medium"

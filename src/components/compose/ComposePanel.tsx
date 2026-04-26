@@ -56,7 +56,7 @@ export function ComposePanel() {
       <div className="px-4 py-3 border-b border-white/5">
         <h3 className="text-sm font-display font-medium text-text-primary flex items-center gap-2">
           <svg
-            className="w-4 h-4 text-warning"
+            className="w-4 h-4 text-text-muted"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -125,7 +125,7 @@ export function ComposePanel() {
                   value={organizePre.targetName}
                   onChange={(e) => setOrganizePre({ targetName: e.target.value })}
                   placeholder="#原稿#"
-                  className="w-full mt-1 bg-bg-elevated border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-primary focus:border-warning focus:outline-none"
+                  className="w-full mt-1 bg-bg-elevated border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-primary focus:border-accent focus:outline-none"
                 />
               </div>
               <CheckBox
@@ -211,7 +211,7 @@ export function ComposePanel() {
                                 })
                               }
                               placeholder="検索名"
-                              className="flex-1 bg-bg-elevated border border-white/10 rounded-lg px-2 py-1 text-[10px] text-text-primary focus:border-warning focus:outline-none"
+                              className="flex-1 bg-bg-elevated border border-white/10 rounded-lg px-2 py-1 text-[10px] text-text-primary focus:border-accent focus:outline-none"
                             />
                             <select
                               value={el.customKind || "layer"}
@@ -220,7 +220,7 @@ export function ComposePanel() {
                                   customKind: e.target.value as "layer" | "group",
                                 })
                               }
-                              className="bg-bg-elevated border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-text-primary focus:border-warning focus:outline-none"
+                              className="bg-bg-elevated border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-text-primary focus:border-accent focus:outline-none"
                             >
                               <option value="layer">レイヤー</option>
                               <option value="group">グループ</option>
@@ -254,7 +254,7 @@ export function ComposePanel() {
                 partialMatch: true,
               });
             }}
-            className="flex items-center gap-1 text-[10px] text-warning hover:text-warning/80 transition-colors mt-2"
+            className="flex items-center gap-1 text-[10px] text-accent hover:text-accent-hover transition-colors mt-2"
           >
             <svg
               className="w-3 h-3"
@@ -269,7 +269,7 @@ export function ComposePanel() {
           </button>
 
           {/* Rest source */}
-          <div className="pt-1.5 mt-1.5 border-t border-warning/15">
+          <div className="pt-1.5 mt-1.5 border-t border-border-light">
             <div className="flex items-center gap-2">
               <span className="text-xs text-text-primary flex-1">指定以外</span>
               <RestSourcePill value={composeSettings.restSource} onChange={setComposeRestSource} />
@@ -277,7 +277,7 @@ export function ComposePanel() {
           </div>
 
           {/* Options */}
-          <div className="pt-1 mt-1 border-t border-warning/15 space-y-1.5">
+          <div className="pt-1 mt-1 border-t border-border-light space-y-1.5">
             <CheckBox
               checked={composeSettings.skipResize}
               onChange={(v) => setComposeSettings({ skipResize: v })}

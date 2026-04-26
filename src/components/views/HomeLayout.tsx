@@ -35,7 +35,6 @@ const TILE_TABS: TileTab[] = [
 ];
 
 export function HomeLayout() {
-  const setSpecViewMode = usePsdStore((s) => s.setSpecViewMode);
   const files = usePsdStore((s) => s.files);
   const setCurrentFolderPath = usePsdStore((s) => s.setCurrentFolderPath);
   const currentFolderPath = usePsdStore((s) => s.currentFolderPath);
@@ -118,6 +117,20 @@ export function HomeLayout() {
     };
   }, []);
   const [wfPickerOpen, setWfPickerOpen] = useState(false);
+  // 閉じアニメ中もマウントを保持するための rendered フラグ
+  const [wfRendered, setWfRendered] = useState(false);
+  useEffect(() => {
+    if (wfPickerOpen) {
+      setWfRendered(true);
+      return;
+    }
+    if (!wfRendered) return;
+    const t = window.setTimeout(() => setWfRendered(false), 160);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wfPickerOpen]);
+  const wfHoverRef = useRef<HTMLDivElement>(null);
+  const wfHoverTimer = useRef<number | null>(null);
   const [showProofLoadOverlay, setShowProofLoadOverlay] = useState(false);
   const [activeTileTab, setActiveTileTab] = useState<TileTabId>("all");
 
@@ -155,19 +168,15 @@ export function HomeLayout() {
   const [tachimiError, setTachimiError] = useState<string | null>(null);
 
   // 退場アニメーション
-  //   toDetail: 右 → 左 スライド（詳細▶）
-  //   toTile:   下 → 上 スライド（タイルクリック）
-  const [exitDirection, setExitDirection] = useState<"none" | "toDetail" | "toTile">("none");
+  //   toDetail: viewStore.slideToHomeDetail() で ViewRouter ラッパーが横スライド
+  //   toTile:   下 → 上 スライド（タイルクリック、ローカルのまま）
+  const [exitDirection, setExitDirection] = useState<"none" | "toTile">("none");
   const exitTimerRef = useRef<number | null>(null);
   useEffect(() => () => {
     if (exitTimerRef.current !== null) window.clearTimeout(exitTimerRef.current);
   }, []);
   const goToDetail = () => {
-    if (exitDirection !== "none") return;
-    setExitDirection("toDetail");
-    exitTimerRef.current = window.setTimeout(() => {
-      setSpecViewMode("thumbnails");
-    }, 300);
+    useViewStore.getState().slideToHomeDetail();
   };
   const goToTile = (id: string) => {
     if (exitDirection !== "none") return;
@@ -265,11 +274,9 @@ export function HomeLayout() {
   return (
     <div
       className={`flex flex-col h-full overflow-hidden transition-all duration-300 ease-in ${
-        exitDirection === "toDetail"
-          ? "-translate-x-8 opacity-0"
-          : exitDirection === "toTile"
-            ? "-translate-y-8 opacity-0"
-            : "translate-x-0 translate-y-0 opacity-100"
+        exitDirection === "toTile"
+          ? "-translate-y-8 opacity-0"
+          : "translate-x-0 translate-y-0 opacity-100"
       }`}
     >
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 overflow-auto">
@@ -411,17 +418,28 @@ export function HomeLayout() {
             )}
           </div>
 
-          {/* ワークフロー大ボタン */}
-          <div className="relative flex-shrink-0">
+          {/* ワークフロー大ボタン（ホバーで吹き出し型リスト展開、TopNav ツールメニュー風） */}
+          <div
+            ref={wfHoverRef}
+            className="relative flex-shrink-0"
+            onMouseEnter={() => {
+              if (wfHoverTimer.current !== null) { window.clearTimeout(wfHoverTimer.current); wfHoverTimer.current = null; }
+              if (!activeWorkflow) setWfPickerOpen(true);
+            }}
+            onMouseLeave={() => {
+              wfHoverTimer.current = window.setTimeout(() => setWfPickerOpen(false), 300);
+            }}
+            aria-haspopup="menu"
+            aria-expanded={wfPickerOpen}
+          >
             <button
-              onClick={() => setWfPickerOpen((v) => !v)}
               disabled={!!activeWorkflow}
               className={`w-full py-4 rounded-2xl text-white text-lg font-bold shadow-card transition-shadow flex items-center justify-center gap-2.5 ${
                 activeWorkflow
                   ? "bg-bg-tertiary text-text-muted cursor-not-allowed opacity-60"
-                  : "bg-gradient-to-br from-accent to-accent-secondary btn-shine"
+                  : `bg-gradient-to-br from-accent to-accent-secondary btn-shine ${wfPickerOpen ? "btn-shine-active" : ""}`
               }`}
-              title={activeWorkflow ? "ワークフロー進行中" : "ワークフローを開始"}
+              title={activeWorkflow ? "ワークフロー進行中" : "ホバーでワークフロー一覧を表示"}
             >
               <span className="relative z-[1] inline-flex items-center gap-2.5">
                 <PlayCircle className="w-6 h-6" strokeWidth={2.25} />
@@ -429,16 +447,30 @@ export function HomeLayout() {
               </span>
             </button>
 
-            {wfPickerOpen && !activeWorkflow && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setWfPickerOpen(false)}
+            {wfRendered && !activeWorkflow && (
+              <div
+                role="menu"
+                className={`absolute left-0 right-0 bottom-full mb-3 z-50 bg-bg-secondary border border-border rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.35)] text-text-primary ${
+                  wfPickerOpen ? "animate-dropdown-up" : "animate-dropdown-up-close pointer-events-none"
+                }`}
+              >
+                {/* 三角吹き出し（下向き、ボタンの中心を指す）— overflow が無い親に配置 */}
+                <span
+                  aria-hidden="true"
+                  className="absolute -bottom-[7px] left-1/2 -translate-x-1/2 w-0 h-0 pointer-events-none z-10"
+                  style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "7px solid var(--cb-border-color, #d5d9e0)" }}
                 />
-                <div className="absolute left-0 right-0 bottom-full mb-2 z-50 bg-bg-secondary border border-border rounded-xl shadow-elevated py-1 max-h-[50vh] overflow-auto">
+                <span
+                  aria-hidden="true"
+                  className="absolute -bottom-[6px] left-1/2 -translate-x-1/2 w-0 h-0 pointer-events-none z-10"
+                  style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderTop: "7px solid var(--cb-menu-bg, #ffffff)" }}
+                />
+                {/* 内側スクロール領域（rounded-xl 継承） */}
+                <div className="py-1 max-h-[50vh] overflow-auto rounded-xl">
                   {WORKFLOWS.map((wf) => (
                     <button
                       key={wf.id}
+                      role="menuitem"
                       className="w-full text-left px-3 py-2 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors flex items-center gap-2"
                       onClick={() => handleSelectWorkflow(wf)}
                     >
@@ -450,7 +482,7 @@ export function HomeLayout() {
                     </button>
                   ))}
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -547,8 +579,8 @@ export function HomeLayout() {
               title="読み込み中のPSDからフォント・ガイド・テキスト情報をJSONに登録"
             />
             {files.length > 0 ? (
-              <div className="[&>div]:w-full [&>div>button]:w-full [&>div>button]:!border-border [&>div>button]:!text-text-secondary [&>div>button:hover]:!text-text-primary [&>div>button:hover]:!shadow-none">
-                <TextExtractButton compact files={files} />
+              <div className="[&>div]:w-full [&>div>button]:w-full">
+                <TextExtractButton compact files={files} variant="neutral" />
               </div>
             ) : (
               <ActionButton

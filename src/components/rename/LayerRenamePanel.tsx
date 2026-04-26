@@ -89,28 +89,28 @@ export function LayerRenamePanel() {
 
         {/* Rename Rules */}
         <div className="bg-bg-tertiary rounded-xl p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-medium text-text-muted">リネームルール</h4>
-            <div className="flex gap-1">
-              <button
-                onClick={() => addRule("layer")}
-                className="px-2 py-1 text-[10px] bg-accent/10 text-accent border border-accent/30 rounded-lg hover:bg-accent/20 transition-colors"
-              >
-                + レイヤー
-              </button>
-              <button
-                onClick={() => addRule("group")}
-                className="px-2 py-1 text-[10px] bg-accent-secondary/10 text-accent-secondary border border-accent-secondary/30 rounded-lg hover:bg-accent-secondary/20 transition-colors"
-              >
-                + グループ
-              </button>
-            </div>
-          </div>
+          <h4 className="text-xs font-medium text-text-muted mb-2">リネームルール</h4>
 
           {layerSettings.rules.length === 0 ? (
-            <p className="text-[10px] text-text-muted text-center py-3">
-              ルールを追加してレイヤー名やグループ名を変更できます
-            </p>
+            <>
+              <p className="text-[10px] text-text-muted text-center py-3">
+                ルールを追加してレイヤー名やグループ名を変更できます
+              </p>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => addRule("layer")}
+                  className="flex-1 px-2 py-1 text-[10px] bg-accent/10 text-accent border border-accent/30 rounded-lg hover:bg-accent/20 transition-colors"
+                >
+                  + レイヤー
+                </button>
+                <button
+                  onClick={() => addRule("group")}
+                  className="flex-1 px-2 py-1 text-[10px] bg-accent-secondary/10 text-accent-secondary border border-accent-secondary/30 rounded-lg hover:bg-accent-secondary/20 transition-colors"
+                >
+                  + グループ
+                </button>
+              </div>
+            </>
           ) : (
             <div className="space-y-2">
               {layerSettings.rules.map((rule) => (
@@ -195,6 +195,20 @@ export function LayerRenamePanel() {
                   </div>
                 </div>
               ))}
+              <div className="flex gap-1 pt-1">
+                <button
+                  onClick={() => addRule("layer")}
+                  className="flex-1 px-2 py-1 text-[10px] bg-accent/10 text-accent border border-accent/30 rounded-lg hover:bg-accent/20 transition-colors"
+                >
+                  + レイヤー
+                </button>
+                <button
+                  onClick={() => addRule("group")}
+                  className="flex-1 px-2 py-1 text-[10px] bg-accent-secondary/10 text-accent-secondary border border-accent-secondary/30 rounded-lg hover:bg-accent-secondary/20 transition-colors"
+                >
+                  + グループ
+                </button>
+              </div>
             </div>
           )}
         </div>

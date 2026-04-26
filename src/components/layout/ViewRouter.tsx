@@ -22,6 +22,7 @@ export function ViewRouter() {
   const activeView = useViewStore((s) => s.activeView);
   const isExitingHome = useViewStore((s) => s.isExitingHome);
   const isEnteringWorkflow = useViewStore((s) => s.isEnteringWorkflow);
+  const slidePhase = useViewStore((s) => s.slidePhase);
 
   // State-preserving mount for heavy tabs (once mounted, never unmount)
   const [progenMounted, setProgenMounted] = useState(false);
@@ -38,7 +39,15 @@ export function ViewRouter() {
 
   return (
     <div className={`flex-1 overflow-hidden bg-bg-primary relative ${
-      isExitingHome ? "animate-exit-to-home" : isEnteringWorkflow ? "animate-enter-from-back" : ""
+      isExitingHome ? "animate-exit-to-home"
+      : isEnteringWorkflow ? "animate-enter-from-back"
+      : slidePhase === "exit-left" ? "animate-slide-out-left"
+      : slidePhase === "exit-right" ? "animate-slide-out-right"
+      : slidePhase === "enter-from-right" ? "animate-slide-in-from-right"
+      : slidePhase === "enter-from-left" ? "animate-slide-in-from-left"
+      : slidePhase === "exit-up" ? "animate-slide-out-up"
+      : slidePhase === "enter-from-bottom" ? "animate-slide-in-from-bottom"
+      : ""
     }`}>
       {/* Standard conditional rendering for lightweight tabs */}
       {activeView === "specCheck" && <SpecCheckView />}

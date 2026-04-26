@@ -424,9 +424,9 @@ export function SpecCheckView() {
     return <HomeLayout />;
   }
 
-  // ホームへ戻る = ViewRouter ラッパーで keyframes アニメ → 380ms 後に specViewMode="home"
+  // ホームへ戻る = ProGen↔TextEditor と同じ横スライド（左 → 右モーション）
   const goToHome = () => {
-    useViewStore.getState().goToHomeWithExit();
+    useViewStore.getState().slideFromDetailToHome();
   };
 
   return (

@@ -38,6 +38,8 @@ interface ViewState {
   isExitingHome: boolean;
   /** ワークフロー開始時の入場アニメーション中フラグ（ViewRouter ラッパーが animate-enter-from-back を付与） */
   isEnteringWorkflow: boolean;
+  /** ProGen ⇔ TextEditor / ホーム ⇔ 詳細 / TopNavツール の遷移アニメフェーズ。ViewRouter ラッパーに animate-slide-* クラスを付与 */
+  slidePhase: "exit-left" | "exit-right" | "enter-from-right" | "enter-from-left" | "exit-up" | "enter-from-bottom" | null;
 
   setActiveView: (view: AppView) => void;
   setDetailPanelOpen: (open: boolean) => void;
@@ -52,6 +54,16 @@ interface ViewState {
   goToHomeWithExit: () => void;
   /** ワークフロー入場アニメーションをトリガー（ViewRouter ラッパーで奥→手前ズーム） */
   triggerWorkflowEnter: () => void;
+  /** ProGen → TextEditor: 右から左へ横スライド切替（exit-left → enter-from-right） */
+  slideToTextEditor: () => void;
+  /** TextEditor → ProGen: 左から右へ横スライド切替（exit-right → enter-from-left） */
+  slideToProgen: () => void;
+  /** ホーム → 詳細(thumbnails): 右から左へ横スライド切替 */
+  slideToHomeDetail: () => void;
+  /** 詳細 → ホーム: 左から右へ横スライド切替 */
+  slideFromDetailToHome: () => void;
+  /** TopNav ツールメニュー → 任意ビュー: 下から上への縦スライド切替（exit-up → enter-from-bottom） */
+  slideToTool: (switchView: () => void) => void;
 }
 
 export const useViewStore = create<ViewState>((set, get) => ({
@@ -65,8 +77,9 @@ export const useViewStore = create<ViewState>((set, get) => ({
   jsonBrowserMode: null,
   isExitingHome: false,
   isEnteringWorkflow: false,
+  slidePhase: null,
 
-  setActiveView: (activeView) => set({ activeView, isExitingHome: false }),
+  setActiveView: (activeView) => set({ activeView, isExitingHome: false, slidePhase: null }),
   setDetailPanelOpen: (isDetailPanelOpen) => set({ isDetailPanelOpen }),
   toggleDetailPanel: () => set((state) => ({ isDetailPanelOpen: !state.isDetailPanelOpen })),
   setProgenMode: (progenMode) => set({ progenMode }),
@@ -90,7 +103,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
       const { activeView } = get();
       // 既にホーム表示中ならアニメ不要
       if (activeView === "specCheck" && psd.specViewMode === "home") return;
-      set({ isExitingHome: true });
+      set({ isExitingHome: true, slidePhase: null });
       window.setTimeout(() => {
         set({ activeView: "specCheck", isExitingHome: false });
         psd.setSpecViewMode("home");
@@ -101,7 +114,76 @@ export const useViewStore = create<ViewState>((set, get) => ({
     set({ isEnteringWorkflow: true });
     window.setTimeout(() => set({ isEnteringWorkflow: false }), 420);
   },
+  slideToTextEditor: () => {
+    if (get().activeView === "textEditor") return;
+    runSlideTransition(get, set, "rtl", () => set({ activeView: "textEditor", isExitingHome: false }));
+  },
+  slideToProgen: () => {
+    if (get().activeView === "progen") return;
+    runSlideTransition(get, set, "ltr", () => set({ activeView: "progen", isExitingHome: false }));
+  },
+  slideToHomeDetail: () => {
+    import("./psdStore").then(({ usePsdStore }) => {
+      const psd = usePsdStore.getState();
+      if (get().activeView === "specCheck" && psd.specViewMode !== "home") return;
+      runSlideTransition(get, set, "rtl", () => {
+        set({ activeView: "specCheck", isExitingHome: false });
+        psd.setSpecViewMode("thumbnails");
+      });
+    });
+  },
+  slideFromDetailToHome: () => {
+    import("./psdStore").then(({ usePsdStore }) => {
+      const psd = usePsdStore.getState();
+      if (get().activeView === "specCheck" && psd.specViewMode === "home") return;
+      runSlideTransition(get, set, "ltr", () => {
+        set({ activeView: "specCheck", isExitingHome: false });
+        psd.setSpecViewMode("home");
+      });
+    });
+  },
+  slideToTool: (switchView) => {
+    if (get().slidePhase) return;
+    set({ slidePhase: "exit-up" });
+    window.setTimeout(() => {
+      if (get().slidePhase !== "exit-up") return;
+      switchView();
+      set({ slidePhase: "enter-from-bottom", isExitingHome: false });
+      window.setTimeout(() => {
+        if (get().slidePhase !== "enter-from-bottom") return;
+        set({ slidePhase: null });
+      }, 320);
+    }, 200);
+  },
 }));
+
+// ────────────────────────────────────────────────────────────
+// 横スライド遷移ヘルパー
+// ────────────────────────────────────────────────────────────
+// direction: "rtl" = 右から左（exit-left → enter-from-right）
+//            "ltr" = 左から右（exit-right → enter-from-left）
+// switchView: 第1段階（exit）終了後に呼ばれる同期処理。activeView や inner state の差替えをここで行う。
+function runSlideTransition(
+  get: () => ViewState,
+  set: (partial: Partial<ViewState>) => void,
+  direction: "rtl" | "ltr",
+  switchView: () => void,
+): void {
+  if (get().slidePhase) return;
+  const exitPhase = direction === "rtl" ? "exit-left" : "exit-right";
+  const enterPhase = direction === "rtl" ? "enter-from-right" : "enter-from-left";
+  set({ slidePhase: exitPhase });
+  window.setTimeout(() => {
+    // 中断検知: 別ナビで slidePhase が変わっていたら no-op
+    if (get().slidePhase !== exitPhase) return;
+    switchView();
+    set({ slidePhase: enterPhase });
+    window.setTimeout(() => {
+      if (get().slidePhase !== enterPhase) return;
+      set({ slidePhase: null });
+    }, 320);
+  }, 220);
+}
 
 /** Tauri互換のpromptダイアログ（window.promptの代替） */
 export function showPromptDialog(message: string, defaultValue = ""): Promise<string | null> {
