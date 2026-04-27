@@ -14,6 +14,7 @@ import { usePsdLoader } from "../../hooks/usePsdLoader";
 
 import { usePageNumberCheck } from "../../hooks/usePageNumberCheck";
 import { PreviewGrid } from "../preview/PreviewGrid";
+import { TextFileCard } from "../preview/TextFileCard";
 import { LayerSectionPanel } from "../metadata/MetadataPanel";
 import { FixGuidePanel } from "../spec-checker/FixGuidePanel";
 import { GuideSectionPanel } from "../spec-checker/GuideSectionPanel";
@@ -775,53 +776,53 @@ export function SpecCheckView() {
                   })}
                 </div>
               )}
-              {/* Non-PSD files (txt, json, etc.) — 全て or テキストフィルタ時に表示 */}
+              {/* Non-PSD files (txt, json, etc.) — 全て or テキストフィルタ時にカード表示 */}
               {folderContents && (fileTypeFilter === "all" || fileTypeFilter === "text") && (() => {
                 const SUPPORTED_BY_STORE = new Set([".psd", ".psb", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".pdf", ".eps"]);
                 const ALLOWED_EXTS = new Set([...SUPPORTED_BY_STORE, ".txt", ".json"]);
                 const nonPsdFiles = folderContents.allFiles.filter((f) => {
                   const d = f.lastIndexOf(".");
-                  if (d < 0) return false; // 拡張子なしは非表示
+                  if (d < 0) return false;
                   const ext = f.substring(d).toLowerCase();
                   return ALLOWED_EXTS.has(ext) && !SUPPORTED_BY_STORE.has(ext);
                 });
                 if (nonPsdFiles.length === 0) return null;
+                const size = THUMBNAIL_SIZES[thumbnailSize].value;
                 return (
-                <div className="flex flex-wrap gap-2 px-4 pt-2 pb-2">
-                  {nonPsdFiles.map((file) => {
-                    const color = getFileIconColor(file);
-                    const ext = getFileExt(file);
-                    const isSelected = selectedNonPsdItem === `file:${file}`;
-                    return (
-                      <div
-                        key={`f-${file}`}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer transition-colors text-sm ${
-                          isSelected ? "bg-sky-100 ring-1 ring-sky-400/50" : "bg-bg-tertiary/30 hover:bg-bg-tertiary"
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedNonPsdItem(`file:${file}`);
-                          usePsdStore.getState().clearSelection();
-                          handleOpenFile(file);
-                        }}
-                        onContextMenu={(e) => {
-                          if (!CONTEXT_MENU_ENABLED) return;
-                          e.preventDefault();
-                          if (!selectedTextFile || selectedTextFile.name !== file) handleOpenFile(file);
-                          setSelectedNonPsdItem(`file:${file}`);
-                          usePsdStore.getState().clearSelection();
-                          setContextMenu({ x: e.clientX, y: e.clientY });
-                        }}
-                        title={file}
-                      >
-                        <div className="w-5 h-5 rounded-sm flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0" style={{ backgroundColor: color }}>
-                          {ext.substring(0, 3)}
-                        </div>
-                        <span className="text-text-secondary truncate">{file}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                  <div className="px-4 pt-3 pb-2">
+                    <div
+                      className="grid gap-9"
+                      style={{
+                        gridTemplateColumns: `repeat(auto-fill, minmax(${size}px, ${Math.round(size * 1.3)}px))`,
+                      }}
+                    >
+                      {nonPsdFiles.map((file) => {
+                        const isSelected = selectedNonPsdItem === `file:${file}`;
+                        return (
+                          <TextFileCard
+                            key={`f-${file}`}
+                            fileName={file}
+                            size={size}
+                            isSelected={isSelected}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedNonPsdItem(`file:${file}`);
+                              usePsdStore.getState().clearSelection();
+                              handleOpenFile(file);
+                            }}
+                            onContextMenu={(e) => {
+                              if (!CONTEXT_MENU_ENABLED) return;
+                              e.preventDefault();
+                              if (!selectedTextFile || selectedTextFile.name !== file) handleOpenFile(file);
+                              setSelectedNonPsdItem(`file:${file}`);
+                              usePsdStore.getState().clearSelection();
+                              setContextMenu({ x: e.clientX, y: e.clientY });
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })()}
               {!hasFiles && !folderContents && <DropZone />}

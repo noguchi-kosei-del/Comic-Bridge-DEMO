@@ -2849,3 +2849,56 @@ v1.0.4 以降の累積アップデート。テキストエディタ↔ProGen 間
 | 改修 | [src/components/split/SplitPreview.tsx](src/components/split/SplitPreview.tsx) — サイズ表示削除 |
 | 改修 | [src/components/progen/ProgenRuleView.tsx](src/components/progen/ProgenRuleView.tsx) — テキストエディタジャンプ slide 化 |
 | バージョン | [package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml) — 1.0.4 → 1.0.5 |
+
+---
+
+## v1.0.6: ホームタイル色分けアイコン + TXT/JSON カード化 + 写植仕様バッジ整理 (2026-04-27)
+
+### 1. ホームタイルアイコンの「四角背景 + 白い線画」化
+[HomeLayout.tsx](src/components/views/HomeLayout.tsx) のツールタイルグリッドのアイコン表示を刷新。アイコンを `w-12 h-12 rounded-xl border` の角丸四角ラッパーで囲み、本体は lucide-react の線画 SVG を `text-white strokeWidth={2}` で描画。
+
+**カテゴリ別の背景色マップ** (`TILE_ICON_COLORS` 定数、ファイル冒頭 [HomeLayout.tsx:37-86](src/components/views/HomeLayout.tsx#L37)):
+
+| カテゴリ | btn.id | 背景色 |
+| --- | --- | --- |
+| 緑 (`bg-green-500`) | `progen` / `textEditor` / `split` / `layerControl` | 入稿系 |
+| 紫 (`bg-purple-500`) | `inspection` / `unifiedViewer` / `layers` / `scanPsd` | 確認・解析系 |
+| オレンジ (`bg-orange-500`) | `replace` / `compose` / `tiff` | 加工系 |
+| 水色 (`bg-sky-400`) | `folderSetup` / `requestPrep` | 準備系 |
+| デフォルト (`bg-accent`) | 上記以外 | フォールバック |
+
+各色は `bg` / `border` / `hover` 3種を `TileIconColor` 型でまとめ、`group-hover:bg-{color}-600` で hover 時に一段濃く。`icon-anim-${btn.id}` の個別アニメーションは維持。
+
+### 2. TXT / JSON ファイルもサムネイルビューでカード表示
+従来は `folderContents.allFiles` のうち PSD 系以外（txt/json）はホーム詳細のサムネイル画面で **小さな横並びピル** で表示されていたものを、PSD ファイルと同じカードグリッドに整列するように変更。
+
+**新規:** [src/components/preview/TextFileCard.tsx](src/components/preview/TextFileCard.tsx)
+- ThumbnailCard と同じアスペクト比 (1 : 1.4142 = A4) / 同じ ring / shadow / hover-translate スタイル
+- 中央に拡張子別カラーの SVG ロゴ (TXT=スレート / JSON=アンバー) — `lucide-react` の `FileText` / `FileJson`
+- 左上に拡張子バッジ (`TXT` / `JSON`)、下部にファイル名グラデオーバーレイ
+- `isSelected` 時は ThumbnailCard と同じ水色 ring + box-shadow
+
+**改修:** [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx)
+- 旧ピル表示 (`flex flex-wrap` の 5px ピル) を `grid auto-fill, minmax(${size}px, ${size*1.3}px)` のカードグリッドに置換
+- `THUMBNAIL_SIZES[thumbnailSize].value` を使ってサムネイルサイズ設定（小/中/大）に追従
+- クリック・右クリックメニュー・選択ハイライト (`selectedNonPsdItem`) は従来どおり
+
+リスト表示 (`viewMode === "list"` 時、`PsdFileListView`) は既存のコンパクト行表示のまま維持。`getFileIconColor` / `getFileExt` は List 表示で引き続き使用。
+
+### 3. 統合ビューアー写植仕様タブのバッジ整理
+[UnifiedViewer.tsx:1275-1308](src/components/unified-viewer/UnifiedViewer.tsx#L1275) のテキストレイヤー行レイアウト:
+
+**削除**: テキストプレビュー行 `<div className="text-[10px] text-text-muted/60 truncate mt-0.5">` (テキスト本文を `\n → " "` 変換 + 30 文字抜粋表示) — レイアウト圧迫の原因だったため撤去
+
+**変更**: フォントサイズ表示 `<span className="text-[10px] text-text-muted">` (旧: プレーンテキスト `12/14pt`) → 白フチ・カーニングと統一感のあるバッジスタイル `text-[9px] px-1 py-px rounded bg-bg-tertiary text-text-secondary` に変更
+
+**統合**: サイズ・白フチ・カーニングを 1 つの `flex flex-wrap gap-1` バッジ行にまとめる IIFE で集約（旧: サイズだけ別の `<span>`、白フチ/カーニングが別の IIFE で 2 段に分かれていた）
+
+### 主要変更ファイル
+| 区分 | パス |
+| --- | --- |
+| 新規 | [src/components/preview/TextFileCard.tsx](src/components/preview/TextFileCard.tsx) — TXT/JSON 用カードコンポーネント |
+| 改修 | [src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) — `TILE_ICON_COLORS` 色マップ、アイコン背景四角化、白線画化 |
+| 改修 | [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) — TXT/JSON ピル → カードグリッド、TextFileCard import |
+| 改修 | [src/components/unified-viewer/UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx) — 写植仕様タブのテキスト本文プレビュー削除、サイズをバッジ化 |
+| バージョン | [package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml) — 1.0.5 → 1.0.6 |

@@ -1277,17 +1277,20 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
                             <div className="text-[10px] text-text-secondary truncate" style={{ color }}>
                               {tl.textInfo.fonts.map((f) => getFontLabel(f)).join(", ")}
                             </div>
-                            {tl.textInfo.fontSizes.length > 0 && (
-                              <span className="text-[10px] text-text-muted">{tl.textInfo.fontSizes.join("/")}pt</span>
-                            )}
-                            {/* 白フチ / カーニング値バッジ */}
+                            {/* サイズ / 白フチ / カーニング値バッジ */}
                             {(() => {
                               const ti: any = tl.textInfo;
+                              const sizes = Array.isArray(tl.textInfo.fontSizes) ? tl.textInfo.fontSizes : [];
                               const stroke = (typeof ti?.strokeSize === "number" && ti.strokeSize > 0) ? ti.strokeSize : null;
                               const tracking: number[] = Array.isArray(ti?.tracking) ? ti.tracking.filter((t: number) => t !== 0) : [];
-                              if (stroke == null && tracking.length === 0) return null;
+                              if (sizes.length === 0 && stroke == null && tracking.length === 0) return null;
                               return (
                                 <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                  {sizes.length > 0 && (
+                                    <span className="text-[9px] px-1 py-px rounded bg-bg-tertiary text-text-secondary">
+                                      {sizes.join("/")}pt
+                                    </span>
+                                  )}
                                   {stroke != null && (
                                     <span className="text-[9px] px-1 py-px rounded bg-accent-tertiary/10 text-accent-tertiary">
                                       白フチ {stroke}px
@@ -1301,11 +1304,6 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
                                 </div>
                               );
                             })()}
-                            {tl.textInfo.text && (
-                              <div className="text-[10px] text-text-muted/60 truncate mt-0.5">
-                                {tl.textInfo.text.replace(/\n/g, " ").substring(0, 30)}
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>

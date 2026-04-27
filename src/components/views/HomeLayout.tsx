@@ -34,6 +34,55 @@ const TILE_TABS: TileTab[] = [
   { id: "tiff", label: "TIFF化", navIds: ["tiff", "scanPsd", "inspection"] },
 ];
 
+// ═══ タイルアイコンの背景色（カテゴリ別） ═══
+type TileIconColor = { bg: string; border: string; hover: string };
+const COLOR_GREEN: TileIconColor = {
+  bg: "bg-green-500",
+  border: "border-green-600/40",
+  hover: "group-hover:bg-green-600 group-hover:border-green-700/60",
+};
+const COLOR_PURPLE: TileIconColor = {
+  bg: "bg-purple-500",
+  border: "border-purple-600/40",
+  hover: "group-hover:bg-purple-600 group-hover:border-purple-700/60",
+};
+const COLOR_ORANGE: TileIconColor = {
+  bg: "bg-orange-500",
+  border: "border-orange-600/40",
+  hover: "group-hover:bg-orange-600 group-hover:border-orange-700/60",
+};
+const COLOR_SKY: TileIconColor = {
+  bg: "bg-sky-400",
+  border: "border-sky-500/40",
+  hover: "group-hover:bg-sky-500 group-hover:border-sky-600/60",
+};
+const COLOR_DEFAULT: TileIconColor = {
+  bg: "bg-accent",
+  border: "border-accent/40",
+  hover: "group-hover:bg-accent-hover group-hover:border-accent-hover/60",
+};
+const TILE_ICON_COLORS: Record<string, TileIconColor> = {
+  // 緑
+  progen: COLOR_GREEN,
+  textEditor: COLOR_GREEN,
+  split: COLOR_GREEN,
+  layerControl: COLOR_GREEN,
+  // 紫
+  inspection: COLOR_PURPLE,
+  unifiedViewer: COLOR_PURPLE,
+  layers: COLOR_PURPLE,
+  scanPsd: COLOR_PURPLE,
+  // オレンジ
+  replace: COLOR_ORANGE,
+  compose: COLOR_ORANGE,
+  tiff: COLOR_ORANGE,
+  // 水色
+  folderSetup: COLOR_SKY,
+  requestPrep: COLOR_SKY,
+  // フォールバック
+  __default: COLOR_DEFAULT,
+};
+
 export function HomeLayout() {
   const files = usePsdStore((s) => s.files);
   const setCurrentFolderPath = usePsdStore((s) => s.setCurrentFolderPath);
@@ -533,6 +582,7 @@ export function HomeLayout() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 auto-rows-fr content-start">
               {tileButtons.map((btn) => {
                 const Icon = btn.icon;
+                const tileColor = TILE_ICON_COLORS[btn.id] ?? TILE_ICON_COLORS.__default;
                 return (
                   <button
                     key={btn.id}
@@ -541,7 +591,9 @@ export function HomeLayout() {
                     className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl bg-bg-primary border border-border hover:border-accent/40 hover:bg-accent/5 shadow-soft hover:shadow-card transition-all group"
                   >
                     {Icon && (
-                      <Icon className={`w-8 h-8 text-text-secondary group-hover:text-accent transition-colors icon-anim-${btn.id}`} />
+                      <span className={`flex items-center justify-center w-12 h-12 rounded-xl border transition-colors ${tileColor.bg} ${tileColor.border} ${tileColor.hover}`}>
+                        <Icon className={`w-7 h-7 text-white transition-colors icon-anim-${btn.id}`} strokeWidth={2} />
+                      </span>
                     )}
                     <span className="text-sm font-medium text-text-primary text-center">
                       {btn.label}
