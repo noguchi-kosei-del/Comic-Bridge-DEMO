@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import {
-  Home, Eye, ScanLine, Layers, Shield, Sparkles, FileEdit,
+  Home, Image, GitCompare, ClipboardCheck, ScanLine, Layers, Shield, Sparkles, FileEdit,
   SlidersHorizontal, Replace, Combine, FileImage, Columns2, FolderCog, Package,
   type LucideIcon,
 } from "lucide-react";
@@ -15,7 +15,9 @@ export interface NavButton {
 /** 全てのナビ/ツール項目（ナビバーとツールメニュー両方で使用可能） */
 export const ALL_NAV_BUTTONS: NavButton[] = [
   { id: "specCheck", label: "ホーム", icon: Home },
-  { id: "unifiedViewer", label: "ビューアー", icon: Eye },
+  { id: "dtpViewer", label: "DTPビューアー", icon: Image },
+  { id: "textDiff", label: "テキスト照合", icon: GitCompare },
+  { id: "proofread", label: "校正JSON", icon: ClipboardCheck },
   { id: "inspection", label: "検版ツール", icon: Shield },
   { id: "progen", label: "ProGen", icon: Sparkles },
   { id: "textEditor", label: "テキストエディタ", icon: FileEdit },
@@ -83,13 +85,27 @@ function migrateToolMenu(existing: string[] | undefined): string[] {
 
 // Migration: 既存ユーザーの navBarButtons に inspection / progen / textEditor を追加（未登録の場合のみ）
 const LAYERS_REORDER_FLAG = "comic_bridge_migration_layers_after_home_v1";
+const SPLIT_VIEWER_MIGRATION_FLAG = "comic_bridge_migration_split_viewer_v1";
 
 function migrateNavBar(existing: string[] | undefined): string[] {
-  if (!existing) return ["specCheck", "layers", "unifiedViewer", "inspection", "progen", "textEditor", "scanPsd"];
+  if (!existing) return ["specCheck", "layers", "dtpViewer", "textDiff", "proofread", "inspection", "progen", "textEditor", "scanPsd"];
   let result = [...existing];
-  // inspection を unifiedViewer の直後に挿入
+  // unifiedViewer → dtpViewer/textDiff/proofread の3つに分離（一度だけ実行）
+  try {
+    if (!localStorage.getItem(SPLIT_VIEWER_MIGRATION_FLAG)) {
+      const idx = result.indexOf("unifiedViewer");
+      if (idx !== -1) {
+        result = [...result.slice(0, idx), "dtpViewer", "textDiff", "proofread", ...result.slice(idx + 1)];
+      }
+      localStorage.setItem(SPLIT_VIEWER_MIGRATION_FLAG, "1");
+    } else {
+      // 万が一 unifiedViewer が残っていたら除去（参照すると AppView 型エラー回避）
+      result = result.filter((id) => id !== "unifiedViewer");
+    }
+  } catch { /* ignore */ }
+  // inspection を proofread の直後に挿入
   if (!result.includes("inspection")) {
-    const idx = result.indexOf("unifiedViewer");
+    const idx = result.indexOf("proofread");
     if (idx === -1) result.push("inspection");
     else result = [...result.slice(0, idx + 1), "inspection", ...result.slice(idx + 1)];
   }

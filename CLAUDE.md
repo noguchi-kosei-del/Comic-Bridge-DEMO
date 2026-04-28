@@ -3035,3 +3035,111 @@ ProGen ルール編集画面の上部バーに、`LabelDropdown` を「校正用
 | 改修 | [src/components/scanPsd/ScanPsdPanel.tsx](src/components/scanPsd/ScanPsdPanel.tsx) — 仮保存警告赤化 |
 | 改修 | [src/components/views/FolderSetupView.tsx](src/components/views/FolderSetupView.tsx) — モーダル退場アニメ |
 | バージョン | [package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml) — 1.0.6 → 1.0.7 |
+
+---
+
+## v1.0.8: 統合ビューアー解体・3 ビューア独立化・スキャナー機能復元・タイル吹き出しアニメ (2026-04-29)
+
+統合ビューアー (`unifiedViewer`) を 3 つの独立ツール（DTPビューアー / テキスト照合 / 校正JSON）に分離し、レイヤー構造の詳細から飛ぶ独立レイヤービューアーを新設。スキャナーの欠落機能 `getAllMissingFields` を旧 COMIC-Bridge から復元。ホームタイルに吹き出し型ホバーアニメと個別アイコン演出を追加。
+
+### 1. レイヤービューアー独立化（SpecLayerGrid「詳細」ボタン経由）
+- **新規** [src/components/views/LayerViewerView.tsx](src/components/views/LayerViewerView.tsx) — 自己完結型レイヤービューアー画面
+  - レイアウト: ヘッダー(戻る/ファイルナビ) + 左 LayerTree(280px) + 中央画像 + SVG 矩形ハイライト
+  - ローカル state: `selectedLayerId` / `highlightBounds` / `imgFallbackDims`
+  - LayerTree クリック → `onSelectLayer(id, bounds)` で highlightBounds を更新 → `<svg viewBox="0 0 dims.w dims.h" preserveAspectRatio="xMidYMid meet">` 上に青矩形描画 ([UnifiedViewer.tsx:1970-1988](src/components/unified-viewer/UnifiedViewer.tsx#L1970) のロジックを移植)
+  - PDF/画像ファイル時は LayerTree 領域に空メッセージ
+- **viewStore 拡張** ([src/store/viewStore.ts](src/store/viewStore.ts))
+  - `AppView` に `"layerViewer"` 追加
+  - `previousView: AppView | null` フィールド + `goToLayerViewer()` / `goBackFromLayerViewer()` action
+  - **横スライド遷移**: `runSlideTransition` ヘルパーで `exit-left → enter-from-right`(進む) / `exit-right → enter-from-left`(戻る) — ホーム ↔ 詳細遷移と完全同一の演出
+- **SpecLayerGrid 詳細ボタン書き換え** ([src/components/spec-checker/SpecLayerGrid.tsx](src/components/spec-checker/SpecLayerGrid.tsx#L113)) — 旧 `toggleAll` (隣の「すべて展開」と重複) → `goToLayerViewer()` に変更、disabled を `files.length === 0 || !activeFileId` に強化
+
+### 2. 統合ビューアー (`unifiedViewer`) を 3 ビューに分離
+**`unifiedViewer` AppView は廃止。UnifiedViewer.tsx 自体は TextEditor 専用エンジンとして温存**（`textEditorMode=true` でのみ使用）。
+
+#### 新規 3 ビュー
+| ビュー | パス | 構成 |
+|---|---|---|
+| **DTPビューアー** | [DTPViewerView.tsx](src/components/views/DTPViewerView.tsx) | 当初は自前実装→後に `<SpecViewerPanel>` ラッパーに切替（参照プロジェクト COMIC-Bridge-main 同等構成）+ `hideLayerTree` オプション |
+| **テキスト照合** | [TextDiffView.tsx](src/components/views/TextDiffView.tsx) | 中央画像 + 右 480px に `<DiffPanel>` (props ベース) + `useTextDiff` フック |
+| **校正JSON** | [ProofreadView.tsx](src/components/views/ProofreadView.tsx) | `<ScopedViewerStoreProvider store={useUnifiedViewerStore}>` で wrap し `<ProofreadPanel>` をそのまま再利用 |
+
+#### 関連変更
+- **viewStore**: `AppView` から `"unifiedViewer"` 削除、`"dtpViewer"` / `"textDiff"` / `"proofread"` 追加
+- **ViewRouter**: 3 ビューを state-preserving mount で追加、`UnifiedViewerView` import 削除
+- **settingsStore.ALL_NAV_BUTTONS**: `unifiedViewer` 削除、3 ビュー追加（`Image` / `GitCompare` / `ClipboardCheck` アイコン）
+  - **localStorage マイグレーション**: `comic_bridge_migration_split_viewer_v1` フラグで 1 回だけ「unifiedViewer → 3 ビューに展開」を実行
+- **HomeLayout `TILE_ICON_COLORS`**: 3 ビュー全て紫カテゴリに割当
+- **workflowStore**: 旧 `nav: "unifiedViewer"` を `textDiff` / `inspection` / `textEditor` に再マッピング
+- **UnifiedViewerView.tsx 削除** + UnifiedViewer.tsx の `targetView` を `"textEditor"` 固定に変更
+- **globals.css**: `icon-anim-unifiedViewer` を 3 つに分割（dtpViewer / textDiff / proofread）
+
+#### 3 ビュー共通機能（後追い実装）
+- **マウスホイールページ送り** ([SpecViewerPanel:525-536](src/components/spec-checker/SpecViewerPanel.tsx#L525) と同じパターン): `useRef<HTMLDivElement>` + `el.addEventListener("wheel", ...)` で前後ファイル送り
+- **Photoshop で開くボタン** (TextDiffView / ProofreadView): ヘッダーに `w-[18px] h-[18px]` の "Ps" バッジ（公式ブルー `#31A8FF` + `border-[#31A8FF]/60`）+ `P` キーショートカット（`useOpenInPhotoshop` + `usePhotoshopConverter` フック使用）
+
+### 3. DTPビューアー: 自前実装 → SpecViewerPanel ベースへ
+当初の自前実装で発生した「画像オーバーフロー」「フォント帳キャプチャボタン消失」を契機に、参照プロジェクト COMIC-Bridge-main と同等の機能性を持つ既存 `<SpecViewerPanel>` をラップする方針に変更:
+
+- **ビュー本体は薄いラッパー** (`<SpecViewerPanel onOpenInPhotoshop={isPhotoshopInstalled ? openFileInPhotoshop : undefined} hideLayerTree />`)
+- **得られる機能**: 中央画像 + 右サイドバー / フォント絞り込み 3 状態 / 問題種別+白フチフィルタ / SVG ハイライトオーバーレイ / マーカー付き画像保存 / フォント帳キャプチャ / OS ネイティブ全画面 / ←→ + ホイールページ送り / P で Photoshop / F でフォルダを開く / 隣接±3 ファイル自動プリフェッチ
+- **`hideLayerTree` prop 新設** ([SpecViewerPanel.tsx](src/components/spec-checker/SpecViewerPanel.tsx)): true 時はサイドバーのタブ切替バー非表示、サイドバーを常に「写植仕様」のみに固定。DTPビューアーはこれを true で渡し「レイヤー構造」タブを非表示
+- **キャプチャボタン常時表示化** ([SpecViewerPanel.tsx:911-948](src/components/spec-checker/SpecViewerPanel.tsx#L911)): 旧 `currentJsonFilePath && fontBookDir && !isCapturing` の AND ガードを撤廃。常時 `top-3 left-12` (フルスクリーン左上ボタン `top-3 left-3` の右隣) に表示、JSON 未読込時はフェード表示 + クリックで「作品情報JSON を読み込んでください」アラート
+
+### 4. スキャナー欠落機能の復元（旧 COMIC-Bridge から）
+旧 [COMIC-Bridge-main/src/types/scanPsd.ts](https://github.com/yamamoto-ryusei-ux/COMIC-Bridge-integrated) との比較で **`getAllMissingFields` 関数が DEMO に欠落**していたため復元:
+
+- **types/scanPsd.ts に 3 関数追加** ([src/types/scanPsd.ts](src/types/scanPsd.ts))
+  - `getEmptyWorkInfoFields(info)` — 作品情報の必須項目未記入を文字列配列で返す
+  - `interface MissingField { tab: ScanPsdTab; label: string }` — タブ番号付き未記入項目
+  - `getAllMissingFields(opts)` — **全 5 タブ横断**で未記入・未設定項目を検出（作品情報 / フォントプリセット未登録・カテゴリ未設定 / 基本フォントサイズ・サイズ一覧・ストロークサイズ / ガイド線・選択範囲 / テキストログ・ルビ一覧）
+- **ScanPsdPanel.tsx 復元** ([src/components/scanPsd/ScanPsdPanel.tsx](src/components/scanPsd/ScanPsdPanel.tsx))（dead code だが整合性維持）: `missingFields` useMemo + 未記入バナー + 保存時確認ダイアログ
+- **ScanPsdEditView.tsx 統合** ([src/components/scanPsd/ScanPsdEditView.tsx](src/components/scanPsd/ScanPsdEditView.tsx))（実稼働 UI）: ヘッダー右に「⚠ 未記入 N項目」バッジボタン → クリックで詳細ダイアログ。保存時 `missingFields > 0` なら自動的に確認ダイアログ表示（戻って入力 / そのまま保存）
+
+**確認した同等性のもの（差分なし）**: `scan_psd.jsx` / `scan_psd_core.jsx` / Rust 側 4 コマンド / `scanPsdStore` / 5 つのタブコンポーネント — 全て完全一致。`TextRubyTab.tsx` は DEMO の方が +144 行（ルビ拡張）で前進、`notionPage` フィールド・3 カラム構成・ProGen 統合・TopNav プリセット自動読込は DEMO 独自で保持。
+
+### 5. ホーム画面: 個別アイコン演出 + 吹き出しアニメ
+- **アイコン別ホバーアニメ刷新** ([src/styles/globals.css](src/styles/globals.css))
+  - **DTPビューアー** (`Image`): フレーム(`<rect>`)が `currentColor` で塗りつぶされ、太陽(`<circle>`)+山(`<path>`) の線画が `#ffffff` に補間される「写真が現像される」演出（`transition: fill 0.35s` + `transition: stroke 0.35s`）
+  - **テキスト照合** (`GitCompare`): `icon-rotate` 0.8s linear で 1 周回転
+  - **校正JSON** (`ClipboardCheck`): 内部 3 番目の path（チェックマーク）に `stroke-dasharray: 24` + `@keyframes icon-draw-check (stroke-dashoffset 24 → 0)` で**チェックマークが書かれていく**0.55s アニメ
+- **タイル吹き出しホバーアニメ** ([src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx))
+  - `TileIconColor` 型に `tipColor: string` 追加（カテゴリ色ごとの border-top 色: `border-t-purple-200` 等）
+  - 丸アイコン `<span>` を `relative` 化、内部に絶対配置の三角形 `<span>` を追加
+  - **動作**: ホバー時に丸アイコンが `-translate-y-1` で 4px 持ち上がる + 三角形が `top-full -mt-1` 位置で `origin-top scale-y-0 → scale-y-100` で**○の底辺から押し出される**ように成長（300ms ease-out で同期）→ 結果として「○ + くちばし」の吹き出し形になり、その中で個別アイコンアニメが動く
+
+### 6. 初稿確認タブの並び順最適化
+[src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx#L32) の `proof` タブ navIds を再順序化:
+- **旧**: `[inspection, textEditor, layers, layerControl, dtpViewer, textDiff, proofread, progen, requestPrep]`
+- **新**: `[dtpViewer, textDiff, proofread, inspection, layers, textEditor, layerControl, progen, requestPrep]`
+
+DTPビューアー / テキスト照合 / 校正JSON が**先頭の 3 タイル**に来て、初稿確認の主要ツールが目立つ配置に。
+
+### 主要変更ファイル一覧
+| 区分 | パス |
+| --- | --- |
+| 新規 | [src/components/views/DTPViewerView.tsx](src/components/views/DTPViewerView.tsx) — SpecViewerPanel ラッパー |
+| 新規 | [src/components/views/TextDiffView.tsx](src/components/views/TextDiffView.tsx) — 画像 + DiffPanel |
+| 新規 | [src/components/views/ProofreadView.tsx](src/components/views/ProofreadView.tsx) — 画像 + ProofreadPanel |
+| 新規 | [src/components/views/LayerViewerView.tsx](src/components/views/LayerViewerView.tsx) — 画像 + LayerTree + SVG ハイライト |
+| 削除 | src/components/views/UnifiedViewerView.tsx |
+| 削除 | src/components/views/ViewerView.tsx — 重複ラッパー |
+| 改修 | [src/store/viewStore.ts](src/store/viewStore.ts) — AppView 4 種入替 + previousView + 4 action 追加 + LayerViewer 横スライド |
+| 改修 | [src/components/layout/ViewRouter.tsx](src/components/layout/ViewRouter.tsx) — 4 ビュー (3 統合分離 + LayerViewer) のマウント切替 |
+| 改修 | [src/store/settingsStore.ts](src/store/settingsStore.ts) — ALL_NAV_BUTTONS 4 種入替 + split_viewer_v1 マイグレーション |
+| 改修 | [src/store/workflowStore.ts](src/store/workflowStore.ts) — `unifiedViewer` 5 箇所を新ビューに再マッピング |
+| 改修 | [src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) — TILE_ICON_COLORS / proof navIds / 吹き出し三角追加 / 円持ち上げ |
+| 改修 | [src/components/spec-checker/SpecLayerGrid.tsx](src/components/spec-checker/SpecLayerGrid.tsx) — 詳細ボタンを LayerViewer 遷移に |
+| 改修 | [src/components/spec-checker/SpecViewerPanel.tsx](src/components/spec-checker/SpecViewerPanel.tsx) — `hideLayerTree` prop / キャプチャボタン常時表示 |
+| 改修 | [src/components/scanPsd/ScanPsdPanel.tsx](src/components/scanPsd/ScanPsdPanel.tsx) / [ScanPsdEditView.tsx](src/components/scanPsd/ScanPsdEditView.tsx) — missingFields ロジック復元 |
+| 改修 | [src/types/scanPsd.ts](src/types/scanPsd.ts) — getAllMissingFields / MissingField / getEmptyWorkInfoFields 追加 |
+| 改修 | [src/components/unified-viewer/UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx) — targetView を `"textEditor"` 固定化 |
+| 改修 | [src/styles/globals.css](src/styles/globals.css) — DTP塗り/Diff回転/校正描画/吹き出し用変数 |
+| 改修 | [src/store/diffStore.ts](src/store/diffStore.ts) — コメント更新 |
+| バージョン | [package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml) — 1.0.7 → 1.0.8 |
+
+### 注意事項
+- **DTPビューアーから旧自前実装は完全撤廃**。ファイル一覧サイドバーやシンプルズーム/パンも参照プロジェクト準拠の SpecViewerPanel 実装に置換されたため、ファイル送りは ←→ / マウスホイール / ヘッダー ◀▶ ボタンに統一された
+- **TextEditor は無傷**: UnifiedViewer.tsx 本体は textEditorMode 経由で稼働継続
+- **既存ユーザーの localStorage**: `migrateNavBar` 内の `comic_bridge_migration_split_viewer_v1` フラグで「`unifiedViewer` → `dtpViewer` / `textDiff` / `proofread`」を 1 回だけ自動展開。フラグ消去で再実行可能
+- **Notion ページ自動起動** (Scan PSD `notionPage` 連携) と **作品情報 JSON への ProGen `proofRules` 適用** は DEMO 独自実装として保持

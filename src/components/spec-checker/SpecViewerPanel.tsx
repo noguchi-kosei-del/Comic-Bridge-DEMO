@@ -54,6 +54,8 @@ interface SpecViewerPanelProps {
   onFilterIssueConsumed?: () => void;
   initialFilterStroke?: number | null;
   onFilterStrokeConsumed?: () => void;
+  /** レイヤー構造タブを非表示にする（DTPビューアー用）。指定時はサイドバーが「写植仕様」のみ */
+  hideLayerTree?: boolean;
 }
 
 export function SpecViewerPanel({
@@ -64,6 +66,7 @@ export function SpecViewerPanel({
   onFilterIssueConsumed,
   initialFilterStroke,
   onFilterStrokeConsumed,
+  hideLayerTree = false,
 }: SpecViewerPanelProps) {
   const files = usePsdStore((s) => s.files);
   const selectedFileIds = usePsdStore((s) => s.selectedFileIds);
@@ -908,12 +911,31 @@ export function SpecViewerPanel({
           )}
         </button>
 
-        {/* Font book capture button — only when JSON is loaded */}
-        {currentJsonFilePath && fontBookDir && !isCapturing && (
+        {/* Font book capture button — フルスクリーンボタン(left-3)の右隣 (left-12)。
+            JSON未読込時はクリックで案内、JSON読込済時は CaptureOverlay を起動。 */}
+        {!isCapturing && (
           <button
-            onClick={() => setIsCapturing(true)}
-            className="absolute top-3 left-12 z-10 w-8 h-8 rounded-lg bg-black/50 hover:bg-black/70 flex items-center justify-center text-white/70 hover:text-white transition-all backdrop-blur-sm"
-            title="フォント帳にキャプチャ"
+            onClick={() => {
+              if (!currentJsonFilePath) {
+                alert("作品情報JSON を読み込んでください（TopNav の作品情報JSONボタン）。\nフォント帳の保存先を確定するために必要です。");
+                return;
+              }
+              if (!fontBookDir) {
+                alert("フォント帳フォルダが未確定です。作品情報JSON のレーベル/タイトルを設定してください。");
+                return;
+              }
+              setIsCapturing(true);
+            }}
+            className={`absolute top-3 left-12 z-10 w-8 h-8 rounded-lg flex items-center justify-center transition-all backdrop-blur-sm ${
+              currentJsonFilePath && fontBookDir
+                ? "bg-black/50 hover:bg-black/70 text-white/70 hover:text-white"
+                : "bg-black/30 hover:bg-black/50 text-white/40 hover:text-white/70"
+            }`}
+            title={
+              currentJsonFilePath && fontBookDir
+                ? "フォント帳にキャプチャ（ドラッグで範囲選択 → フォントを選んで保存）"
+                : "フォント帳にキャプチャ（作品情報JSONを読み込んでください）"
+            }
           >
             <svg
               className="w-4 h-4"
@@ -1039,35 +1061,37 @@ export function SpecViewerPanel({
           )}
         </div>
 
-        {/* Sidebar tab switcher */}
-        <div className="px-3 py-1.5 border-b border-border flex-shrink-0">
-          <div className="flex bg-bg-elevated rounded-md p-0.5 border border-white/5">
-            <button
-              onClick={() => setSidebarTab("text")}
-              className={`flex-1 px-2 py-1 text-[10px] rounded transition-all ${
-                sidebarTab === "text"
-                  ? "bg-bg-tertiary text-text-primary font-medium shadow-sm"
-                  : "text-text-muted hover:text-text-secondary"
-              }`}
-            >
-              写植仕様
-            </button>
-            <button
-              onClick={() => setSidebarTab("layers")}
-              className={`flex-1 px-2 py-1 text-[10px] rounded transition-all ${
-                sidebarTab === "layers"
-                  ? "bg-bg-tertiary text-text-primary font-medium shadow-sm"
-                  : "text-text-muted hover:text-text-secondary"
-              }`}
-            >
-              レイヤー構造
-            </button>
+        {/* Sidebar tab switcher — hideLayerTree 指定時は非表示（写植仕様のみ表示） */}
+        {!hideLayerTree && (
+          <div className="px-3 py-1.5 border-b border-border flex-shrink-0">
+            <div className="flex bg-bg-elevated rounded-md p-0.5 border border-white/5">
+              <button
+                onClick={() => setSidebarTab("text")}
+                className={`flex-1 px-2 py-1 text-[10px] rounded transition-all ${
+                  sidebarTab === "text"
+                    ? "bg-bg-tertiary text-text-primary font-medium shadow-sm"
+                    : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                写植仕様
+              </button>
+              <button
+                onClick={() => setSidebarTab("layers")}
+                className={`flex-1 px-2 py-1 text-[10px] rounded transition-all ${
+                  sidebarTab === "layers"
+                    ? "bg-bg-tertiary text-text-primary font-medium shadow-sm"
+                    : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                レイヤー構造
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Sidebar content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-          {sidebarTab === "text" ? (
+          {sidebarTab === "text" || hideLayerTree ? (
             <div className="p-2 space-y-1.5">
               {/* Font filter bar — always shows all fonts */}
               {fontInfo.allFontNames.length > 0 && (

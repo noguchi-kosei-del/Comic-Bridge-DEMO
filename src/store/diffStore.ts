@@ -338,7 +338,7 @@ export const useDiffStore = create<DiffStore>((set, get) => ({
         console.error("loadFolderSide error:", e);
       }
     }
-    // compareMode の自動判定はタブ移動時のみ（UnifiedViewerView 側で実行）
+    // compareMode の自動判定はタブ移動時のみ（InspectionToolView 側で実行）
     get().rebuildPairs();
 
     // 各ファイルのプレビューを並行取得（バックグラウンド）

@@ -5,6 +5,7 @@ import { useScanPsdStore } from "../../store/scanPsdStore";
 import { useProgenStore } from "../../store/progenStore";
 import { useScanPsdProcessor } from "../../hooks/useScanPsdProcessor";
 import type { ScanResult } from "../../hooks/useScanPsdProcessor";
+import { TAB_LABELS, getAllMissingFields } from "../../types/scanPsd";
 import { WorkInfoTab } from "./tabs/WorkInfoTab";
 import { FontTypesTab } from "./tabs/FontTypesTab";
 import { FontSizesTab } from "./tabs/FontSizesTab";
@@ -67,7 +68,27 @@ export function ScanPsdEditView() {
   const pendingTitleLabel = useScanPsdStore((s) => s.pendingTitleLabel);
   const scanData = useScanPsdStore((s) => s.scanData);
   const presetSets = useScanPsdStore((s) => s.presetSets);
+  const selectedGuideIndex = useScanPsdStore((s) => s.selectedGuideIndex);
+  const selectionRanges = useScanPsdStore((s) => s.selectionRanges);
+  const rubyList = useScanPsdStore((s) => s.rubyList);
   const { savePresetJson, startScan, removeVolumeData } = useScanPsdProcessor();
+
+  // 全タブの未記入・未設定項目
+  const missingFields = useMemo(
+    () =>
+      getAllMissingFields({
+        workInfo,
+        presetSets,
+        scanData,
+        selectedGuideIndex,
+        selectionRanges,
+        rubyList,
+      }),
+    [workInfo, presetSets, scanData, selectedGuideIndex, selectionRanges, rubyList],
+  );
+
+  // 保存時の未記入警告ダイアログ
+  const [showEmptyFieldsDialog, setShowEmptyFieldsDialog] = useState(false);
 
   // workInfo.label変更時にProGenマスタールールを自動読み込み
   // + currentJsonFilePath からJSONを読み込み proofRules があれば適用
@@ -137,12 +158,25 @@ export function ScanPsdEditView() {
 
   const fileName = currentJsonFilePath ? currentJsonFilePath.split(/[\\/]/).pop() || "" : "";
 
-  const handleSave = async () => {
+  const doSave = async () => {
     try {
       await savePresetJson();
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleSave = async () => {
+    if (missingFields.length > 0) {
+      setShowEmptyFieldsDialog(true);
+      return;
+    }
+    await doSave();
+  };
+
+  const handleForceSave = async () => {
+    setShowEmptyFieldsDialog(false);
+    await doSave();
   };
 
   // --- 追加スキャンダイアログ操作 ---
@@ -280,6 +314,15 @@ export function ScanPsdEditView() {
           <span className="text-[10px] text-error font-semibold bg-error/10 px-2.5 py-1 rounded-full border border-error/20 animate-pulse">
             ⚠ 未登録フォント {unregisteredCount}件
           </span>
+        )}
+        {missingFields.length > 0 && (
+          <button
+            onClick={() => setShowEmptyFieldsDialog(true)}
+            className="text-[10px] text-warning font-semibold bg-warning/10 px-2.5 py-1 rounded-full border border-warning/20 hover:bg-warning/20 transition-colors"
+            title="未記入・未設定項目を確認"
+          >
+            ⚠ 未記入 {missingFields.length}項目
+          </button>
         )}
         {pendingTitleLabel && (
           <span className="text-[10px] text-warning font-semibold bg-warning/10 px-2.5 py-1 rounded-full border border-warning/20">
@@ -586,6 +629,67 @@ export function ScanPsdEditView() {
           result={scanCompleteResult}
           onClose={() => setScanCompleteResult(null)}
         />
+      )}
+
+      {/* 未記入フィールド警告ダイアログ（保存時 + バッジクリック時） */}
+      {showEmptyFieldsDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowEmptyFieldsDialog(false);
+          }}
+        >
+          <div
+            className="bg-bg-secondary rounded-2xl shadow-xl w-[420px] max-h-[80vh] overflow-hidden border border-border flex flex-col"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 pt-6 pb-4 text-center">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-warning/10 flex items-center justify-center mb-3">
+                <svg
+                  className="w-6 h-6 text-warning"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-sm font-bold text-text-primary mb-3">未記入・未設定の項目があります</h3>
+            </div>
+            <div className="px-6 flex-1 overflow-auto">
+              <div className="flex flex-wrap gap-1.5 justify-center mb-3">
+                {missingFields.map((f, i) => (
+                  <span
+                    key={i}
+                    className="text-[11px] px-2 py-0.5 rounded-full bg-warning/15 text-warning font-medium"
+                  >
+                    {TAB_LABELS[f.tab]}: {f.label}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[11px] text-text-muted text-center pb-3">このまま保存しますか？</p>
+            </div>
+            <div className="px-6 pb-5 flex gap-2 flex-shrink-0 border-t border-border/30 pt-3">
+              <button
+                onClick={() => setShowEmptyFieldsDialog(false)}
+                className="flex-1 px-4 py-2.5 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-xl hover:bg-bg-tertiary/80 transition-colors"
+              >
+                戻って入力
+              </button>
+              <button
+                onClick={handleForceSave}
+                className="flex-1 px-4 py-2.5 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-xl hover:-translate-y-0.5 transition-all shadow-sm"
+              >
+                そのまま保存
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -133,7 +133,9 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
   useEffect(() => {
     // UnifiedViewer は「ビューアー」と「テキストエディタ」の両 View にマウントされるため、
     // 自身が該当する activeView の時のみ同期する（インスタンスの混線防止）。
-    const targetView = textEditorMode ? "textEditor" : "unifiedViewer";
+    // UnifiedViewer はテキストエディタビュー専用エンジンとして残置。
+    // 統合ビューアーView（旧 unifiedViewer）は v1.0.8 で DTPビューアー / テキスト照合 / 校正JSON に分離済。
+    const targetView = textEditorMode ? "textEditor" : "textEditor";
     if (activeView === targetView) {
       doSync();
       cache.current.clear();
@@ -205,7 +207,7 @@ function UnifiedViewerInner({ textEditorMode = false }: UnifiedViewerProps) {
   const [highlightBounds, setHighlightBounds] = useState<{ top: number; left: number; bottom: number; right: number } | null>(null);
   const [activeFontFilter, setActiveFontFilter] = useState<string | null>(null);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  const [activeTabId, setActiveTabId] = useState<PanelTab>("text");
+  const [activeTabId, setActiveTabId] = useState<PanelTab>("layers");
   const [captureStatus, setCaptureStatus] = useState<string | null>(null);
 
   // フォント帳の自動読み込み（作品情報JSON読み込み時）

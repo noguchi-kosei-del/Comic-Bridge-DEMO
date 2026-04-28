@@ -12,11 +12,14 @@ import { ScanPsdView } from "../views/ScanPsdView";
 // import { TypsettingView } from "../views/TypsettingView";
 // KENBAN は完全削除済み（差分・分割は統合ビューアーへReact移植完了）
 import { ProgenView } from "../views/ProgenView";
-import { UnifiedViewerView } from "../views/UnifiedViewerView";
+import { DTPViewerView } from "../views/DTPViewerView";
+import { TextDiffView } from "../views/TextDiffView";
+import { ProofreadView } from "../views/ProofreadView";
 import { TextEditorView } from "../views/TextEditorView";
 import { FolderSetupView } from "../views/FolderSetupView";
 import { RequestPrepView } from "../views/RequestPrepView";
 import { InspectionToolView } from "../views/InspectionToolView";
+import { LayerViewerView } from "../views/LayerViewerView";
 
 export function ViewRouter() {
   const activeView = useViewStore((s) => s.activeView);
@@ -26,13 +29,17 @@ export function ViewRouter() {
 
   // State-preserving mount for heavy tabs (once mounted, never unmount)
   const [progenMounted, setProgenMounted] = useState(false);
-  const [unifiedViewerMounted, setUnifiedViewerMounted] = useState(false);
+  const [dtpViewerMounted, setDtpViewerMounted] = useState(false);
+  const [textDiffMounted, setTextDiffMounted] = useState(false);
+  const [proofreadMounted, setProofreadMounted] = useState(false);
   const [textEditorMounted, setTextEditorMounted] = useState(false);
   const [inspectionMounted, setInspectionMounted] = useState(false);
 
   useEffect(() => {
     if (activeView === "progen") setProgenMounted(true);
-    if (activeView === "unifiedViewer") setUnifiedViewerMounted(true);
+    if (activeView === "dtpViewer") setDtpViewerMounted(true);
+    if (activeView === "textDiff") setTextDiffMounted(true);
+    if (activeView === "proofread") setProofreadMounted(true);
     if (activeView === "textEditor") setTextEditorMounted(true);
     if (activeView === "inspection") setInspectionMounted(true);
   }, [activeView]);
@@ -62,6 +69,7 @@ export function ViewRouter() {
       {activeView === "scanPsd" && <ScanPsdView />}
       {activeView === "folderSetup" && <FolderSetupView />}
       {activeView === "requestPrep" && <RequestPrepView />}
+      {activeView === "layerViewer" && <LayerViewerView />}
 
       {/* ProGen: React native (state-preserving via display toggle) */}
       {progenMounted && (
@@ -70,10 +78,24 @@ export function ViewRouter() {
         </div>
       )}
 
-      {/* Unified Viewer: display toggle for state preservation */}
-      {unifiedViewerMounted && (
-        <div style={{ display: activeView === "unifiedViewer" ? "contents" : "none" }}>
-          <UnifiedViewerView />
+      {/* DTP Viewer: display toggle for state preservation */}
+      {dtpViewerMounted && (
+        <div style={{ display: activeView === "dtpViewer" ? "contents" : "none" }}>
+          <DTPViewerView />
+        </div>
+      )}
+
+      {/* Text Diff: display toggle for state preservation */}
+      {textDiffMounted && (
+        <div style={{ display: activeView === "textDiff" ? "contents" : "none" }}>
+          <TextDiffView />
+        </div>
+      )}
+
+      {/* Proofread: display toggle for state preservation */}
+      {proofreadMounted && (
+        <div style={{ display: activeView === "proofread" ? "contents" : "none" }}>
+          <ProofreadView />
         </div>
       )}
 

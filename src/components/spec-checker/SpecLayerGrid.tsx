@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { usePsdStore } from "../../store/psdStore";
+import { useViewStore } from "../../store/viewStore";
 import {
   collectTextLayers,
   useFontResolver,
@@ -19,13 +20,6 @@ export function SpecLayerGrid({ layoutMode = "grid" }: { layoutMode?: LayerLayou
   const allExpanded = files.length > 0 && files.every((f) => expandedIds.has(f.id));
   const toggleAll = () => {
     setExpandedIds(allExpanded ? new Set() : new Set(files.map((f) => f.id)));
-  };
-  const toggleOne = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
   };
 
   // 全ファイル合計サマリー
@@ -116,7 +110,25 @@ export function SpecLayerGrid({ layoutMode = "grid" }: { layoutMode?: LayerLayou
 
       {layoutMode === "grid" ? (
         <>
-          <div className="px-4 pt-2 flex items-center justify-end">
+          <div className="px-4 pt-2 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => useViewStore.getState().goToLayerViewer()}
+              disabled={files.length === 0 || !activeFileId}
+              className="px-2 py-1 text-[10px] rounded-md bg-bg-tertiary text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-border/50 transition-colors inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="選択中ファイルのレイヤービューアーを開く"
+            >
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              詳細
+            </button>
             <button
               type="button"
               onClick={toggleAll}
@@ -155,7 +167,6 @@ export function SpecLayerGrid({ layoutMode = "grid" }: { layoutMode?: LayerLayou
                   fontInfo={fontInfo}
                   onSelect={() => selectFile(file.id)}
                   isExpanded={expandedIds.has(file.id)}
-                  onToggleExpand={() => toggleOne(file.id)}
                 />
               );
             })}
@@ -192,7 +203,6 @@ function SpecLayerCard({
   fontInfo,
   onSelect,
   isExpanded,
-  onToggleExpand,
 }: {
   file: any;
   textLayers: any[];
@@ -200,7 +210,6 @@ function SpecLayerCard({
   fontInfo: any;
   onSelect: () => void;
   isExpanded: boolean;
-  onToggleExpand: () => void;
 }) {
   return (
     <div
@@ -213,24 +222,6 @@ function SpecLayerCard({
     >
       {/* Header */}
       <div className={`px-3 py-2 flex items-center gap-2 ${isExpanded ? "border-b border-border/60" : ""}`}>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-          className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
-          aria-label={isExpanded ? "折りたたむ" : "展開する"}
-          aria-expanded={isExpanded}
-          title={isExpanded ? "折りたたむ" : "展開する"}
-        >
-          <svg
-            className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
         <span className={`text-[11px] font-medium truncate flex-1 ${isActive ? "text-accent" : "text-text-primary"}`}>
           {file.fileName.replace(/\.(psd|psb)$/i, "")}
         </span>

@@ -1015,8 +1015,24 @@ html.dark-mode-invert * {
 @keyframes icon-pull-apart { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(1.2); } }
 @keyframes icon-rotate     { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 @keyframes icon-bounce     { 0%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } 60% { transform: translateY(0); } 80% { transform: translateY(-2px); } }
+/* 校正JSON: クリップボードの中のチェックマーク (3 番目の path) を「書く」ように描画する。
+   stroke-dashoffset を 24 → 0 で線を一筆書き表示。 */
+@keyframes icon-draw-check { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
 
-.group:hover .icon-anim-unifiedViewer { animation: icon-blink      0.6s ease-in-out; }
+/* DTPビューアー: ホバー時にフレーム(rect)が現アイコン色で塗りつぶされ、
+   太陽(circle) + 山(path) の線画が白に変化する。「写真が現像される」イメージ。 */
+.icon-anim-dtpViewer > :nth-child(1) { transition: fill 0.35s ease-out; }
+.icon-anim-dtpViewer > :nth-child(2),
+.icon-anim-dtpViewer > :nth-child(3) { transition: stroke 0.35s ease-out; }
+.group:hover .icon-anim-dtpViewer > :nth-child(1) { fill: currentColor; }
+.group:hover .icon-anim-dtpViewer > :nth-child(2),
+.group:hover .icon-anim-dtpViewer > :nth-child(3) { stroke: #ffffff; }
+.group:hover .icon-anim-textDiff      { animation: icon-rotate     0.8s linear; }
+/* 校正JSON: ホバー時にチェックマークだけ再描画（クリップボード本体は静止） */
+.group:hover .icon-anim-proofread > :nth-child(3) {
+  stroke-dasharray: 24;
+  animation: icon-draw-check 0.55s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
 /* 検版ツール: 盾の内側に fill が緩やかに入って抜ける（fill-opacity 0 → 0.5 → 0）。
    stroke は静止のまま、currentColor は group-hover:text-accent と連動。 */
 .group:hover .icon-anim-inspection > * { animation: icon-fill 1.6s ease-in-out infinite; }

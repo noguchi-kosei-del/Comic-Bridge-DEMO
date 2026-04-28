@@ -12,10 +12,13 @@ export type AppView =
   | "typesetting"
   | "progen"
   | "textEditor"
-  | "unifiedViewer"
+  | "dtpViewer"
+  | "textDiff"
+  | "proofread"
   | "folderSetup"
   | "requestPrep"
-  | "inspection";
+  | "inspection"
+  | "layerViewer";
 
 export type ProgenMode = "extraction" | "formatting" | "proofreading" | null;
 
@@ -40,6 +43,8 @@ interface ViewState {
   isEnteringWorkflow: boolean;
   /** ProGen ⇔ TextEditor / ホーム ⇔ 詳細 / TopNavツール の遷移アニメフェーズ。ViewRouter ラッパーに animate-slide-* クラスを付与 */
   slidePhase: "exit-left" | "exit-right" | "enter-from-right" | "enter-from-left" | "exit-up" | "enter-from-bottom" | null;
+  /** レイヤービューアー入場前のビュー（戻るボタン用） */
+  previousView: AppView | null;
 
   setActiveView: (view: AppView) => void;
   setDetailPanelOpen: (open: boolean) => void;
@@ -64,6 +69,10 @@ interface ViewState {
   slideFromDetailToHome: () => void;
   /** TopNav ツールメニュー → 任意ビュー: 下から上への縦スライド切替（exit-up → enter-from-bottom） */
   slideToTool: (switchView: () => void) => void;
+  /** レイヤービューアーへ遷移（前ビューを記憶） */
+  goToLayerViewer: () => void;
+  /** レイヤービューアーから前ビューへ戻る */
+  goBackFromLayerViewer: () => void;
 }
 
 export const useViewStore = create<ViewState>((set, get) => ({
@@ -78,6 +87,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   isExitingHome: false,
   isEnteringWorkflow: false,
   slidePhase: null,
+  previousView: null,
 
   setActiveView: (activeView) => set({ activeView, isExitingHome: false, slidePhase: null }),
   setDetailPanelOpen: (isDetailPanelOpen) => set({ isDetailPanelOpen }),
@@ -154,6 +164,26 @@ export const useViewStore = create<ViewState>((set, get) => ({
         set({ slidePhase: null });
       }, 320);
     }, 200);
+  },
+  goToLayerViewer: () => {
+    if (get().activeView === "layerViewer") return;
+    const fromView = get().activeView;
+    // ホーム → 詳細 と同じ右→左スライド（exit-left → enter-from-right）
+    runSlideTransition(get, set, "rtl", () => {
+      set({
+        previousView: fromView,
+        activeView: "layerViewer",
+        isExitingHome: false,
+      });
+    });
+  },
+  goBackFromLayerViewer: () => {
+    if (get().activeView !== "layerViewer") return;
+    const prev = get().previousView ?? "specCheck";
+    // 詳細 → ホーム と同じ左→右スライド（exit-right → enter-from-left）
+    runSlideTransition(get, set, "ltr", () => {
+      set({ activeView: prev, previousView: null });
+    });
   },
 }));
 

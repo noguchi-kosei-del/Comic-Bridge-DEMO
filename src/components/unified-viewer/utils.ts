@@ -6,7 +6,6 @@ import type { TextPage, FontPresetEntry } from "../../store/unifiedViewerStore";
 import {
   Layers,
   Ruler,
-  Type,
   ClipboardCheck,
   GitCompare,
   FileEdit,
@@ -18,7 +17,6 @@ import {
 export const ALL_PANEL_TABS: { id: PanelTab; label: string; icon: LucideIcon }[] = [
   { id: "layers", label: "レイヤー", icon: Layers },
   { id: "spec", label: "写植仕様", icon: Ruler },
-  { id: "text", label: "テキスト", icon: Type },
   { id: "proofread", label: "校正JSON", icon: ClipboardCheck },
   { id: "diff", label: "テキスト照合", icon: GitCompare },
   { id: "editor", label: "テキストエディタ", icon: FileEdit },

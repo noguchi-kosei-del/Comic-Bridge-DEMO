@@ -28,43 +28,49 @@ interface TileTab {
 
 const TILE_TABS: TileTab[] = [
   { id: "all", label: "すべて", navIds: null },
-  { id: "ingest", label: "入稿", navIds: ["progen", "textEditor", "split", "layerControl", "requestPrep"] },
-  { id: "proof", label: "初稿確認", navIds: ["inspection", "textEditor", "layers", "layerControl", "unifiedViewer", "progen"] },
-  { id: "whiteout", label: "差し替え", navIds: ["replace", "compose", "inspection"] },
-  { id: "tiff", label: "TIFF化", navIds: ["tiff", "scanPsd", "inspection"] },
+  { id: "ingest", label: "入稿", navIds: ["progen", "textEditor", "split", "layerControl", "folderSetup"] },
+  { id: "proof", label: "初稿確認", navIds: ["dtpViewer", "textDiff", "proofread", "inspection", "layers", "textEditor", "layerControl", "progen", "requestPrep"] },
+  { id: "whiteout", label: "白消し", navIds: ["replace", "compose", "inspection"] },
+  { id: "tiff", label: "TIFF制作", navIds: ["tiff", "scanPsd", "inspection"] },
 ];
 
 // ═══ タイルアイコンの背景色（カテゴリ別） ═══
-type TileIconColor = { bg: string; border: string; hover: string; iconText: string };
+// tipColor: ホバー時に出現する吹き出しのくちばし(三角形)の border-top 色（hover bg と一致）
+type TileIconColor = { bg: string; border: string; hover: string; iconText: string; tipColor: string };
 const COLOR_GREEN: TileIconColor = {
   bg: "bg-green-100",
   border: "border-green-200/60",
   hover: "group-hover:bg-green-200 group-hover:border-green-300/70",
   iconText: "text-green-600",
+  tipColor: "border-t-green-200",
 };
 const COLOR_PURPLE: TileIconColor = {
   bg: "bg-purple-100",
   border: "border-purple-200/60",
   hover: "group-hover:bg-purple-200 group-hover:border-purple-300/70",
   iconText: "text-purple-600",
+  tipColor: "border-t-purple-200",
 };
 const COLOR_ORANGE: TileIconColor = {
   bg: "bg-orange-100",
   border: "border-orange-200/60",
   hover: "group-hover:bg-orange-200 group-hover:border-orange-300/70",
   iconText: "text-orange-600",
+  tipColor: "border-t-orange-200",
 };
 const COLOR_SKY: TileIconColor = {
   bg: "bg-sky-100",
   border: "border-sky-200/60",
   hover: "group-hover:bg-sky-200 group-hover:border-sky-300/70",
   iconText: "text-sky-600",
+  tipColor: "border-t-sky-200",
 };
 const COLOR_DEFAULT: TileIconColor = {
   bg: "bg-accent/15",
   border: "border-accent/30",
   hover: "group-hover:bg-accent/25 group-hover:border-accent/50",
   iconText: "text-accent",
+  tipColor: "border-t-accent/25",
 };
 const TILE_ICON_COLORS: Record<string, TileIconColor> = {
   // 緑
@@ -72,7 +78,9 @@ const TILE_ICON_COLORS: Record<string, TileIconColor> = {
   textEditor: COLOR_GREEN,
   // 紫
   inspection: COLOR_PURPLE,
-  unifiedViewer: COLOR_PURPLE,
+  dtpViewer: COLOR_PURPLE,
+  textDiff: COLOR_PURPLE,
+  proofread: COLOR_PURPLE,
   layers: COLOR_PURPLE,
   scanPsd: COLOR_PURPLE,
   // オレンジ
@@ -596,8 +604,21 @@ export function HomeLayout() {
                     className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl bg-bg-primary border border-border hover:border-accent/40 hover:bg-accent/5 shadow-soft hover:shadow-card transition-all group"
                   >
                     {Icon && (
-                      <span className={`flex items-center justify-center w-14 h-14 rounded-full transition-colors ${tileColor.bg} ${tileColor.hover}`}>
+                      <span className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ease-out group-hover:-translate-y-1 ${tileColor.bg} ${tileColor.hover}`}>
                         <Icon className={`w-7 h-7 transition-colors icon-anim-${btn.id} ${tileColor.iconText}`} strokeWidth={2} />
+                        {/* 吹き出しのくちばし（下向き三角）: ○ の底辺を起点に下方向へ「押し出される」ように展開。
+                            上端は ○ にめり込ませて固定、scale-y で 0 → 1 に伸びる（origin-top）。
+                            ○ 自身も同時に -translate-y-1 で持ち上がるので、吹き出しが膨らむような連動演出になる。 */}
+                        <span
+                          aria-hidden
+                          className={`absolute left-1/2 top-full -mt-1 -translate-x-1/2 origin-top w-0 h-0
+                            border-l-[8px] border-r-[8px] border-l-transparent border-r-transparent border-t-[10px]
+                            ${tileColor.tipColor}
+                            opacity-0 scale-y-0
+                            group-hover:opacity-100 group-hover:scale-y-100
+                            transition-[opacity,transform] duration-300 ease-out
+                            pointer-events-none`}
+                        />
                       </span>
                     )}
                     <span className="text-sm font-medium text-text-primary text-center">
