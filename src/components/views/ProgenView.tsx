@@ -608,8 +608,12 @@ function LandingScreen() {
 
   // レーベル選択 → マスタールール読み込み → 画面遷移
   const handleGo = useCallback((screen: ProgenScreen) => {
-    if (selectedLabel && (!hasRules || selectedLabel !== currentLabel)) {
-      useProgenStore.getState().loadMasterRule(selectedLabel);
+    if (selectedLabel) {
+      // 画面側 LabelDropdown 表示用に、ルール再ロードの有無に関わらず必ず currentMasterLabel を反映
+      useProgenStore.setState({ currentMasterLabel: selectedLabel });
+      if (!hasRules || selectedLabel !== currentLabel) {
+        useProgenStore.getState().loadMasterRule(selectedLabel);
+      }
     }
     try { localStorage.removeItem("progen_pendingMode"); } catch { /* ignore */ }
     navigateToScreen(screen);

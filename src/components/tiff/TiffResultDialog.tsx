@@ -109,7 +109,7 @@ export function TiffResultDialog() {
         }
       }}
     >
-      <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col overflow-hidden">
+      <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col overflow-hidden animate-dialog-pop">
         {/* Header */}
         <div className="px-6 py-4 border-b border-border flex items-center gap-3">
           <div

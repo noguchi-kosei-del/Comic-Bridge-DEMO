@@ -924,7 +924,7 @@ export function FolderSetupView() {
       {/* ═══ ファイル確認オーバーレイ（フォーム上に重なって表示） ═══ */}
       {fileCheck && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-[2px]" onClick={() => setFileCheck(null)}>
-          <div className="bg-bg-secondary border border-border rounded-2xl shadow-2xl w-[480px] p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-bg-secondary border border-border rounded-2xl shadow-2xl w-[480px] p-5 space-y-3 animate-dialog-pop" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div className="text-[12px] font-bold text-text-primary flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5" />コピー先のファイル確認</div>
               <button onClick={() => setFileCheck(null)} className="text-text-muted hover:text-text-primary"><XIcon className="w-4 h-4" /></button>
@@ -1079,7 +1079,7 @@ export function FolderSetupView() {
       {/* 作品情報JSON ブラウザモーダル */}
       {showJsonBrowser && createPortal(
         <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowJsonBrowser(false); }}>
-          <div className="bg-bg-secondary rounded-xl shadow-2xl w-[500px] max-h-[70vh] flex flex-col overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="bg-bg-secondary rounded-xl shadow-2xl w-[500px] max-h-[70vh] flex flex-col overflow-hidden animate-dialog-pop" onMouseDown={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-2 border-b border-border">
               <h3 className="text-sm font-medium">作品情報JSONを選択</h3>
               <button onClick={() => setShowJsonBrowser(false)} className="text-text-muted hover:text-text-primary">✕</button>

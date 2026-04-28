@@ -330,7 +330,7 @@ export function TiffPartialBlurModal({
       }}
     >
       <div
-        className="bg-bg-secondary border border-border rounded-2xl shadow-xl overflow-hidden flex flex-col"
+        className="bg-bg-secondary border border-border rounded-2xl shadow-xl overflow-hidden flex flex-col animate-dialog-pop"
         style={{ width: "90vw", height: "85vh", maxWidth: 1400 }}
         onMouseDown={(e) => e.stopPropagation()}
       >

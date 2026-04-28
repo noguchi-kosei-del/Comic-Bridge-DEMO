@@ -716,7 +716,7 @@ export function CropJsonLoadDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col overflow-hidden">
+      <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col overflow-hidden animate-dialog-pop">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-display font-bold text-text-primary">JSONファイルを選択</h3>
@@ -1176,7 +1176,7 @@ export function CropJsonRegisterDialog({ onClose }: { onClose: () => void }) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl w-96 mx-4 overflow-hidden">
+      <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl w-96 mx-4 overflow-hidden animate-dialog-pop">
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-display font-bold text-text-primary flex items-center gap-2">

@@ -63,7 +63,7 @@ export function ThumbnailCard({
               : "bg-bg-tertiary border-border hover:ring-1 hover:ring-sky-300/30"
         }
         ${hasError ? "ring-2 ring-error shadow-glow-error" : ""}
-        ${!hasError && isCaution ? "ring-2 ring-warning/60" : ""}
+        ${!hasError && isCaution ? "ring-2 ring-amber-400/60" : ""}
         ${isPassed && isChecked && !isCaution && !isSelected && !isActive ? "ring-1 ring-success/30" : ""}
       `}
       style={{
@@ -197,7 +197,7 @@ export function ThumbnailCard({
             </div>
           )}
           {cautionReasons?.includes("tombo") && (
-            <div className="px-1.5 py-0.5 rounded-md bg-warning/90 text-white text-[9px] font-bold shadow-sm w-fit">
+            <div className="px-1.5 py-0.5 rounded-md bg-amber-400 text-white text-[9px] font-bold shadow-sm w-fit">
               トンボなし？
             </div>
           )}
@@ -210,7 +210,7 @@ export function ThumbnailCard({
           <span className="text-white text-xs font-bold">!</span>
         </div>
       ) : isCaution ? (
-        <div className="absolute top-3 right-3 w-6 h-6 bg-warning rounded-lg flex items-center justify-center shadow-lg">
+        <div className="absolute top-3 right-3 w-6 h-6 bg-amber-400 rounded-lg flex items-center justify-center shadow-lg">
           <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"

@@ -581,7 +581,7 @@ export function SpecCheckView() {
             {hasChecked && (
               <>
                 <div className="w-px h-3 bg-border/40 mx-0.5" />
-                {stats.caution > 0 && <span className="text-[10px] text-warning font-medium">{stats.caution}注意</span>}
+                {stats.caution > 0 && <span className="text-[10px] text-error font-medium">{stats.caution}注意</span>}
               </>
             )}
             <div className="flex-1" />

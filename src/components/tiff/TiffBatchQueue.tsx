@@ -406,27 +406,6 @@ function QueueRow({
           title="処理対象に含める"
         />
 
-        {/* Thumbnail */}
-        <div className="w-8 h-11 rounded bg-bg-tertiary flex-shrink-0 overflow-hidden flex items-center justify-center">
-          {item.file.thumbnail ? (
-            <img src={item.file.thumbnail} className="w-full h-full object-cover" alt="" />
-          ) : (
-            <svg
-              className="w-4 h-4 text-text-muted/40"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"
-              />
-            </svg>
-          )}
-        </div>
-
         {/* File Name → Output Name */}
         <div className="flex-1 min-w-0 flex items-center gap-1.5">
           <span
@@ -610,7 +589,7 @@ function QueueRow({
                   />
                 </svg>
                 <div>
-                  <p className="text-[10px] text-warning font-medium">
+                  <p className="text-[10px] text-error font-medium">
                     キャンバスサイズが異なります
                   </p>
                   <p className="text-[9px] text-warning/70 mt-0.5">

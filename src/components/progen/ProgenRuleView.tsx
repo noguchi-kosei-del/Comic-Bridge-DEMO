@@ -12,12 +12,14 @@ import { useScanPsdStore } from "../../store/scanPsdStore";
 import { EDIT_CATEGORIES, NUMBER_SUB_RULES } from "../../types/progen";
 import type { SymbolRule, ProofRule } from "../../types/progen";
 import { showPromptDialog } from "../../store/viewStore";
-import { openExternalUrl } from "../../hooks/useProgenTauri";
+import { openExternalUrl, getMasterLabelList } from "../../hooks/useProgenTauri";
 import { useUnifiedViewerStore } from "../../store/unifiedViewerStore";
 import { useViewStore } from "../../store/viewStore";
 import { generateSimpleCheckPrompt, generateVariationCheckPrompt, generateExtractionPrompt, generateFormattingPrompt } from "../../lib/progenPrompts";
 
 // ═══ メインコンポーネント ═══
+
+type DropdownId = "label" | "textSource" | "resultPaste";
 
 export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}) {
   const store = useProgenStore();
@@ -27,6 +29,8 @@ export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}
   const [copied, setCopied] = useState<string | null>(null);
   const [textSources, setTextSources] = useState<{ name: string; content: string }[]>([]);
   const [showTextPicker, setShowTextPicker] = useState<"correctness" | "proposal" | null>(null);
+  // 同列ホバー用: アクティブなドロップダウン id を一元管理（隣接間移動時に旧ドロップダウンを即時閉じる）
+  const [activeDropdown, setActiveDropdown] = useState<DropdownId | null>(null);
   const [browseDir, setBrowseDir] = useState("");
   const [browseFolders, setBrowseFolders] = useState<string[]>([]);
   const [browseFiles, setBrowseFiles] = useState<string[]>([]);
@@ -149,15 +153,18 @@ export function ProgenRuleView({ listMode = false }: { listMode?: boolean } = {}
             テキストエディタ
           </button>
 
-          {/* 右寄せ: ドロップダウン2つ */}
+          {/* 右寄せ: ドロップダウン3つ（共有 activeDropdown で隣接間移動時の重なり防止） */}
           <div className="flex-1" />
+          <LabelDropdown activeDropdown={activeDropdown} setActiveDropdown={setActiveDropdown} />
           <TextSourceDropdown
             textSources={textSources}
             setTextSources={setTextSources}
             setShowTextPicker={setShowTextPicker}
             loadBrowseDir={loadBrowseDir}
+            activeDropdown={activeDropdown}
+            setActiveDropdown={setActiveDropdown}
           />
-          <ResultPasteDropdown />
+          <ResultPasteDropdown activeDropdown={activeDropdown} setActiveDropdown={setActiveDropdown} />
         </div>
 
         {/* テキストフォルダブラウザモーダル */}
@@ -715,33 +722,212 @@ function SaveButton() {
   );
 }
 
+// ═══ レーベル選択ドロップダウン（ホバー開閉 + フキダシ型） ═══
+
+interface SharedDropdownProps {
+  activeDropdown: DropdownId | null;
+  setActiveDropdown: React.Dispatch<React.SetStateAction<DropdownId | null>>;
+}
+
+function LabelDropdown({ activeDropdown, setActiveDropdown }: SharedDropdownProps) {
+  const id: DropdownId = "label";
+  const hover = activeDropdown === id;
+  const [rendered, setRendered] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  const [labels, setLabels] = useState<{ key: string; displayName?: string }[]>([]);
+  // 現在 ProGen ストアにロードされているマスタールールのレーベル（ランディング画面で選択された値が反映される）
+  const currentMasterLabel = useProgenStore((s) => s.currentMasterLabel);
+  const workInfoLabel = useScanPsdStore((s) => s.workInfo.label);
+  // 表示用の選択中レーベル: ProGen に明示ロード済みのものを最優先、なければ作品情報JSON のレーベル
+  const selectedLabel = currentMasterLabel || workInfoLabel || "";
+
+  // 閉じアニメ中もマウントを保持
+  useEffect(() => {
+    if (hover) { setRendered(true); return; }
+    if (!rendered) return;
+    const t = window.setTimeout(() => setRendered(false), 160);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hover]);
+
+  const handleEnter = useCallback(() => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setActiveDropdown(id);
+  }, [setActiveDropdown]);
+
+  const handleLeave = useCallback(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
+      setActiveDropdown((prev) => (prev === id ? null : prev));
+    }, 300);
+  }, [setActiveDropdown]);
+
+  // ラベル一覧の読み込み
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await getMasterLabelList();
+        if (cancelled) return;
+        if (result?.success && result.labels) {
+          const sorted = [...result.labels].sort((a, b) => {
+            if (a.key === "default") return -1;
+            if (b.key === "default") return 1;
+            return ((a as any).displayName || (a as any).display_name || a.key)
+              .localeCompare(((b as any).displayName || (b as any).display_name || b.key), "ja");
+          });
+          const normalized = sorted.map((l: any) => ({
+            key: l.key,
+            displayName: l.displayName || l.display_name || l.key,
+          }));
+          setLabels(normalized);
+        }
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSelect = useCallback((key: string) => {
+    // ストアの currentMasterLabel は loadMasterRule 内で更新される
+    useProgenStore.getState().loadMasterRule(key);
+    setActiveDropdown((prev) => (prev === id ? null : prev));
+  }, [setActiveDropdown]);
+
+  const selectedDisplay =
+    labels.find((l) => l.key === selectedLabel)?.displayName || selectedLabel || "default";
+
+  return (
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      aria-haspopup="menu"
+      aria-expanded={hover}
+    >
+      <button
+        className={`px-2 py-1 text-[10px] font-medium rounded border transition-colors inline-flex items-center gap-1 ${
+          hover
+            ? "border-accent/40 text-accent bg-accent/5"
+            : "border-border/40 text-text-secondary hover:text-text-primary hover:border-accent/30"
+        }`}
+        title="ProGen マスタールールのレーベルを切り替え"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+        </svg>
+        <span className="max-w-[120px] truncate">{selectedDisplay}</span>
+        <svg className="w-2.5 h-2.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {rendered && (
+        <div
+          role="menu"
+          className={`absolute right-0 top-full mt-3 z-[1000] min-w-[200px] bg-bg-secondary border border-border rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.35)] text-text-primary ${
+            hover ? "animate-dropdown-down" : "animate-dropdown-down-close pointer-events-none"
+          }`}
+        >
+          {/* 三角フキダシ（上向き、トリガーボタン中心を指す） */}
+          <span
+            aria-hidden="true"
+            className="absolute -top-[7px] right-4 w-0 h-0 pointer-events-none z-10"
+            style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "7px solid var(--cb-border-color, #d5d9e0)" }}
+          />
+          <span
+            aria-hidden="true"
+            className="absolute -top-[6px] right-4 w-0 h-0 pointer-events-none z-10"
+            style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "7px solid var(--cb-menu-bg, #ffffff)" }}
+          />
+          <div className="max-h-[300px] overflow-auto py-1.5 rounded-lg">
+            <div className="px-3.5 pt-1 pb-1.5 text-[11px] text-text-muted border-b border-border mb-1">
+              レーベル選択（{labels.length}件）
+            </div>
+            {labels.length === 0 ? (
+              <div className="px-3.5 py-2 text-[11px] text-text-muted">レーベルがありません</div>
+            ) : (
+              labels.map((l) => {
+                const active = l.key === selectedLabel;
+                return (
+                  <button
+                    key={l.key}
+                    role="menuitem"
+                    onClick={() => handleSelect(l.key)}
+                    className={`w-full px-3.5 py-2 text-left text-[12px] transition-colors flex items-center justify-between gap-2 ${
+                      active
+                        ? "bg-accent/15 text-accent font-medium"
+                        : "text-text-primary hover:bg-bg-tertiary"
+                    }`}
+                  >
+                    <span className="truncate">{l.displayName || l.key}</span>
+                    {active && <span className="text-[10px] flex-shrink-0">✓</span>}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ═══ 校正用テキスト追加ドロップダウン ═══
 
-interface TextSourceDropdownProps {
+interface TextSourceDropdownProps extends SharedDropdownProps {
   textSources: { name: string; content: string }[];
   setTextSources: React.Dispatch<React.SetStateAction<{ name: string; content: string }[]>>;
   setShowTextPicker: React.Dispatch<React.SetStateAction<"correctness" | "proposal" | null>>;
   loadBrowseDir: (dir: string) => Promise<void>;
 }
 
-function TextSourceDropdown({ textSources, setTextSources, setShowTextPicker, loadBrowseDir }: TextSourceDropdownProps) {
-  const [open, setOpen] = useState(false);
+function TextSourceDropdown({ textSources, setTextSources, setShowTextPicker, loadBrowseDir, activeDropdown, setActiveDropdown }: TextSourceDropdownProps) {
+  const id: DropdownId = "textSource";
+  const hover = activeDropdown === id;
+  const [rendered, setRendered] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+    if (hover) { setRendered(true); return; }
+    if (!rendered) return;
+    const t = window.setTimeout(() => setRendered(false), 160);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hover]);
+
+  const handleEnter = useCallback(() => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setActiveDropdown(id);
+  }, [setActiveDropdown]);
+
+  const handleLeave = useCallback(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
+      setActiveDropdown((prev) => (prev === id ? null : prev));
+    }, 300);
+  }, [setActiveDropdown]);
+
+  const closeIfActive = useCallback(() => {
+    setActiveDropdown((prev) => (prev === id ? null : prev));
+  }, [setActiveDropdown]);
 
   return (
-    <div ref={ref} className="relative">
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      aria-haspopup="menu"
+      aria-expanded={hover}
+    >
       <button
-        onClick={() => setOpen((v) => !v)}
-        className="px-2 py-1 text-[10px] font-medium rounded border border-border/40 text-text-secondary hover:text-text-primary hover:border-accent/30 transition-colors inline-flex items-center gap-1"
+        className={`px-2 py-1 text-[10px] font-medium rounded border transition-colors inline-flex items-center gap-1 ${
+          hover
+            ? "border-accent/40 text-accent bg-accent/5"
+            : "border-border/40 text-text-secondary hover:text-text-primary hover:border-accent/30"
+        }`}
       >
         校正用テキスト追加
         {textSources.length > 0 && (
@@ -751,49 +937,70 @@ function TextSourceDropdown({ textSources, setTextSources, setShowTextPicker, lo
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-40 bg-bg-secondary border border-border rounded-lg shadow-xl py-2 min-w-[240px]">
-          {textSources.length > 0 && (
-            <div className="px-3 pb-2 border-b border-border/30 mb-2">
-              <div className="text-[9px] text-text-muted/60 mb-1">追加済み ({textSources.length})</div>
-              <div className="space-y-0.5 max-h-32 overflow-auto">
-                {textSources.map((s, i) => (
-                  <div key={i} className="flex items-center gap-1 text-[10px] text-text-secondary">
-                    <span className="truncate flex-1">{s.name}</span>
-                    <button onClick={() => setTextSources((prev) => prev.filter((_, j) => j !== i))} className="text-text-muted/40 hover:text-error flex-shrink-0">✕</button>
-                  </div>
-                ))}
+      {rendered && (
+        <div
+          role="menu"
+          className={`absolute right-0 top-full mt-3 z-[1000] min-w-[240px] bg-bg-secondary border border-border rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.35)] text-text-primary ${
+            hover ? "animate-dropdown-down" : "animate-dropdown-down-close pointer-events-none"
+          }`}
+        >
+          {/* 三角フキダシ（上向き） */}
+          <span
+            aria-hidden="true"
+            className="absolute -top-[7px] right-4 w-0 h-0 pointer-events-none z-10"
+            style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "7px solid var(--cb-border-color, #d5d9e0)" }}
+          />
+          <span
+            aria-hidden="true"
+            className="absolute -top-[6px] right-4 w-0 h-0 pointer-events-none z-10"
+            style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "7px solid var(--cb-menu-bg, #ffffff)" }}
+          />
+          <div className="max-h-[40vh] overflow-auto py-2 rounded-lg">
+            {textSources.length > 0 && (
+              <div className="px-3 pb-2 border-b border-border/30 mb-2">
+                <div className="text-[10px] text-text-muted/60 mb-1">追加済み ({textSources.length})</div>
+                <div className="space-y-0.5 max-h-32 overflow-auto">
+                  {textSources.map((s, i) => (
+                    <div key={i} className="flex items-center gap-1 text-[11px] text-text-secondary">
+                      <span className="truncate flex-1">{s.name}</span>
+                      <button onClick={() => setTextSources((prev) => prev.filter((_, j) => j !== i))} className="text-text-muted/40 hover:text-error flex-shrink-0">✕</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setTextSources([])} className="text-[10px] text-text-muted/60 hover:text-error mt-1">全クリア</button>
               </div>
-              <button onClick={() => setTextSources([])} className="text-[9px] text-text-muted/60 hover:text-error mt-1">全クリア</button>
-            </div>
-          )}
-          <button
-            onClick={async () => {
-              const path = await dialogOpen({ filters: [{ name: "テキスト", extensions: ["txt"] }], multiple: true });
-              if (!path) return;
-              const paths = Array.isArray(path) ? path : [path];
-              for (const p of paths) {
-                try {
-                  const bytes = await readFile(p as string);
-                  const content = new TextDecoder("utf-8").decode(bytes);
-                  const name = (p as string).replace(/\\/g, "/").split("/").pop() || "text.txt";
-                  setTextSources((prev) => [...prev, { name, content }]);
-                } catch { /* ignore */ }
-              }
-            }}
-            className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-accent hover:bg-bg-tertiary transition-colors"
-            title="エクスプローラーからテキストファイルを選択"
-          >エクスプローラーから参照…</button>
-          <button
-            onClick={() => {
-              const base = useScanPsdStore.getState().textLogFolderPath || "";
-              if (base) loadBrowseDir(base);
-              setShowTextPicker("correctness");
-              setOpen(false);
-            }}
-            className="w-full text-left px-3 py-1.5 text-[10px] text-text-secondary hover:text-accent hover:bg-bg-tertiary transition-colors"
-            title="テキストフォルダから選択"
-          >テキストフォルダから選択…</button>
+            )}
+            <button
+              role="menuitem"
+              onClick={async () => {
+                const path = await dialogOpen({ filters: [{ name: "テキスト", extensions: ["txt"] }], multiple: true });
+                if (!path) { closeIfActive(); return; }
+                const paths = Array.isArray(path) ? path : [path];
+                for (const p of paths) {
+                  try {
+                    const bytes = await readFile(p as string);
+                    const content = new TextDecoder("utf-8").decode(bytes);
+                    const name = (p as string).replace(/\\/g, "/").split("/").pop() || "text.txt";
+                    setTextSources((prev) => [...prev, { name, content }]);
+                  } catch { /* ignore */ }
+                }
+                closeIfActive();
+              }}
+              className="w-full text-left px-3.5 py-2 text-[12px] text-text-primary hover:bg-bg-tertiary transition-colors"
+              title="エクスプローラーからテキストファイルを選択"
+            >エクスプローラーから参照…</button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                const base = useScanPsdStore.getState().textLogFolderPath || "";
+                if (base) loadBrowseDir(base);
+                setShowTextPicker("correctness");
+                closeIfActive();
+              }}
+              className="w-full text-left px-3.5 py-2 text-[12px] text-text-primary hover:bg-bg-tertiary transition-colors"
+              title="テキストフォルダから選択"
+            >テキストフォルダから選択…</button>
+          </div>
         </div>
       )}
     </div>
@@ -802,40 +1009,88 @@ function TextSourceDropdown({ textSources, setTextSources, setShowTextPicker, lo
 
 // ═══ 結果貼り付けドロップダウン ═══
 
-function ResultPasteDropdown() {
-  const [open, setOpen] = useState(false);
+function ResultPasteDropdown({ activeDropdown, setActiveDropdown }: SharedDropdownProps) {
+  const id: DropdownId = "resultPaste";
+  const hover = activeDropdown === id;
+  const [rendered, setRendered] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+    if (hover) { setRendered(true); return; }
+    if (!rendered) return;
+    const t = window.setTimeout(() => setRendered(false), 160);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hover]);
+
+  const handleEnter = useCallback(() => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setActiveDropdown(id);
+  }, [setActiveDropdown]);
+
+  const handleLeave = useCallback(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
+      setActiveDropdown((prev) => (prev === id ? null : prev));
+    }, 300);
+  }, [setActiveDropdown]);
+
+  const closeIfActive = useCallback(() => {
+    setActiveDropdown((prev) => (prev === id ? null : prev));
+  }, [setActiveDropdown]);
 
   return (
-    <div ref={ref} className="relative">
+    <div
+      ref={ref}
+      className="relative"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      aria-haspopup="menu"
+      aria-expanded={hover}
+    >
       <button
-        onClick={() => setOpen((v) => !v)}
-        className="px-2 py-1 text-[10px] font-medium rounded border border-border/40 text-text-secondary hover:text-text-primary hover:border-accent/30 transition-colors inline-flex items-center gap-1"
+        className={`px-2 py-1 text-[10px] font-medium rounded border transition-colors inline-flex items-center gap-1 ${
+          hover
+            ? "border-accent/40 text-accent bg-accent/5"
+            : "border-border/40 text-text-secondary hover:text-text-primary hover:border-accent/30"
+        }`}
       >
         結果を貼り付け
         <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-40 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[160px]">
-          <button
-            onClick={() => { useProgenStore.getState().setResultSaveMode("text"); setOpen(false); }}
-            className="w-full text-left px-3 py-1.5 text-[10px] font-medium text-blue-500 hover:bg-blue-50 transition-colors"
-          >テキスト保存</button>
-          <button
-            onClick={() => { useProgenStore.getState().setResultSaveMode("json"); setOpen(false); }}
-            className="w-full text-left px-3 py-1.5 text-[10px] font-medium text-emerald-500 hover:bg-emerald-50 transition-colors"
-          >JSON保存</button>
+      {rendered && (
+        <div
+          role="menu"
+          className={`absolute right-0 top-full mt-3 z-[1000] min-w-[180px] bg-bg-secondary border border-border rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.35)] text-text-primary ${
+            hover ? "animate-dropdown-down" : "animate-dropdown-down-close pointer-events-none"
+          }`}
+        >
+          {/* 三角フキダシ（上向き） */}
+          <span
+            aria-hidden="true"
+            className="absolute -top-[7px] right-4 w-0 h-0 pointer-events-none z-10"
+            style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "7px solid var(--cb-border-color, #d5d9e0)" }}
+          />
+          <span
+            aria-hidden="true"
+            className="absolute -top-[6px] right-4 w-0 h-0 pointer-events-none z-10"
+            style={{ borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "7px solid var(--cb-menu-bg, #ffffff)" }}
+          />
+          <div className="py-1.5 rounded-lg">
+            <button
+              role="menuitem"
+              onClick={() => { useProgenStore.getState().setResultSaveMode("text"); closeIfActive(); }}
+              className="w-full text-left px-3.5 py-2 text-[12px] font-medium text-blue-500 hover:bg-bg-tertiary transition-colors"
+            >テキスト保存</button>
+            <button
+              role="menuitem"
+              onClick={() => { useProgenStore.getState().setResultSaveMode("json"); closeIfActive(); }}
+              className="w-full text-left px-3.5 py-2 text-[12px] font-medium text-emerald-500 hover:bg-bg-tertiary transition-colors"
+            >JSON保存</button>
+          </div>
         </div>
       )}
     </div>

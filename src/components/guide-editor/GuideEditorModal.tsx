@@ -6,6 +6,7 @@ import { GuideCanvas } from "./GuideCanvas";
 import { GuideList } from "./GuideList";
 import { usePreparePsd } from "../../hooks/usePreparePsd";
 import { useHighResPreview } from "../../hooks/useHighResPreview";
+import { useDialogClose } from "../../hooks/useDialogClose";
 
 export function GuideEditorModal() {
   const closeEditor = useGuideStore((state) => state.closeEditor);
@@ -75,10 +76,6 @@ export function GuideEditorModal() {
     });
   };
 
-  const handleClose = () => {
-    closeEditor();
-  };
-
   // Use original size from high-res preview, or fall back to metadata
   const canvasSize = originalSize
     ? { width: originalSize.width, height: originalSize.height }
@@ -90,14 +87,17 @@ export function GuideEditorModal() {
 
   const imageUrl = highResImageUrl;
 
+  const { animationClass, backdropClass, requestClose } = useDialogClose(closeEditor);
+  const handleClose = requestClose;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 ${backdropClass}`}
       onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => { if (e.target === e.currentTarget) closeEditor(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
     >
       <div
-        className="bg-bg-secondary rounded-lg shadow-2xl w-[95vw] max-w-6xl h-[90vh] flex flex-col overflow-hidden relative"
+        className={`bg-bg-secondary rounded-lg shadow-2xl w-[95vw] max-w-6xl h-[90vh] flex flex-col overflow-hidden relative ${animationClass}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

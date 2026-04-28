@@ -40,6 +40,9 @@ interface ProgenStore {
   currentLoadedJson: any | null;
   currentJsonPath: string;
 
+  // ===== 現在読み込み中のマスタールール ラベル =====
+  currentMasterLabel: string;
+
   // ===== 管理モード =====
   isAdminMode: boolean;
 
@@ -140,6 +143,8 @@ export const useProgenStore = create<ProgenStore>((set, get) => ({
   currentLoadedJson: null,
   currentJsonPath: "",
 
+  currentMasterLabel: "",
+
   isAdminMode: false,
 
   outputFormatVolume: 1,
@@ -216,6 +221,7 @@ export const useProgenStore = create<ProgenStore>((set, get) => ({
       const res = await invoke<any>("progen_read_master_rule", { labelValue });
       if (res?.success && res.data) {
         get().applyJsonRules(res.data);
+        set({ currentMasterLabel: labelValue });
       }
     } catch { /* ignore */ }
   },
@@ -298,6 +304,7 @@ export const useProgenStore = create<ProgenStore>((set, get) => ({
     landingProofreadingContent: "",
     currentLoadedJson: null,
     currentJsonPath: "",
+    currentMasterLabel: "",
     isAdminMode: false,
     outputFormatVolume: 1,
     outputFormatStartPage: 1,

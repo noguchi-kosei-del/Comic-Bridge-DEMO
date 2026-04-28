@@ -133,7 +133,7 @@ export function ScanPsdPanel() {
       {/* 仮保存警告バナー */}
       {pendingTitleLabel && (
         <div className="px-3 py-2 bg-warning/10 border-b border-warning/30 flex-shrink-0">
-          <p className="text-[10px] text-warning font-medium">
+          <p className="text-[10px] text-error font-medium">
             タイトルとレーベルを入力して再度保存してください（現在は仮保存状態です）
           </p>
         </div>

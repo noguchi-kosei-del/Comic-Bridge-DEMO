@@ -1104,8 +1104,8 @@ export function TiffSettingsPanel() {
         if (totalOverflows === 0) return null;
 
         return (
-          <div className="mx-2 mb-1 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30">
-            <div className="flex items-center gap-1.5 text-warning text-[11px] font-medium">
+          <div className="mx-2 mb-1 px-3 py-2 rounded-lg bg-error/10 border border-error/30">
+            <div className="flex items-center gap-1.5 text-error text-[11px] font-medium">
               <svg
                 className="w-4 h-4 flex-shrink-0"
                 fill="none"
@@ -1198,7 +1198,7 @@ export function TiffSettingsPanel() {
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"
+                  d="M14 5l7 7m0 0l-7 7m7-7H3"
                 />
               </svg>
               全て実行 ({files.length})
@@ -1269,7 +1269,7 @@ export function TiffSettingsPanel() {
             if (e.target === e.currentTarget) setBlurDiffConfirm(null);
           }}
         >
-          <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-sm w-full mx-4 p-5">
+          <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-sm w-full mx-4 p-5 animate-dialog-pop">
             <h3 className="text-sm font-display font-bold text-warning mb-3">
               ぼかし値の差異を検出
             </h3>
@@ -1316,7 +1316,7 @@ export function TiffSettingsPanel() {
       )}
       {canvasMismatch && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+          <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden animate-dialog-pop">
             <div className="px-6 py-4 border-b border-border">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">

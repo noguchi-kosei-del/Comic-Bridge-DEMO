@@ -1,5 +1,6 @@
 import { HTMLAttributes, forwardRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useDialogClose } from "../../hooks/useDialogClose";
 
 interface ModalProps extends HTMLAttributes<HTMLDivElement> {
   isOpen: boolean;
@@ -32,17 +33,19 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(
     },
     ref,
   ) => {
+    const { animationClass, backdropClass, requestClose } = useDialogClose(onClose);
+
     // ESCキーで閉じる
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === "Escape" && isOpen) {
-          onClose();
+          requestClose();
         }
       };
 
       document.addEventListener("keydown", handleKeyDown);
       return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [isOpen, onClose]);
+    }, [isOpen, requestClose]);
 
     // スクロール無効化
     useEffect(() => {
@@ -59,9 +62,9 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(
     if (!isOpen) return null;
 
     const modalContent = (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={requestClose}>
         {/* オーバーレイ */}
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+        <div className={`absolute inset-0 bg-black/40 backdrop-blur-sm ${backdropClass}`} />
 
         {/* モーダル本体 */}
         <div
@@ -71,7 +74,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(
             bg-bg-secondary rounded-3xl
             border border-border
             shadow-elevated
-            animate-slide-up
+            ${animationClass}
             ${className}
           `}
           onClick={(e) => e.stopPropagation()}
@@ -85,7 +88,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(
               )}
               {showCloseButton && (
                 <button
-                  onClick={onClose}
+                  onClick={requestClose}
                   className="
                     p-1.5 rounded-lg
                     text-text-muted hover:text-text-primary

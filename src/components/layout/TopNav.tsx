@@ -20,6 +20,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { SettingsButton } from "./SettingsPanel";
 import { useSettingsStore, ALL_NAV_BUTTONS } from "../../store/settingsStore";
 import { parseComicPotText } from "../unified-viewer/utils";
+import { useDialogClose } from "../../hooks/useDialogClose";
 
 export function TopNav() {
   const setActiveView = useViewStore((s) => s.setActiveView);
@@ -29,7 +30,6 @@ export function TopNav() {
   const presetsLoadedForReset = useUnifiedViewerStore((s) => s.fontPresets.length > 0 || !!s.presetJsonPath);
   const checkLoadedForReset = useUnifiedViewerStore((s) => !!s.checkData);
   const updater = useAppUpdater();
-  const viewerStore = useUnifiedViewerStore();
   const jsonFolderPath = useScanPsdStore((s) => s.jsonFolderPath);
   const jsonBrowserMode = useViewStore((s) => s.jsonBrowserMode);
   const setJsonBrowserMode = useViewStore((s) => s.setJsonBrowserMode);
@@ -46,19 +46,17 @@ export function TopNav() {
     ps.clearFiles();
     ps.setCurrentFolderPath(null);
     ps.triggerRefresh();
-    // テキスト（両方のビューアーインスタンスをクリア）
+    // テキスト / 作品情報JSON / 校正JSON（両方のビューアーインスタンスをクリア）
     for (const s of [vs, ts]) {
       s.setTextContent("");
       s.setTextFilePath(null);
       s.setTextHeader([]);
       s.setTextPages([]);
       s.setIsDirty(false);
+      s.setFontPresets([]);
+      s.setPresetJsonPath(null);
+      s.setCheckData(null);
     }
-    // 作品情報JSON
-    vs.setFontPresets([]);
-    vs.setPresetJsonPath(null);
-    // 校正JSON
-    vs.setCheckData(null);
     // 仕様チェック結果（○/× カウント）
     sp.clearCheckResults();
     sp.clearConversionResults();
@@ -97,10 +95,13 @@ export function TopNav() {
         else {
           throw new Error("校正JSONの形式が正しくありません（checks フィールド、または配列形式が必要です）。");
         }
-        viewerStore.setCheckData({
+        const checkData = {
           title: data.work || "", fileName: filePath.substring(filePath.lastIndexOf("\\") + 1), filePath,
           allItems, correctnessItems: allItems.filter((i) => i.checkKind === "correctness"), proposalItems: allItems.filter((i) => i.checkKind === "proposal"),
-        });
+        };
+        // ビューアー / テキストエディタ 両方のストアに反映（store 独立化対応）
+        useUnifiedViewerStore.getState().setCheckData(checkData);
+        useTextEditorViewerStore.getState().setCheckData(checkData);
       } else {
         const presets: FontPresetEntry[] = [];
         const presetsObj = data?.presetData?.presets ?? data?.presets ?? data?.presetSets ?? data;
@@ -118,7 +119,13 @@ export function TopNav() {
         if (presets.length === 0 && !hasWorkInfo) {
           throw new Error("作品情報JSONの形式が正しくありません（presets / workInfo いずれも見つかりません）。");
         }
-        if (presets.length > 0) { viewerStore.setFontPresets(presets); viewerStore.setPresetJsonPath(filePath); }
+        if (presets.length > 0) {
+          // ビューアー / テキストエディタ 両方のストアに反映
+          useUnifiedViewerStore.getState().setFontPresets(presets);
+          useUnifiedViewerStore.getState().setPresetJsonPath(filePath);
+          useTextEditorViewerStore.getState().setFontPresets(presets);
+          useTextEditorViewerStore.getState().setPresetJsonPath(filePath);
+        }
         // workInfo（ジャンル/タイトル/巻数等）をscanPsdStoreにセット
         if (hasWorkInfo) {
           const scanStore = useScanPsdStore.getState();
@@ -262,132 +269,205 @@ export function TopNav() {
       <WindowControls />
 
       {/* Update Prompt Dialog */}
-      {updater.showPrompt && updater.updateInfo &&
-        createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-bg-secondary border border-border rounded-2xl p-8 shadow-xl max-w-sm text-center space-y-4">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-accent to-accent-secondary flex items-center justify-center shadow-lg">
-                <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-text-primary">アップデートがあります</h3>
-                <p className="text-xs text-text-muted mt-1">v{updater.appVersion} → <span className="text-accent-tertiary font-semibold">v{updater.updateInfo.version}</span></p>
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => updater.dismissPrompt()} className="flex-1 px-4 py-2.5 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-xl hover:bg-bg-tertiary/80 transition-colors">あとで</button>
-                <button onClick={() => { updater.dismissPrompt(); updater.downloadAndInstall(); }} className="flex-1 px-4 py-2.5 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-xl hover:-translate-y-0.5 transition-all shadow-sm">アップデートする</button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {updater.showPrompt && updater.updateInfo && (
+        <UpdatePromptDialog
+          appVersion={updater.appVersion}
+          newVersion={updater.updateInfo.version}
+          onDismiss={() => updater.dismissPrompt()}
+          onAccept={() => { updater.dismissPrompt(); updater.downloadAndInstall(); }}
+        />
+      )}
 
       {/* Update Dialog (downloading / ready / error) */}
-      {(updater.phase === "downloading" || updater.phase === "ready" || updater.phase === "error") &&
-        createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-bg-secondary border border-border rounded-2xl p-8 shadow-xl max-w-sm text-center space-y-4">
-              {updater.phase === "downloading" && (
-                <>
-                  <svg className="w-12 h-12 mx-auto text-accent animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <h3 className="text-base font-bold text-text-primary">アップデート中...</h3>
-                  <p className="text-xs text-text-muted">ダウンロードしています。しばらくお待ちください。</p>
-                </>
-              )}
-              {updater.phase === "ready" && (
-                <>
-                  <svg className="w-12 h-12 mx-auto text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="text-base font-bold text-text-primary">インストール完了</h3>
-                  <p className="text-xs text-text-muted">アプリを再起動します...</p>
-                </>
-              )}
-              {updater.phase === "error" && (
-                <>
-                  <svg className="w-12 h-12 mx-auto text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <h3 className="text-base font-bold text-text-primary">アップデート失敗</h3>
-                  <p className="text-xs text-text-muted">{updater.error}</p>
-                  <button onClick={updater.dismiss} className="px-4 py-2 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-xl hover:-translate-y-0.5 transition-all">閉じる</button>
-                </>
-              )}
-            </div>
-          </div>,
-          document.body,
-        )}
+      {(updater.phase === "downloading" || updater.phase === "ready" || updater.phase === "error") && (
+        <UpdateProgressDialog
+          phase={updater.phase}
+          error={updater.error}
+          onDismiss={updater.dismiss}
+        />
+      )}
 
 
       {/* 読み込みリセット確認ダイアログ（カスタム） */}
-      {showResetConfirm &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
-            onMouseDown={(e) => { if (e.target === e.currentTarget) setShowResetConfirm(false); }}
-          >
-            <div
-              className="bg-bg-secondary border border-error/30 rounded-2xl p-5 shadow-xl w-[340px] space-y-4"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-full bg-error/15 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <div className="flex-1 pt-0.5">
-                  <h3 className="text-sm font-bold text-error">読み込みリセット</h3>
-                  <p className="text-xs text-text-secondary mt-1">読み込み済みの PSD・テキスト・作品情報 JSON・校正 JSON を全て破棄します。よろしいですか？</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowResetConfirm(false)}
-                  className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors"
-                  autoFocus
-                >
-                  キャンセル
-                </button>
-                <button
-                  onClick={() => { setShowResetConfirm(false); performReset(); }}
-                  className="flex-1 px-3 py-2 text-xs font-medium text-white bg-error rounded-lg hover:bg-error/90 transition-colors shadow-sm shadow-error/30"
-                >
-                  リセット
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {showResetConfirm && (
+        <ResetConfirmDialog
+          onClose={() => setShowResetConfirm(false)}
+          onConfirm={() => { setShowResetConfirm(false); performReset(); }}
+        />
+      )}
 
       {/* JSON File Browser Modal */}
-      {jsonBrowserMode &&
-        createPortal(
-          <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40" onMouseDown={(e) => { if (e.target === e.currentTarget) setJsonBrowserMode(null); }}>
-            <div className="bg-bg-secondary rounded-xl shadow-2xl w-[500px] max-h-[70vh] flex flex-col overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-                <h3 className="text-sm font-medium">{jsonBrowserMode === "preset" ? "作品情報JSON" : "校正データJSON"} を選択</h3>
-                <button onClick={() => setJsonBrowserMode(null)} className="text-text-muted hover:text-text-primary">✕</button>
-              </div>
-              <div className="flex-1 overflow-auto">
-                {jsonBrowserMode === "preset" && jsonFolderPath ? (
-                  <JsonFileBrowser basePath={jsonFolderPath} onSelect={handleJsonSelect} onCancel={() => setJsonBrowserMode(null)} mode="open" />
-                ) : jsonBrowserMode === "check" ? (
-                  <CheckJsonBrowser onSelect={handleJsonSelect} onCancel={() => setJsonBrowserMode(null)} />
-                ) : (
-                  <div className="p-4 text-center text-text-muted text-xs">JSONフォルダパスが設定されていません</div>
-                )}
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {jsonBrowserMode && (
+        <JsonBrowserDialog
+          mode={jsonBrowserMode}
+          jsonFolderPath={jsonFolderPath}
+          onSelect={handleJsonSelect}
+          onClose={() => setJsonBrowserMode(null)}
+        />
+      )}
     </nav>
+  );
+}
+
+// ─── アップデート通知ダイアログ ───
+function UpdatePromptDialog({ appVersion, newVersion, onDismiss, onAccept }: {
+  appVersion: string; newVersion: string; onDismiss: () => void; onAccept: () => void;
+}) {
+  const { animationClass, backdropClass, requestClose } = useDialogClose(onDismiss);
+  const handleAccept = useCallback(() => {
+    requestClose();
+    setTimeout(onAccept, 220);
+  }, [onAccept, requestClose]);
+  return createPortal(
+    <div className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm ${backdropClass}`}>
+      <div className={`bg-bg-secondary border border-border rounded-2xl p-8 shadow-xl max-w-sm text-center space-y-4 ${animationClass}`}>
+        <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-accent to-accent-secondary flex items-center justify-center shadow-lg">
+          <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-base font-bold text-text-primary">アップデートがあります</h3>
+          <p className="text-xs text-text-muted mt-1">v{appVersion} → <span className="text-accent-tertiary font-semibold">v{newVersion}</span></p>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={requestClose} className="flex-1 px-4 py-2.5 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-xl hover:bg-bg-tertiary/80 transition-colors">あとで</button>
+          <button onClick={handleAccept} className="flex-1 px-4 py-2.5 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-xl hover:-translate-y-0.5 transition-all shadow-sm">アップデートする</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─── アップデート進捗/完了/エラーダイアログ ───
+function UpdateProgressDialog({ phase, error, onDismiss }: {
+  phase: "downloading" | "ready" | "error" | string;
+  error?: string | null;
+  onDismiss: () => void;
+}) {
+  const { animationClass, backdropClass, requestClose } = useDialogClose(onDismiss);
+  return createPortal(
+    <div className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm ${backdropClass}`}>
+      <div className={`bg-bg-secondary border border-border rounded-2xl p-8 shadow-xl max-w-sm text-center space-y-4 ${animationClass}`}>
+        {phase === "downloading" && (
+          <>
+            <svg className="w-12 h-12 mx-auto text-accent animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <h3 className="text-base font-bold text-text-primary">アップデート中...</h3>
+            <p className="text-xs text-text-muted">ダウンロードしています。しばらくお待ちください。</p>
+          </>
+        )}
+        {phase === "ready" && (
+          <>
+            <svg className="w-12 h-12 mx-auto text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="text-base font-bold text-text-primary">インストール完了</h3>
+            <p className="text-xs text-text-muted">アプリを再起動します...</p>
+          </>
+        )}
+        {phase === "error" && (
+          <>
+            <svg className="w-12 h-12 mx-auto text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <h3 className="text-base font-bold text-text-primary">アップデート失敗</h3>
+            <p className="text-xs text-text-muted">{error}</p>
+            <button onClick={requestClose} className="px-4 py-2 text-xs font-medium text-white bg-gradient-to-r from-accent to-accent-secondary rounded-xl hover:-translate-y-0.5 transition-all">閉じる</button>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─── 読み込みリセット確認ダイアログ ───
+function ResetConfirmDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+  const { animationClass, backdropClass, requestClose } = useDialogClose(onClose);
+  const handleConfirm = useCallback(() => {
+    // 確認ボタンも退場アニメ後に実行
+    const orig = onConfirm;
+    // requestClose は内部で setTimeout で onClose を呼ぶので、ここでは直接 onConfirm を実行
+    // ただし退場アニメ中に actions が走ってしまわないよう setTimeout で揃える
+    requestClose();
+    setTimeout(orig, 220);
+    // requestClose は onClose を呼ぶが、parent の onConfirm 内で同じ state を変更するため二重操作にはならない
+  }, [onConfirm, requestClose]);
+  return createPortal(
+    <div
+      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 ${backdropClass}`}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}
+    >
+      <div
+        className={`bg-bg-secondary border border-error/30 rounded-2xl p-5 shadow-xl w-[340px] space-y-4 ${animationClass}`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-full bg-error/15 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div className="flex-1 pt-0.5">
+            <h3 className="text-sm font-bold text-error">読み込みリセット</h3>
+            <p className="text-xs text-text-secondary mt-1">読み込み済みの PSD・テキスト・作品情報 JSON・校正 JSON を全て破棄します。よろしいですか？</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={requestClose}
+            className="flex-1 px-3 py-2 text-xs font-medium text-text-secondary bg-bg-tertiary rounded-lg hover:bg-bg-elevated transition-colors"
+            autoFocus
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="flex-1 px-3 py-2 text-xs font-medium text-white bg-error rounded-lg hover:bg-error/90 transition-colors shadow-sm shadow-error/30"
+          >
+            リセット
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─── JSON ブラウザダイアログ ───
+function JsonBrowserDialog({ mode, jsonFolderPath, onSelect, onClose }: {
+  mode: "preset" | "check";
+  jsonFolderPath: string | null;
+  onSelect: (path: string) => void;
+  onClose: () => void;
+}) {
+  const { animationClass, backdropClass, requestClose } = useDialogClose(onClose);
+  const handleSelect = useCallback((path: string) => {
+    onSelect(path);
+    requestClose();
+  }, [onSelect, requestClose]);
+  return createPortal(
+    <div className={`fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 ${backdropClass}`} onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
+      <div className={`bg-bg-secondary rounded-xl shadow-2xl w-[500px] max-h-[70vh] flex flex-col overflow-hidden ${animationClass}`} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+          <h3 className="text-sm font-medium">{mode === "preset" ? "作品情報JSON" : "校正データJSON"} を選択</h3>
+          <button onClick={requestClose} className="text-text-muted hover:text-text-primary">✕</button>
+        </div>
+        <div className="flex-1 overflow-auto">
+          {mode === "preset" && jsonFolderPath ? (
+            <JsonFileBrowser basePath={jsonFolderPath} onSelect={handleSelect} onCancel={requestClose} mode="open" />
+          ) : mode === "check" ? (
+            <CheckJsonBrowser onSelect={handleSelect} onCancel={requestClose} />
+          ) : (
+            <div className="p-4 text-center text-text-muted text-xs">JSONフォルダパスが設定されていません</div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -436,14 +516,16 @@ function TopNavDataButtons() {
       if (typeof content !== "string") {
         throw new Error("ファイル内容を文字列として取得できませんでした。");
       }
-      const vs = useUnifiedViewerStore.getState();
-      vs.setTextContent(content);
-      vs.setTextFilePath(p);
-      vs.setIsDirty(false);
       // COMIC-POTフォーマットをパースしてページ/ブロックに分割
       const { header, pages } = parseComicPotText(content);
-      vs.setTextHeader(header);
-      vs.setTextPages(pages);
+      // ビューアー / テキストエディタ 両方のストアに反映（store 独立化対応）
+      for (const s of [useUnifiedViewerStore.getState(), useTextEditorViewerStore.getState()]) {
+        s.setTextContent(content);
+        s.setTextFilePath(p);
+        s.setIsDirty(false);
+        s.setTextHeader(header);
+        s.setTextPages(pages);
+      }
     } catch (e) {
       await dialogMessage(
         `テキストファイルを読み込めませんでした。ファイル形式または文字コードが対応していない可能性があります。\n\n${e instanceof Error ? e.message : String(e)}`,
@@ -461,11 +543,23 @@ function TopNavDataButtons() {
           presetsLoaded={presetsLoaded}
           checkLoaded={checkLoaded}
           onLoadText={handleOpenText}
-          onClearText={() => { const v = useUnifiedViewerStore.getState(); v.setTextContent(""); v.setTextFilePath(null); v.setTextHeader([]); v.setTextPages([]); v.setIsDirty(false); }}
+          onClearText={() => {
+            for (const s of [useUnifiedViewerStore.getState(), useTextEditorViewerStore.getState()]) {
+              s.setTextContent(""); s.setTextFilePath(null); s.setTextHeader([]); s.setTextPages([]); s.setIsDirty(false);
+            }
+          }}
           onLoadPreset={() => useViewStore.getState().setJsonBrowserMode("preset")}
-          onClearPreset={() => { useUnifiedViewerStore.getState().setFontPresets([]); useUnifiedViewerStore.getState().setPresetJsonPath(null); }}
+          onClearPreset={() => {
+            for (const s of [useUnifiedViewerStore.getState(), useTextEditorViewerStore.getState()]) {
+              s.setFontPresets([]); s.setPresetJsonPath(null);
+            }
+          }}
           onLoadCheck={() => useViewStore.getState().setJsonBrowserMode("check")}
-          onClearCheck={() => useUnifiedViewerStore.getState().setCheckData(null)}
+          onClearCheck={() => {
+            for (const s of [useUnifiedViewerStore.getState(), useTextEditorViewerStore.getState()]) {
+              s.setCheckData(null);
+            }
+          }}
         />
       ) : (
         <>

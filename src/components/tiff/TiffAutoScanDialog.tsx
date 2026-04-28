@@ -203,7 +203,7 @@ export function TiffAutoScanDialog({
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40"
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <div className="bg-bg-secondary rounded-2xl shadow-2xl w-[420px] max-h-[85vh] flex flex-col border border-border/50 overflow-hidden">
+      <div className="bg-bg-secondary rounded-2xl shadow-2xl w-[420px] max-h-[85vh] flex flex-col border border-border/50 overflow-hidden animate-dialog-pop">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border/50">
           <h3 className="text-sm font-bold text-text-primary">TIFF化 実行確認</h3>

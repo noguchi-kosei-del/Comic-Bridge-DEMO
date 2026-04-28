@@ -2902,3 +2902,136 @@ v1.0.4 以降の累積アップデート。テキストエディタ↔ProGen 間
 | 改修 | [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) — TXT/JSON ピル → カードグリッド、TextFileCard import |
 | 改修 | [src/components/unified-viewer/UnifiedViewer.tsx](src/components/unified-viewer/UnifiedViewer.tsx) — 写植仕様タブのテキスト本文プレビュー削除、サイズをバッジ化 |
 | バージョン | [package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml) — 1.0.5 → 1.0.6 |
+
+---
+
+## v1.0.7: ダイアログ depth アニメーション + ProGen レーベル選択統合 + 細部 UI 調整 (2026-04-28)
+
+### 1. ダイアログの開閉アニメーション統一（depth-zoom）
+全ダイアログで「奥から手前へ」「手前から奥へ」のスケール + ブラー + フェードアニメーションを採用し、開閉時に背景オーバーレイもふんわりフェードイン/アウトするよう統合。
+
+**新規 keyframes** ([tailwind.config.js](tailwind.config.js)):
+- `dialog-pop`: `scale(0.82)` + `blur(4px)` + opacity 0 → `scale(1)` + `blur(0)` + opacity 1（0.32秒、cubic-bezier(0.16, 1, 0.3, 1)）
+- `dialog-pop-out`: 逆方向 0.22秒 ease-in、`forwards`
+- `backdrop-in` / `backdrop-out`: 半透明黒幕の opacity 0↔1 フェード（0.28s/0.22s）
+
+**新規フック** [src/hooks/useDialogClose.ts](src/hooks/useDialogClose.ts):
+- `requestClose()` を呼ぶと `isExiting=true` → 退場アニメ → 220ms 後に実 `onClose` を実行
+- 戻り値: `{ isExiting, animationClass, backdropClass, requestClose }`
+- `animationClass` は開く時 `animate-dialog-pop` / 閉じる時 `animate-dialog-pop-out` を自動切替
+- `backdropClass` は同期して `animate-backdrop-in` / `animate-backdrop-out` を切替
+
+**適用済みダイアログ** (`animate-dialog-pop` + `animate-backdrop-*`):
+- 共通 [Modal](src/components/ui/Modal.tsx) — オーバーレイ／X／Escape すべて `requestClose` 経由
+- [SettingsPanel](src/components/layout/SettingsPanel.tsx)
+- [GuideEditorModal](src/components/guide-editor/GuideEditorModal.tsx)
+- TopNav 4 ダイアログ（リセット確認 / JSON ブラウザ / アップデート通知 / アップデート進捗）— 各々を `ResetConfirmDialog` / `JsonBrowserDialog` / `UpdatePromptDialog` / `UpdateProgressDialog` インナーコンポーネントに切り出し
+- 結果ダイアログ系 ([SplitResultDialog](src/components/split/SplitResultDialog.tsx) / [RenameResultDialog](src/components/rename/RenameResultDialog.tsx) / [LayerControlResultDialog](src/components/layer-control/LayerControlResultDialog.tsx) / [TiffResultDialog](src/components/tiff/TiffResultDialog.tsx)) — `animate-slide-up` から `animate-dialog-pop` に置換
+- ペアリングモーダル ([ReplacePairingModal](src/components/replace/ReplacePairingModal.tsx) / [ComposePairingModal](src/components/compose/ComposePairingModal.tsx))
+- TIFF 系ダイアログ ([TiffAutoScanDialog](src/components/tiff/TiffAutoScanDialog.tsx) / [TiffCanvasMismatchDialog](src/components/tiff/TiffCanvasMismatchDialog.tsx) / [TiffCropSidePanel](src/components/tiff/TiffCropSidePanel.tsx) / [TiffPageRulesEditor](src/components/tiff/TiffPageRulesEditor.tsx) / [TiffPartialBlurModal](src/components/tiff/TiffPartialBlurModal.tsx) / [TiffSettingsPanel](src/components/tiff/TiffSettingsPanel.tsx) 内の confirm 系)
+- [FolderSetupView](src/components/views/FolderSetupView.tsx) のファイル確認モーダル + JSON ブラウザモーダル
+
+Tooltip / SpeechBubble は控えめな `slide-up` を維持（dialog-pop は適用しない）。
+
+### 2. ProGen 上部バー右側 3 ドロップダウン刷新（ホバー開閉 + フキダシ + 共有 active）
+[ProgenRuleView.tsx](src/components/progen/ProgenRuleView.tsx)
+
+3 つのドロップダウンを TopNav ツールメニューと同じパターンで再実装:
+- **新規 `LabelDropdown`** を「校正用テキスト追加」の左側に追加。ProGen マスタールールのラベル切替 UI として機能
+- **既存 `TextSourceDropdown` / `ResultPasteDropdown`** をホバー開閉に変更
+
+**共通仕様**:
+- **ホバー開閉**: `onMouseEnter` で即時開、`onMouseLeave` で 300ms ディレイ閉
+- **`rendered` フラグ + 160ms タイマー** で `animate-dropdown-down-close` のアニメ完了まで DOM 保持
+- **フキダシ三角（上向き）**: TopNav ツールメニューと同じ 2 段スタック方式（外側 `border-bottom 7px solid var(--cb-border-color)` + 内側同色 `var(--cb-menu-bg)`、`right-4` 配置）。CSS 変数経由で light/dark 両モード対応
+- **ボタンアクティブ時強調**: ホバー中は `border-accent/40 text-accent bg-accent/5`
+
+**隣接ボタン間移動時の重なり防止**（`activeDropdown` 共有 state）:
+- 親 `ProgenRuleView` に `[activeDropdown, setActiveDropdown] = useState<DropdownId | null>(null)` を導入
+- 各ドロップダウンは props で受け取り、`hover = activeDropdown === id` で開閉判定
+- ボタン A → ボタン B 移動時:
+  1. B の `onMouseEnter` で `setActiveDropdown("B")` を即実行
+  2. A の `hover` が即時 false に → A は遅延ゼロで閉じアニメ開始
+  3. A の close タイマーは `prev === "A"` チェックで no-op
+- 完全離脱時のみ 300ms バッファで誤閉じ防止
+- メニュー項目クリック時は `closeIfActive()`（`prev === id` の時のみ null セット）で確実にクローズ
+
+### 3. ProGen レーベル選択の永続化
+[progenStore.ts](src/store/progenStore.ts) + [ProgenView.tsx](src/components/views/ProgenView.tsx) + [ProgenRuleView.tsx](src/components/progen/ProgenRuleView.tsx)
+
+**問題**: ランディング画面で選んだレーベルがルール編集画面の `LabelDropdown` ボタンに反映されず常に `"default"` 表示になっていた。`loadMasterRule` の呼び出し条件が「ルール未読み込み or レーベルが workInfo と異なる」に限定されており、すでにルール読み込み済みのケースで `currentMasterLabel` が更新されないため。
+
+**修正**:
+- `progenStore` に `currentMasterLabel: string` フィールドを追加（初期値 `""`、`reset()` でクリア）
+- `loadMasterRule(labelValue)` 成功時に `set({ currentMasterLabel: labelValue })`
+- `ProgenView.handleGo` で `useProgenStore.setState({ currentMasterLabel: selectedLabel })` を必ず実行（loadMasterRule の有無に関わらず）
+- `LabelDropdown` の表示優先度: `currentMasterLabel`（ProGen 明示ロード） > `useScanPsdStore.workInfo.label`（作品情報JSON） > 空
+- ローカル `selectedLabel` state は撤去、ストア駆動に統一
+
+### 4. ホームタイル「見開き分割」「レイヤー制御」をオレンジに移動
+[HomeLayout.tsx](src/components/views/HomeLayout.tsx) `TILE_ICON_COLORS`:
+- `split` / `layerControl`: 緑 → **オレンジ**（加工系カテゴリへ）
+
+### 5. ホームタイルアイコンを Stirling PDF 風の淡背景 + 同色アイコンに変更
+[HomeLayout.tsx](src/components/views/HomeLayout.tsx)
+
+旧: 700 系の濃い色背景 + 白アイコン → **新: 100 系の淡パステル背景 + 600 系の同色アイコン**
+- `TileIconColor` 型に `iconText` フィールド追加
+- 緑/紫/オレンジ/水色 各カテゴリで `bg-{color}-100` + `text-{color}-600`
+- ホバー時は `bg-{color}-200` + `border-{color}-300`
+- `<Icon>` の `text-white` → `tileColor.iconText` を使用
+- `shadow-md` → 撤去（淡背景に影は不釣り合い）
+
+### 6. テキストエディタの校正JSON 読み込み修正
+[TopNav.tsx](src/components/layout/TopNav.tsx)
+
+**問題**: ビューアーとテキストエディタは独立 zustand インスタンス（`useUnifiedViewerStore` / `useTextEditorViewerStore`）だが、`handleJsonSelect` は `useUnifiedViewerStore` のみに `setCheckData()` を呼んでいたため、テキストエディタ画面の `ProofreadPanel`（scoped store 経由）には校正JSON が反映されない。
+
+**修正**: 両方のストアに同期書き込み:
+- `handleJsonSelect`: 校正データ / フォントプリセット / 作品情報JSON 全て両ストアに反映
+- `handleOpenText`: テキスト読み込みも両ストアに反映
+- `WfDataPickerButton` の onClearText / onClearPreset / onClearCheck も両ストア対応
+- `performReset` も両ストア対応にループ統一
+- 不要になった `viewerStore` ローカル変数を削除
+
+### 7. ProGen レーベル選択ボタン新設（v1.0.7 改修中の途中成果物）
+ProGen ルール編集画面の上部バーに、`LabelDropdown` を「校正用テキスト追加」の左側に新設。`getMasterLabelList()` で取得したマスタールール一覧を表示し、選択で `loadMasterRule(labelKey)` を実行 → `currentProofRules` / `symbolRules` / `options` / `numberRules` を即時反映。ジャンル/レーベル系の二段階選択が必要な場合はランディング画面で実施するため、編集画面ではフラットなレーベルキー選択のみ。
+
+### 8. UI ディテール調整
+- **TIFF 化サイドバー幅 1.5x**: [TiffView.tsx](src/components/views/TiffView.tsx) の左サイドバー `w-[272px]` → `w-[408px]`（他ビューの 272px は維持）
+- **「全て実行」アイコンを右矢印に統一**: [TiffSettingsPanel.tsx](src/components/tiff/TiffSettingsPanel.tsx) と [SplitPanel.tsx](src/components/split/SplitPanel.tsx) の「全て実行」ボタン両方を `arrow-long-right` (`M14 5l7 7m0 0l-7 7m7-7H3`) に変更
+- **TIFF テキストはみ出しメッセージを赤化**: [TiffSettingsPanel.tsx](src/components/tiff/TiffSettingsPanel.tsx) のはみ出し検出バナーを `bg-warning/10 border-warning/30 text-warning` → `bg-error/10 border-error/30 text-error`
+- **TIFF 一覧のサムネイルセル削除**: [TiffBatchQueue.tsx](src/components/tiff/TiffBatchQueue.tsx) から `w-8 h-11 rounded bg-bg-tertiary ...` のサムネイル div ブロックを撤去（チェックボックス → ファイル名カラムが直接隣接）
+- **「トンボなし？」カード color 統一**: [ThumbnailCard.tsx](src/components/preview/ThumbnailCard.tsx)
+  - バッジ: `bg-warning/90` → `bg-amber-400`（オレンジ寄りの黄色）
+  - リング: `ring-warning/60` → `ring-amber-400/60`
+  - 右上「!」アイコン: `bg-warning` → `bg-amber-400`
+- **`text-warning` 系メッセージを赤化**（3 箇所）:
+  - [TiffBatchQueue.tsx](src/components/tiff/TiffBatchQueue.tsx) 「キャンバスサイズが異なります」
+  - [SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) ホーム画面「N注意」カウンター
+  - [ScanPsdPanel.tsx](src/components/scanPsd/ScanPsdPanel.tsx) 仮保存警告バナー
+
+### 主要変更ファイル一覧
+| 区分 | パス |
+| --- | --- |
+| 新規 | [src/hooks/useDialogClose.ts](src/hooks/useDialogClose.ts) — ダイアログ退場アニメ管理フック |
+| 改修 | [tailwind.config.js](tailwind.config.js) — `dialog-pop` / `dialog-pop-out` / `backdrop-in` / `backdrop-out` keyframes |
+| 改修 | [src/components/ui/Modal.tsx](src/components/ui/Modal.tsx) — useDialogClose 統合 |
+| 改修 | [src/components/layout/SettingsPanel.tsx](src/components/layout/SettingsPanel.tsx) — useDialogClose + 退場アニメ |
+| 改修 | [src/components/layout/TopNav.tsx](src/components/layout/TopNav.tsx) — 4 ダイアログのインナー化、両ストア書き込み統一、JSON 読み込みの TextEditor 反映 |
+| 改修 | [src/components/guide-editor/GuideEditorModal.tsx](src/components/guide-editor/GuideEditorModal.tsx) — useDialogClose + 退場アニメ |
+| 改修 | [src/components/progen/ProgenRuleView.tsx](src/components/progen/ProgenRuleView.tsx) — 3 ドロップダウンをホバー + フキダシ + 共有 activeDropdown 化、`LabelDropdown` 新設 |
+| 改修 | [src/components/views/ProgenView.tsx](src/components/views/ProgenView.tsx) — `handleGo` で `currentMasterLabel` を必ず反映 |
+| 改修 | [src/store/progenStore.ts](src/store/progenStore.ts) — `currentMasterLabel` フィールド + `loadMasterRule` で更新 |
+| 改修 | [src/components/views/HomeLayout.tsx](src/components/views/HomeLayout.tsx) — タイル色再割当て / Stirling 風淡背景 + 同色アイコン |
+| 改修 | [src/components/views/TiffView.tsx](src/components/views/TiffView.tsx) — サイドバー幅 1.5x |
+| 改修 | [src/components/tiff/TiffSettingsPanel.tsx](src/components/tiff/TiffSettingsPanel.tsx) — 「全て実行」右矢印化 / テキストはみ出し赤化 / 確認モーダル退場アニメ |
+| 改修 | [src/components/tiff/TiffBatchQueue.tsx](src/components/tiff/TiffBatchQueue.tsx) — サムネイル列削除 / キャンバスサイズ警告赤化 |
+| 改修 | [src/components/tiff/TiffResultDialog.tsx](src/components/tiff/TiffResultDialog.tsx) ほか TIFF 系モーダル群 — 退場アニメ |
+| 改修 | [src/components/split/SplitPanel.tsx](src/components/split/SplitPanel.tsx) — 「全て実行」右矢印化 |
+| 改修 | [src/components/split/SplitResultDialog.tsx](src/components/split/SplitResultDialog.tsx) / [src/components/rename/RenameResultDialog.tsx](src/components/rename/RenameResultDialog.tsx) / [src/components/layer-control/LayerControlResultDialog.tsx](src/components/layer-control/LayerControlResultDialog.tsx) / [src/components/replace/ReplacePairingModal.tsx](src/components/replace/ReplacePairingModal.tsx) / [src/components/compose/ComposePairingModal.tsx](src/components/compose/ComposePairingModal.tsx) — `animate-slide-up` → `animate-dialog-pop` |
+| 改修 | [src/components/preview/ThumbnailCard.tsx](src/components/preview/ThumbnailCard.tsx) — トンボ警告 amber 統一 |
+| 改修 | [src/components/views/SpecCheckView.tsx](src/components/views/SpecCheckView.tsx) — 「N注意」赤化 |
+| 改修 | [src/components/scanPsd/ScanPsdPanel.tsx](src/components/scanPsd/ScanPsdPanel.tsx) — 仮保存警告赤化 |
+| 改修 | [src/components/views/FolderSetupView.tsx](src/components/views/FolderSetupView.tsx) — モーダル退場アニメ |
+| バージョン | [package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml) — 1.0.6 → 1.0.7 |

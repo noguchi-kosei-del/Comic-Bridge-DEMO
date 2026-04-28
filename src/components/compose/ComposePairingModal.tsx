@@ -99,7 +99,7 @@ export function ComposePairingModal({ onExecute, onRescan }: Props) {
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-3xl max-h-[80vh] bg-bg-secondary rounded-2xl border border-border shadow-elevated animate-slide-up flex flex-col"
+        className="relative w-full max-w-3xl max-h-[80vh] bg-bg-secondary rounded-2xl border border-border shadow-elevated animate-dialog-pop flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

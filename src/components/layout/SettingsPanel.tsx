@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useAppUpdater } from "../../hooks/useAppUpdater";
+import { useDialogClose } from "../../hooks/useDialogClose";
 
 const FONT_SIZES = [
   { id: "small" as const, label: "小", desc: "9px基準" },
@@ -43,6 +44,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     setFontSize, setAccentColor, setDarkMode, setDefaultFolderPath,
   } = useSettingsStore();
   const updater = useAppUpdater();
+  const { animationClass, backdropClass, requestClose } = useDialogClose(onClose);
 
   const handleBrowseFolder = async () => {
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -51,8 +53,8 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-bg-secondary rounded-2xl shadow-2xl border border-border w-[480px] max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 ${backdropClass}`} onClick={requestClose}>
+      <div className={`bg-bg-secondary rounded-2xl shadow-2xl border border-border w-[480px] max-h-[85vh] overflow-hidden flex flex-col ${animationClass}`} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="px-5 py-3 border-b border-border">
           <h2 className="text-sm font-bold text-text-primary">設定</h2>
@@ -132,7 +134,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               </button>
             )}
           </div>
-          <button onClick={onClose} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent/90 transition-colors">閉じる</button>
+          <button onClick={requestClose} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent/90 transition-colors">閉じる</button>
         </div>
       </div>
     </div>,

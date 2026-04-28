@@ -16,7 +16,7 @@ export function TiffCanvasMismatchDialog({
 }: TiffCanvasMismatchDialogProps) {
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+      <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden animate-dialog-pop">
         {/* Header */}
         <div className="px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">

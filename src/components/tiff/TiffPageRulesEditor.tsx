@@ -23,7 +23,7 @@ export function TiffPageRulesEditor({ onClose }: { onClose: () => void }) {
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-2xl w-full mx-4 overflow-hidden flex flex-col max-h-[85vh]">
+        <div className="bg-bg-secondary border border-border rounded-2xl shadow-xl max-w-2xl w-full mx-4 overflow-hidden flex flex-col max-h-[85vh] animate-dialog-pop">
           {/* Header */}
           <div className="px-6 py-4 border-b border-border flex-shrink-0">
             <h3 className="text-sm font-display font-bold text-text-primary">

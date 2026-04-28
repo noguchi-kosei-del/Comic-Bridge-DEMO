@@ -35,38 +35,41 @@ const TILE_TABS: TileTab[] = [
 ];
 
 // ═══ タイルアイコンの背景色（カテゴリ別） ═══
-type TileIconColor = { bg: string; border: string; hover: string };
+type TileIconColor = { bg: string; border: string; hover: string; iconText: string };
 const COLOR_GREEN: TileIconColor = {
-  bg: "bg-green-500",
-  border: "border-green-600/40",
-  hover: "group-hover:bg-green-600 group-hover:border-green-700/60",
+  bg: "bg-green-100",
+  border: "border-green-200/60",
+  hover: "group-hover:bg-green-200 group-hover:border-green-300/70",
+  iconText: "text-green-600",
 };
 const COLOR_PURPLE: TileIconColor = {
-  bg: "bg-purple-500",
-  border: "border-purple-600/40",
-  hover: "group-hover:bg-purple-600 group-hover:border-purple-700/60",
+  bg: "bg-purple-100",
+  border: "border-purple-200/60",
+  hover: "group-hover:bg-purple-200 group-hover:border-purple-300/70",
+  iconText: "text-purple-600",
 };
 const COLOR_ORANGE: TileIconColor = {
-  bg: "bg-orange-500",
-  border: "border-orange-600/40",
-  hover: "group-hover:bg-orange-600 group-hover:border-orange-700/60",
+  bg: "bg-orange-100",
+  border: "border-orange-200/60",
+  hover: "group-hover:bg-orange-200 group-hover:border-orange-300/70",
+  iconText: "text-orange-600",
 };
 const COLOR_SKY: TileIconColor = {
-  bg: "bg-sky-400",
-  border: "border-sky-500/40",
-  hover: "group-hover:bg-sky-500 group-hover:border-sky-600/60",
+  bg: "bg-sky-100",
+  border: "border-sky-200/60",
+  hover: "group-hover:bg-sky-200 group-hover:border-sky-300/70",
+  iconText: "text-sky-600",
 };
 const COLOR_DEFAULT: TileIconColor = {
-  bg: "bg-accent",
-  border: "border-accent/40",
-  hover: "group-hover:bg-accent-hover group-hover:border-accent-hover/60",
+  bg: "bg-accent/15",
+  border: "border-accent/30",
+  hover: "group-hover:bg-accent/25 group-hover:border-accent/50",
+  iconText: "text-accent",
 };
 const TILE_ICON_COLORS: Record<string, TileIconColor> = {
   // 緑
   progen: COLOR_GREEN,
   textEditor: COLOR_GREEN,
-  split: COLOR_GREEN,
-  layerControl: COLOR_GREEN,
   // 紫
   inspection: COLOR_PURPLE,
   unifiedViewer: COLOR_PURPLE,
@@ -76,6 +79,8 @@ const TILE_ICON_COLORS: Record<string, TileIconColor> = {
   replace: COLOR_ORANGE,
   compose: COLOR_ORANGE,
   tiff: COLOR_ORANGE,
+  split: COLOR_ORANGE,
+  layerControl: COLOR_ORANGE,
   // 水色
   folderSetup: COLOR_SKY,
   requestPrep: COLOR_SKY,
@@ -591,8 +596,8 @@ export function HomeLayout() {
                     className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl bg-bg-primary border border-border hover:border-accent/40 hover:bg-accent/5 shadow-soft hover:shadow-card transition-all group"
                   >
                     {Icon && (
-                      <span className={`flex items-center justify-center w-12 h-12 rounded-xl border transition-colors ${tileColor.bg} ${tileColor.border} ${tileColor.hover}`}>
-                        <Icon className={`w-7 h-7 text-white transition-colors icon-anim-${btn.id}`} strokeWidth={2} />
+                      <span className={`flex items-center justify-center w-14 h-14 rounded-full transition-colors ${tileColor.bg} ${tileColor.hover}`}>
+                        <Icon className={`w-7 h-7 transition-colors icon-anim-${btn.id} ${tileColor.iconText}`} strokeWidth={2} />
                       </span>
                     )}
                     <span className="text-sm font-medium text-text-primary text-center">

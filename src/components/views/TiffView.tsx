@@ -39,7 +39,7 @@ export function TiffView() {
   return (
     <div className="flex h-full overflow-hidden" data-tool-panel>
       {/* Left Sidebar — 設定 */}
-      <div className="w-[272px] flex-shrink-0 border-r border-border overflow-hidden">
+      <div className="w-[408px] flex-shrink-0 border-r border-border overflow-hidden">
         <TiffSettingsPanel />
       </div>
 
